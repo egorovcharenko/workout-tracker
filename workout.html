@@ -243,10 +243,15 @@ function getHintWeight(exIdx, setKey) {
   // Fall back to last session weight for this specific exercise
   if (state.lastSession && state.workout) {
     const ex = state.workout.exercises[exIdx];
-    // Try matching set first, then any set of same exercise
+    const setType = setKey === "warmup" ? "warmup" : "working";
+    const setNum = setKey === "warmup" ? 0 : setKey + 1;
+    // Try: exact match → working set 1 → any working set → warmup
     const tryKeys = [
-      `${ex.name}|${setKey === "warmup" ? "warmup" : "working"}|${setKey === "warmup" ? 0 : setKey + 1}`,
+      `${ex.name}|${setType}|${setNum}`,
       `${ex.name}|working|1`,
+      `${ex.name}|working|2`,
+      `${ex.name}|working|3`,
+      `${ex.name}|warmup|0`,
     ];
     for (const k of tryKeys) {
       const data = state.lastSession[k];
