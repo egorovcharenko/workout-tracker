@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workout Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+<style>
+  * { -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f9fafb; margin: 0; }
+  .weight-btn { min-width: 32px; padding: 2px 6px; border-radius: 6px; font-size: 11px; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s; }
+  .set-btn { width: 32px; height: 32px; border-radius: 50%; font-weight: 700; font-size: 12px; border: none; cursor: pointer; transition: all 0.2s; }
+  .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; transition: all 0.3s; }
+  .card.done { background: #f0fdf4; border-color: #bbf7d0; }
+  .timer-circle { transition: stroke-dashoffset 1s linear; }
+  .save-pulse { animation: pulse 0.6s ease-out; }
+  @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+</style>
+</head>
+<body>
+<div id="app" style="max-width: 448px; margin: 0 auto; min-height: 100vh;"></div>
+
+<script>
+const WORKOUTS = [
+  {
+    id: "arms-shoulders",
+    name: "Arms & Shoulders",
+    duration: "~15 min",
+    exercises: [
+      { name: "Overhead Dumbbell Press", sets: 3, reps: "6-10", notes: "Seated or standing", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
+      { name: "Dumbbell Bicep Curls", sets: 3, reps: "8-12", notes: "Superset with next", superset: "A", video: "https://www.youtube.com/shorts/MKWBV29S6c0" },
+      { name: "Overhead Tricep Extension", sets: 3, reps: "10-15", notes: "Single DB, both hands", superset: "A", video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
+    ],
+    rest: 60,
+    warmup: "A few light sets to warm up elbows and wrists",
+  },
+  {
+    id: "back",
+    name: "Back",
+    duration: "~20 min",
+    exercises: [
+      { name: "Dumbbell Bent-Over Rows", sets: 3, reps: "8-12", notes: "Keep back flat, pull to hips", superset: false, video: "https://www.youtube.com/shorts/dpYI8K6e-jE" },
+      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", notes: "Each side, knee on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo" },
+      { name: "Reverse Flyes", sets: 3, reps: "15-20", notes: "Rear delts & upper back, light weight", superset: false, video: "https://www.youtube.com/shorts/LsT-bR_zxLo" },
+    ],
+    rest: 60,
+    warmup: "Light rows to warm up shoulders and back",
+  },
+  {
+    id: "full-body",
+    name: "Full Body",
+    duration: "~35 min",
+    exercises: [
+      { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4" },
+      { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
+      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo" },
+      { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "12", notes: "Hinge at hips, slight knee bend", superset: false, video: "https://www.youtube.com/shorts/cGMaBqaExBo" },
+      { name: "Seated Overhead Press", sets: 2, reps: "10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
+      { name: "Dumbbell Bicep Curls", sets: 2, reps: "12", notes: "Finish strong", superset: false, video: "https://www.youtube.com/shorts/MKWBV29S6c0" },
+    ],
+    rest: 75,
+    warmup: "Light goblet squats and arm circles to warm up",
+  },
+];
+
+// Exercise → muscle group mappings (primary muscles get full load, secondary get half)
+const EXERCISE_MUSCLES = {
+  "Overhead Dumbbell Press": { primary: ["shoulders"], secondary: ["triceps"] },
+  "Dumbbell Bicep Curls": { primary: ["biceps"], secondary: ["forearms"] },
+  "Overhead Tricep Extension": { primary: ["triceps"], secondary: [] },
+  "Dumbbell Bent-Over Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
+  "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
+  "Reverse Flyes": { primary: ["rear_delts"], secondary: ["upper_back"] },
+  "Goblet Squat": { primary: ["quads", "glutes"], secondary: ["core"] },
+  "Dumbbell Flat Bench Press": { primary: ["chest"], secondary: ["triceps", "shoulders"] },
+  "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
+  "Dumbbell Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"] },
+  "Seated Overhead Press": { primary: ["shoulders"], secondary: ["triceps"] },
+  // Future
+  "Lunges": { primary: ["quads", "glutes"], secondary: ["hamstrings"] },
+  "Calf Raises": { primary: ["calves"], secondary: [] },
+};
+
+// All trackable muscle groups with display info
+const MUSCLE_GROUPS = {
+  shoulders:  { label: "Shoulders",   side: "front" },
+  chest:      { label: "Chest",       side: "front" },
+  biceps:     { label: "Biceps",      side: "front" },
+  triceps:    { label: "Triceps",     side: "back"  },
+  forearms:   { label: "Forearms",    side: "front" },
+  core:       { label: "Core",        side: "front" },
+  quads:      { label: "Quads",       side: "front" },
+  upper_back: { label: "Upper Back",  side: "back"  },
+  lats:       { label: "Lats",        side: "back"  },
+  rear_delts: { label: "Rear Delts",  side: "back"  },
+  lower_back: { label: "Lower Back",  side: "back"  },
+  glutes:     { label: "Glutes",      side: "back"  },
+  hamstrings: { label: "Hamstrings",  side: "back"  },
+  calves:     { label: "Calves",      side: "back"  },
+};
+
+const WEIGHTS_LB = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
+const lbToKg = lb => (lb * 0.453592).toFixed(1);
+
+const WEIGHT_COLORS = [
+  ["#ecfdf5","#047857","#a7f3d0"], ["#d1fae5","#065f46","#6ee7b7"],
+  ["#ecfccb","#3f6212","#bef264"], ["#fef9c3","#854d0e","#fde047"],
+  ["#fef3c7","#92400e","#fcd34d"], ["#ffedd5","#9a3412","#fdba74"],
+  ["#fed7aa","#7c2d12","#fb923c"], ["#fee2e2","#991b1b","#fca5a5"],
+  ["#fecaca","#7f1d1d","#f87171"], ["#fca5a5","#450a0a","#ef4444"],
+];
+
+function weightBtnStyle(lb, selected, hinted) {
+  if (selected) return 'background:#3b82f6;color:white;box-shadow:0 1px 3px rgba(59,130,246,0.4);outline:2px solid #93c5fd;';
+  if (hinted) return 'background:white;color:#93c5fd;border:2px dashed #93c5fd;';
+  const i = WEIGHTS_LB.indexOf(lb);
+  const c = WEIGHT_COLORS[i] || WEIGHT_COLORS[0];
+  return `background:${c[0]};color:${c[1]};border:1px solid ${c[2]};`;
+}
+
+// State
+let state = {
+  screen: "home", // home | workout | history
+  workout: null,
+  completed: {},
+  weights: {},
+  elapsed: 0,
+  running: false,
+  resting: false,
+  restLeft: 0,
+  showGif: {},
+  lastSession: {},
+  reps: {},
+  history: [],
+  saved: false,
+  sessionId: null,
+  lastSaved: null,
+};
+
+let timerInterval = null;
+let restInterval = null;
+let muscleStatus = {}; // { muscle: { hoursAgo, load, date } }
+
+function computeMuscleStatus(history) {
+  const now = Date.now();
+  const status = {};
+  // Go through history (newest first) and find when each muscle was last worked
+  for (const session of history) {
+    const sessionDate = new Date(session.date + "T12:00:00");
+    const hoursAgo = (now - sessionDate.getTime()) / (1000 * 60 * 60);
+    for (const set of session.sets) {
+      const mapping = EXERCISE_MUSCLES[set.exercise];
+      if (!mapping) continue;
+      const load = set.weight_lb || 0;
+      const reps = parseInt(set.reps) || 0;
+      const volume = load * reps;
+      for (const m of mapping.primary) {
+        if (!status[m] || hoursAgo < status[m].hoursAgo) {
+          status[m] = { hoursAgo, volume, date: session.date, workout: session.workout_name };
+        } else if (hoursAgo === status[m].hoursAgo) {
+          status[m].volume += volume;
+        }
+      }
+      for (const m of mapping.secondary) {
+        const vol = volume * 0.5;
+        if (!status[m] || hoursAgo < status[m].hoursAgo) {
+          status[m] = { hoursAgo, volume: vol, date: session.date, workout: session.workout_name };
+        } else if (hoursAgo === status[m].hoursAgo) {
+          status[m].volume += vol;
+        }
+      }
+    }
+  }
+  return status;
+}
+
+function getRecoveryColor(hoursAgo) {
+  if (hoursAgo == null) return { bg: "#f3f4f6", fg: "#9ca3af", label: "No data", pct: 0 };
+  if (hoursAgo < 24) return { bg: "#fecaca", fg: "#dc2626", label: "Worked today", pct: 15 };
+  if (hoursAgo < 48) return { bg: "#fed7aa", fg: "#ea580c", label: "Recovering", pct: 50 };
+  if (hoursAgo < 72) return { bg: "#fef08a", fg: "#ca8a04", label: "Almost ready", pct: 80 };
+  return { bg: "#bbf7d0", fg: "#16a34a", label: "Ready", pct: 100 };
+}
+
+function getWorkoutRecovery(workout) {
+  // Collect all muscles this workout targets
+  const musclePcts = {};
+  for (const ex of workout.exercises) {
+    const mapping = EXERCISE_MUSCLES[ex.name];
+    if (!mapping) continue;
+    for (const m of mapping.primary) {
+      const s = muscleStatus[m];
+      musclePcts[m] = getRecoveryColor(s?.hoursAgo).pct;
+    }
+    for (const m of mapping.secondary) {
+      const s = muscleStatus[m];
+      if (!musclePcts[m]) musclePcts[m] = getRecoveryColor(s?.hoursAgo).pct;
+    }
+  }
+  const vals = Object.values(musclePcts);
+  if (vals.length === 0) return { avg: 0, muscles: {} };
+  const avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+  return { avg, muscles: musclePcts };
+}
+
+function recoveryBadge(pct) {
+  let bg, fg, label;
+  if (pct >= 80) { bg = "#dcfce7"; fg = "#16a34a"; label = "Ready"; }
+  else if (pct >= 50) { bg = "#fef9c3"; fg = "#ca8a04"; label = "Recovering"; }
+  else if (pct > 0) { bg = "#fee2e2"; fg = "#dc2626"; label = "Sore"; }
+  else { bg = "#f3f4f6"; fg = "#9ca3af"; label = "No data"; }
+  return `<span style="font-size:11px;font-weight:600;color:${fg};background:${bg};padding:3px 8px;border-radius:8px;white-space:nowrap">${label} ${pct}%</span>`;
+}
+
+async function loadMuscleStatus() {
+  try {
+    const res = await fetch("/api/history?limit=30");
+    const history = await res.json();
+    muscleStatus = computeMuscleStatus(history);
+    render();
+  } catch (e) { console.error("[MUSCLE] Error:", e); }
+}
+
+// Only returns explicitly set weight for this exact set
+function getSetWeight(exIdx, setKey) {
+  const k = `${exIdx}-${setKey}`;
+  return state.weights[k] != null ? state.weights[k] : null;
+}
+
+// Returns the weight from a previous set as a suggestion (dashed hint)
+// Only looks within the SAME exercise — previous sets, warmup, or last session
+function getHintWeight(exIdx, setKey) {
+  // Look back through previous sets in same exercise
+  if (typeof setKey === "number" && setKey > 0) {
+    const prev = getSetWeight(exIdx, setKey - 1);
+    if (prev != null) return prev;
+    return getHintWeight(exIdx, setKey - 1);
+  }
+  if (typeof setKey === "number" && setKey === 0) {
+    const warmup = getSetWeight(exIdx, "warmup");
+    if (warmup != null) return warmup;
+  }
+  // Fall back to last session weight for this specific exercise
+  if (state.lastSession && state.workout) {
+    const ex = state.workout.exercises[exIdx];
+    // Try matching set first, then any set of same exercise
+    const tryKeys = [
+      `${ex.name}|${setKey === "warmup" ? "warmup" : "working"}|${setKey === "warmup" ? 0 : setKey + 1}`,
+      `${ex.name}|working|1`,
+    ];
+    for (const k of tryKeys) {
+      const data = state.lastSession[k];
+      if (data?.weight_lb) return data.weight_lb;
+    }
+  }
+  return null;
+}
+
+// For saving: use explicit weight, or fall back to hint
+function getEffectiveWeight(exIdx, setKey) {
+  return getSetWeight(exIdx, setKey) || getHintWeight(exIdx, setKey);
+}
+
+function totalSets() { return state.workout.exercises.reduce((s, e) => s + e.sets + 1, 0); }
+function completedSets() { return Object.values(state.completed).filter(Boolean).length; }
+function allDone() { return completedSets() === totalSets(); }
+function formatTime(s) { return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`; }
+function localDate() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+// API — auto-save on every set toggle
+let saveTimeout = null;
+
+async function autoSave() {
+  const w = state.workout;
+  const sets = [];
+  w.exercises.forEach((ex, exIdx) => {
+    if (state.completed[`${exIdx}-warmup`]) {
+      sets.push({ exercise: ex.name, set_type: "warmup", set_number: 0, reps: String(state.reps[`${exIdx}-warmup`] || ex.reps), weight_lb: getEffectiveWeight(exIdx, "warmup") });
+    }
+    for (let i = 0; i < ex.sets; i++) {
+      if (state.completed[`${exIdx}-${i}`]) {
+        sets.push({ exercise: ex.name, set_type: "working", set_number: i + 1, reps: String(state.reps[`${exIdx}-${i}`] || ex.reps), weight_lb: getEffectiveWeight(exIdx, i) });
+      }
+    }
+  });
+  if (sets.length === 0) return;
+  const body = {
+    workout: w.name,
+    date: localDate(),
+    duration_sec: state.elapsed,
+    session_id: state.sessionId || null,
+    sets
+  };
+  try {
+    const res = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.ok) {
+      state.sessionId = data.id;
+      state.lastSaved = Date.now();
+      console.log(`[AUTO-SAVE] Session #${data.id} — ${sets.length} sets`);
+    }
+  } catch (e) {
+    console.error("[AUTO-SAVE] Error:", e);
+  }
+}
+
+// Debounced save — waits 500ms after last action to avoid spamming
+function triggerSave() {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(autoSave, 500);
+}
+
+async function loadSessionData(workoutName) {
+  try {
+    // First check if there's a session from today to resume
+    const todayRes = await fetch(`/api/today-session?workout=${encodeURIComponent(workoutName)}`);
+    const todayData = await todayRes.json();
+
+    if (todayData && todayData.id) {
+      // Resume today's session
+      state.sessionId = todayData.id;
+      state.elapsed = todayData.duration_sec || 0;
+      todayData.sets.forEach(s => {
+        const exIdx = state.workout.exercises.findIndex(e => e.name === s.exercise);
+        if (exIdx < 0) return;
+        const sk = s.set_type === "warmup" ? "warmup" : s.set_number - 1;
+        const key = `${exIdx}-${sk}`;
+        state.completed[key] = true;
+        if (s.weight_lb) state.weights[key] = s.weight_lb;
+        if (s.reps) state.reps[key] = parseInt(s.reps) || 0;
+      });
+      console.log(`[RESUME] Restored session #${todayData.id} with ${todayData.sets.length} sets`);
+    }
+
+    // Load hints: first try same-workout last session, then cross-workout exercise hints
+    const [lastRes, hintsRes] = await Promise.all([
+      fetch(`/api/last-session?workout=${encodeURIComponent(workoutName)}`),
+      fetch("/api/exercise-hints"),
+    ]);
+    state.lastSession = await lastRes.json();
+    state.exerciseHints = await hintsRes.json();
+
+    // Merge: same-workout session takes priority, cross-workout fills gaps
+    const merged = { ...state.exerciseHints, ...state.lastSession };
+    state.lastSession = merged;
+
+    // Pre-fill weights from hints (only for sets not already restored)
+    Object.entries(merged).forEach(([key, data]) => {
+      const [exercise, setType, setNum] = key.split("|");
+      const exIdx = state.workout.exercises.findIndex(e => e.name === exercise);
+      if (exIdx >= 0) {
+        const sk = setType === "warmup" ? "warmup" : parseInt(setNum) - 1;
+        const stateKey = `${exIdx}-${sk}`;
+        if (state.weights[stateKey] == null && data.weight_lb) {
+          state.weights[stateKey] = data.weight_lb;
+        }
+      }
+    });
+
+    render();
+  } catch (e) { console.error("[LOAD] Error:", e); }
+}
+
+async function loadHistory() {
+  try {
+    const res = await fetch("/api/history?limit=20");
+    state.history = await res.json();
+    render();
+  } catch (e) { state.history = []; render(); }
+}
+
+// Timer controls
+function startTimer() {
+  if (timerInterval) return;
+  state.running = true;
+  timerInterval = setInterval(() => { state.elapsed++; render(); }, 1000);
+}
+function stopTimer() { state.running = false; clearInterval(timerInterval); timerInterval = null; }
+function startRest(duration) {
+  state.resting = true; state.restLeft = duration;
+  restInterval = setInterval(() => {
+    state.restLeft--;
+    if (state.restLeft <= 0) { clearInterval(restInterval); restInterval = null; state.resting = false; }
+    render();
+  }, 1000);
+}
+function skipRest() { clearInterval(restInterval); restInterval = null; state.resting = false; state.restLeft = 0; render(); }
+
+// Sets are now logged via logReps() in renderSetRow
+
+function startWorkout(w) {
+  state.screen = "workout"; state.workout = w; state.completed = {}; state.weights = {}; state.reps = {};
+  state.elapsed = 0; state.running = false; state.saved = false; state.showGif = {};
+  state.sessionId = null; state.lastSaved = null;
+  render();
+  loadSessionData(w.name);
+}
+
+// Render
+function render() {
+  const app = document.getElementById("app");
+  if (state.screen === "home") app.innerHTML = renderHome();
+  else if (state.screen === "workout") app.innerHTML = renderWorkout();
+  else if (state.screen === "history") app.innerHTML = renderHistory();
+}
+
+function renderMuscleMap() {
+  // SVG body outlines with muscle zone overlays
+  // Front and back side by side
+  function muscleRect(id, x, y, w, h, rx) {
+    const s = muscleStatus[id];
+    const r = getRecoveryColor(s?.hoursAgo);
+    const info = MUSCLE_GROUPS[id];
+    const tip = s ? `${Math.round(s.hoursAgo)}h ago` : "—";
+    return `
+      <g>
+        <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx || 4}" fill="${r.bg}" stroke="${r.fg}" stroke-width="1.2" opacity="0.85"/>
+        <text x="${x + w/2}" y="${y + h/2 + 1}" text-anchor="middle" dominant-baseline="middle" font-size="7" font-weight="600" fill="${r.fg}">${info.label}</text>
+        <text x="${x + w/2}" y="${y + h - 2}" text-anchor="middle" font-size="5" fill="${r.fg}" opacity="0.7">${tip}</text>
+      </g>
+    `;
+  }
+
+  // Legend
+  const legendItems = [
+    { color: "#fecaca", border: "#dc2626", label: "<24h" },
+    { color: "#fed7aa", border: "#ea580c", label: "24-48h" },
+    { color: "#fef08a", border: "#ca8a04", label: "48-72h" },
+    { color: "#bbf7d0", border: "#16a34a", label: "72h+" },
+    { color: "#f3f4f6", border: "#9ca3af", label: "No data" },
+  ];
+  const legendHTML = legendItems.map(l => `
+    <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#6b7280">
+      <span style="width:10px;height:10px;border-radius:2px;background:${l.color};border:1px solid ${l.border};display:inline-block"></span>${l.label}
+    </span>
+  `).join("");
+
+  return `
+    <div class="card" style="padding:16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0">Muscle Recovery Map</h3>
+      </div>
+      <div style="display:flex;justify-content:center;gap:8px;margin-bottom:8px">
+        <div style="text-align:center">
+          <p style="font-size:10px;color:#9ca3af;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Front</p>
+          <svg viewBox="0 0 100 170" width="130" height="220" style="display:block">
+            <!-- Body silhouette - front -->
+            <ellipse cx="50" cy="14" rx="12" ry="13" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <path d="M35,28 Q30,30 26,40 L20,65 Q18,70 22,70 L32,60 L32,75 L30,120 Q29,125 34,125 L42,125 L44,90 L50,80 L56,90 L58,125 L66,125 Q71,125 70,120 L68,75 L68,60 L78,70 Q82,70 80,65 L74,40 Q70,30 65,28 Z" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <path d="M30,125 L28,155 Q27,160 33,160 L40,160 L41,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <path d="M59,125 L60,160 L67,160 Q73,160 72,155 L70,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <!-- Muscle zones - front -->
+            ${muscleRect("shoulders", 28, 28, 17, 14, 3)}
+            ${muscleRect("shoulders", 55, 28, 17, 14, 3)}
+            ${muscleRect("chest", 36, 38, 28, 16, 4)}
+            ${muscleRect("biceps", 22, 44, 13, 18, 3)}
+            ${muscleRect("biceps", 65, 44, 13, 18, 3)}
+            ${muscleRect("forearms", 20, 55, 11, 14, 3)}
+            ${muscleRect("forearms", 69, 55, 11, 14, 3)}
+            ${muscleRect("core", 38, 56, 24, 20, 4)}
+            ${muscleRect("quads", 32, 90, 15, 30, 4)}
+            ${muscleRect("quads", 53, 90, 15, 30, 4)}
+          </svg>
+        </div>
+        <div style="text-align:center">
+          <p style="font-size:10px;color:#9ca3af;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Back</p>
+          <svg viewBox="0 0 100 170" width="130" height="220" style="display:block">
+            <!-- Body silhouette - back -->
+            <ellipse cx="50" cy="14" rx="12" ry="13" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <path d="M35,28 Q30,30 26,40 L20,65 Q18,70 22,70 L32,60 L32,75 L30,120 Q29,125 34,125 L42,125 L44,90 L50,80 L56,90 L58,125 L66,125 Q71,125 70,120 L68,75 L68,60 L78,70 Q82,70 80,65 L74,40 Q70,30 65,28 Z" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <path d="M30,125 L28,155 Q27,160 33,160 L40,160 L41,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <path d="M59,125 L60,160 L67,160 Q73,160 72,155 L70,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <!-- Muscle zones - back -->
+            ${muscleRect("rear_delts", 28, 28, 17, 12, 3)}
+            ${muscleRect("rear_delts", 55, 28, 17, 12, 3)}
+            ${muscleRect("upper_back", 36, 33, 28, 13, 4)}
+            ${muscleRect("triceps", 22, 44, 13, 18, 3)}
+            ${muscleRect("triceps", 65, 44, 13, 18, 3)}
+            ${muscleRect("lats", 34, 48, 32, 16, 4)}
+            ${muscleRect("lower_back", 38, 66, 24, 14, 4)}
+            ${muscleRect("glutes", 34, 82, 32, 16, 4)}
+            ${muscleRect("hamstrings", 32, 100, 15, 24, 4)}
+            ${muscleRect("hamstrings", 53, 100, 15, 24, 4)}
+            ${muscleRect("calves", 32, 130, 13, 22, 4)}
+            ${muscleRect("calves", 55, 130, 13, 22, 4)}
+          </svg>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">${legendHTML}</div>
+    </div>
+  `;
+}
+
+function renderWorkoutCard(w, i) {
+  const rec = getWorkoutRecovery(w);
+  const exerciseList = w.exercises.map(ex => {
+    const mapping = EXERCISE_MUSCLES[ex.name];
+    const primaryMuscles = mapping ? mapping.primary : [];
+    let worstPct = 100;
+    for (const m of primaryMuscles) {
+      const s = muscleStatus[m];
+      const p = getRecoveryColor(s?.hoursAgo).pct;
+      if (p < worstPct) worstPct = p;
+    }
+    let dotColor;
+    if (worstPct >= 80) dotColor = "#22c55e";
+    else if (worstPct >= 50) dotColor = "#eab308";
+    else if (worstPct > 0) dotColor = "#ef4444";
+    else dotColor = "#d1d5db";
+    return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:12px;color:#6b7280">' +
+      '<span style="width:6px;height:6px;border-radius:50%;background:' + dotColor + ';display:inline-block;flex-shrink:0"></span>' +
+      ex.name + '</span>';
+  }).join('<span style="color:#e5e7eb;font-size:10px;margin:0 2px">&middot;</span>');
+
+  return '<button onclick="startWorkout(WORKOUTS[' + i + '])" style="width:100%;text-align:left;background:white;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px;cursor:pointer">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+      '<div style="font-weight:600;color:#111827">' + w.name + '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px">' +
+        recoveryBadge(rec.avg) +
+        '<span style="color:#d1d5db;font-size:18px">&rarr;</span>' +
+      '</div>' +
+    '</div>' +
+    '<div style="font-size:13px;color:#9ca3af;margin-bottom:6px">' + w.exercises.length + ' exercises &middot; ' + w.duration + '</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:4px;line-height:1.6">' + exerciseList + '</div>' +
+  '</button>';
+}
+
+function getExpectedSets(workoutName) {
+  const w = WORKOUTS.find(w => w.name === workoutName);
+  if (!w) return 999; // unknown workout, don't filter
+  return w.exercises.reduce((s, e) => s + e.sets + 1, 0); // working sets + warmup per exercise
+}
+
+function renderHome() {
+  // Check for active sessions today — filter out completed ones
+  const activeSessions = (state._activeSessions || []).filter(s => s.sets_done < getExpectedSets(s.workout_name));
+  const activeSessionHTML = activeSessions.length ? activeSessions.map(s => `
+    <button onclick="startWorkout(WORKOUTS.find(w=>w.name==='${s.workout_name.replace(/'/g,"\\'")}')||WORKOUTS[0])"
+      style="width:100%;text-align:left;background:#eff6ff;border:2px solid #3b82f6;border-radius:12px;padding:16px;margin-bottom:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-weight:600;color:#1d4ed8">${s.workout_name}</div>
+        <div style="font-size:13px;color:#3b82f6;margin-top:2px">${s.sets_done} sets done · ${formatTime(s.duration_sec || 0)} elapsed</div>
+      </div>
+      <span style="color:#3b82f6;font-size:13px;font-weight:600;background:#dbeafe;padding:4px 10px;border-radius:8px">Resume →</span>
+    </button>
+  `).join("") : "";
+
+  return `
+    <div style="padding:32px 16px 16px">
+      <h1 style="font-size:24px;font-weight:700;color:#111827">My Workouts</h1>
+      <p style="font-size:14px;color:#6b7280;margin-top:4px">Tap a workout to start</p>
+    </div>
+    <div style="padding:0 16px">
+      ${activeSessionHTML ? `<div style="margin-bottom:4px"><p style="font-size:11px;font-weight:600;color:#3b82f6;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">In Progress</p>${activeSessionHTML}</div>` : ""}
+      ${renderMuscleMap()}
+      ${WORKOUTS.map((w,i) => renderWorkoutCard(w, i)).join("")}
+      <button onclick="state.screen='history';loadHistory()" style="width:100%;text-align:center;background:none;border:1px solid #e5e7eb;border-radius:12px;padding:12px;cursor:pointer;font-size:14px;color:#6b7280;margin-top:4px">
+        View History
+      </button>
+    </div>
+  `;
+}
+
+function renderRestTimer() {
+  if (!state.resting) return "";
+  const dur = state.workout.rest;
+  const pct = ((dur - state.restLeft) / dur) * 100;
+  const isLow = state.restLeft <= 10;
+  const color = isLow ? "#ef4444" : "#3b82f6";
+  const r = 45, circ = 2 * Math.PI * r;
+  return `
+    <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+      <p style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.1em">Rest</p>
+      <div style="position:relative;width:200px;height:200px;display:flex;align-items:center;justify-content:center">
+        <svg style="position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="${r}" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="4"/>
+          <circle cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="4"
+            stroke-dasharray="${circ}" stroke-dashoffset="${circ*(1-pct/100)}" stroke-linecap="round" class="timer-circle"/>
+        </svg>
+        <span style="font-size:72px;font-weight:700;color:${isLow ? '#ef4444' : 'white'}">${state.restLeft}</span>
+      </div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);margin:0">${dur - state.restLeft}s / ${dur}s</p>
+      <button onclick="skipRest()" style="font-size:15px;color:rgba(255,255,255,0.5);background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:10px 32px;cursor:pointer;margin-top:8px">
+        Skip rest →
+      </button>
+    </div>
+  `;
+}
+
+function getRepsOptions(targetReps) {
+  const [lo, hi] = parseRepRange(targetReps);
+  const pad = hi - lo <= 3 ? 3 : 2;
+  const start = Math.max(1, lo - pad);
+  const end = hi + pad;
+  const opts = [];
+  for (let i = start; i <= end; i++) opts.push(i);
+  return opts;
+}
+
+function repsBtnStyle(r, selected, hinted, inRange) {
+  if (selected) return 'background:#22c55e;color:white;box-shadow:0 1px 3px rgba(34,197,94,0.4);outline:2px solid #86efac;';
+  if (hinted) return 'background:white;color:#86efac;border:2px dashed #86efac;';
+  if (inRange) return 'background:#f0fdf4;color:#16a34a;border:1.5px solid #86efac;';
+  return 'background:#fafafa;color:#a3a3a3;border:1px solid #e5e7eb;';
+}
+
+function parseRepRange(repsStr) {
+  // Parse "10-12" → [10,12], or "12" → [12,12]
+  const parts = String(repsStr).split("-").map(s => parseInt(s.trim()));
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return parts;
+  if (parts.length === 1 && !isNaN(parts[0])) return [parts[0], parts[0]];
+  return [8, 12]; // default hypertrophy range
+}
+
+function getLastReps(exIdx, setKey) {
+  // Check last session data for this exercise/set
+  if (!state.lastSession) return null;
+  const ex = state.workout.exercises[exIdx];
+  const setType = setKey === "warmup" ? "warmup" : "working";
+  const setNum = setKey === "warmup" ? 0 : setKey + 1;
+  const key = `${ex.name}|${setType}|${setNum}`;
+  const data = state.lastSession[key];
+  if (data && data.reps) {
+    const n = parseInt(data.reps);
+    return isNaN(n) ? null : n;
+  }
+  return null;
+}
+
+function logReps(exIdx, setKey, reps, isWarmup) {
+  // setKey comes as string from onclick — parse to number for working sets
+  const sk = (setKey === "warmup") ? "warmup" : parseInt(setKey);
+  state.reps[`${exIdx}-${sk}`] = reps;
+  state.completed[`${exIdx}-${sk}`] = true;
+  if (!state.running) startTimer();
+  // Rest timer after every working set
+  // Skip rest only between superset partners (e.g. curls→extensions with no break)
+  if (!isWarmup) {
+    const ex = state.workout.exercises[exIdx];
+    const nextEx = state.workout.exercises[exIdx + 1];
+    const skipForSuperset = ex.superset && nextEx?.superset === ex.superset;
+    if (!skipForSuperset) {
+      startRest(state.workout.rest);
+    }
+  }
+  if (allDone()) { stopTimer(); skipRest(); }
+  triggerSave();
+  render();
+}
+
+function undoSet(exIdx, setKey) {
+  delete state.reps[`${exIdx}-${setKey}`];
+  state.completed[`${exIdx}-${setKey}`] = false;
+  triggerSave();
+  render();
+}
+
+function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
+  const w = getSetWeight(exIdx, setKey);
+  const wHint = w == null ? getHintWeight(exIdx, setKey) : null;
+  const loggedReps = state.reps[`${exIdx}-${setKey}`];
+  const labelColor = isWarmup ? '#d97706' : '#6b7280';
+  const doneColor = isWarmup ? '#f59e0b' : '#22c55e';
+
+  if (isDone && loggedReps) {
+    // Completed set — show summary with undo
+    return `
+      <div style="border-bottom:1px solid #f9fafb;padding:10px 0;display:flex;align-items:center;gap:8px;opacity:0.85">
+        <span style="font-size:11px;font-weight:700;color:${doneColor};width:20px;text-align:center">✓</span>
+        <span style="font-size:12px;color:#374151;font-weight:500">${label}</span>
+        <span style="font-size:12px;color:#6b7280">${loggedReps} reps</span>
+        ${w ? `<span style="font-size:12px;font-family:monospace;color:#2563eb">@ ${w}lb</span>` : ''}
+        <button onclick="undoSet(${exIdx},'${setKey}')" style="margin-left:auto;font-size:10px;color:#9ca3af;background:none;border:1px solid #e5e7eb;border-radius:4px;padding:2px 6px;cursor:pointer">undo</button>
+      </div>
+    `;
+  }
+
+  // Active set — show weight + reps pickers
+  let weightDisplay = '';
+  if (w) {
+    weightDisplay = `<span style="font-size:12px;font-family:monospace;color:#2563eb">${w}lb / ${lbToKg(w)}kg</span>`;
+  } else if (wHint) {
+    weightDisplay = `<span style="font-size:11px;font-family:monospace;color:#93c5fd;border-bottom:1px dashed #93c5fd">${wHint}lb?</span>`;
+  }
+
+  return `
+    <div style="border-bottom:1px solid #f0f0f0;padding:10px 0">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:700;color:${labelColor};width:20px;text-align:center">${label}</span>
+        <span style="font-size:12px;color:#9ca3af">${targetReps} reps</span>
+        ${weightDisplay ? `<span style="margin-left:auto">${weightDisplay}</span>` : ''}
+      </div>
+      <div style="margin-bottom:6px">
+        <div style="font-size:10px;color:#9ca3af;margin-bottom:3px;padding-left:26px">Weight (lb)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;padding-left:26px">
+          ${WEIGHTS_LB.map(lb => `
+            <button class="weight-btn" style="${weightBtnStyle(lb, w === lb, wHint === lb)}"
+              onclick="state.weights['${exIdx}-${setKey}']=${w===lb?'null':lb};triggerSave();render()">
+              ${lb}
+            </button>
+          `).join("")}
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px;color:#9ca3af;margin-bottom:3px;padding-left:26px">Reps done (tap to log set)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;padding-left:26px">
+          ${(() => { const lastR = getLastReps(exIdx, setKey); const [lo,hi] = parseRepRange(targetReps); return getRepsOptions(targetReps).map(r => `
+            <button class="weight-btn" style="${repsBtnStyle(r, false, lastR === r, r >= lo && r <= hi)}"
+              onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup})">
+              ${r}
+            </button>
+          `).join(""); })()}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderWorkout() {
+  const w = state.workout;
+  const total = totalSets();
+  const done = completedSets();
+  const pct = total ? (done / total) * 100 : 0;
+  const isDone = allDone();
+
+  let exerciseCards = w.exercises.map((ex, exIdx) => {
+    const warmupDone = !!state.completed[`${exIdx}-warmup`];
+    const exDone = warmupDone && Array.from({length:ex.sets}).every((_,i) => state.completed[`${exIdx}-${i}`]);
+    const gifVisible = state.showGif[exIdx];
+
+    let setsHTML = renderSetRow(exIdx, "warmup", "W", warmupDone, ex.reps, true);
+    for (let i = 0; i < ex.sets; i++) {
+      setsHTML += renderSetRow(exIdx, i, `${i+1}`, !!state.completed[`${exIdx}-${i}`], ex.reps, false);
+    }
+
+    return `
+      <div class="card ${exDone ? 'done' : ''}">
+        <div style="padding:16px 16px 8px">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
+            <div style="flex:1">
+              <h3 style="font-weight:600;color:${exDone ? '#15803d' : '#111827'};margin:0">${ex.name}</h3>
+              <p style="font-size:12px;color:#6b7280;margin:2px 0 0">${ex.sets} × ${ex.reps} reps</p>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center">
+              ${ex.superset ? '<span style="font-size:11px;background:#f3e8ff;color:#7c3aed;padding:2px 8px;border-radius:9999px;font-weight:500">Superset</span>' : ''}
+              ${ex.video ? `<a href="${ex.video}" target="_blank" rel="noopener" style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:9999px;font-weight:500;text-decoration:none;display:inline-block">▶ How to</a>` : ''}
+            </div>
+          </div>
+          ${ex.notes ? `<p style="font-size:12px;color:#9ca3af;margin:0">${ex.notes}</p>` : ''}
+        </div>
+        <div style="padding:0 16px 12px">${setsHTML}</div>
+      </div>
+    `;
+  }).join("");
+
+  let completionHTML = "";
+  if (isDone) {
+    const summaryLines = w.exercises.map((ex, exIdx) => {
+      let lines = "";
+      if (state.completed[`${exIdx}-warmup`]) {
+        const wt = getEffectiveWeight(exIdx, "warmup");
+        const rp = state.reps[`${exIdx}-warmup`] || ex.reps;
+        lines += `<p style="font-size:12px;color:#d97706;font-family:monospace;margin:2px 0 2px 8px">W: ${rp} reps ${wt ? `@ ${wt}lb / ${lbToKg(wt)}kg` : ""}</p>`;
+      }
+      for (let i = 0; i < ex.sets; i++) {
+        if (state.completed[`${exIdx}-${i}`]) {
+          const wt = getEffectiveWeight(exIdx, i);
+          const rp = state.reps[`${exIdx}-${i}`] || ex.reps;
+          lines += `<p style="font-size:12px;color:#6b7280;font-family:monospace;margin:2px 0 2px 8px">#${i+1}: ${rp} reps ${wt ? `@ ${wt}lb / ${lbToKg(wt)}kg` : ""}</p>`;
+        }
+      }
+      return `<div style="margin-bottom:8px"><p style="font-weight:500;color:#374151;margin:0">${ex.name}</p>${lines}</div>`;
+    }).join("");
+
+    completionHTML = `
+      <div style="padding:24px 0">
+        <div style="text-align:center;margin-bottom:16px">
+          <p style="font-size:40px;margin:0 0 8px">💪</p>
+          <h3 style="font-size:20px;font-weight:700;color:#15803d;margin:0">Workout Complete!</h3>
+          <p style="font-size:14px;color:#6b7280;margin:4px 0 0">Time: ${formatTime(state.elapsed)}</p>
+        </div>
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <p style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">Session Summary</p>
+          ${summaryLines}
+          <div style="border-top:1px solid #e5e7eb;padding-top:8px;margin-top:8px;display:flex;justify-content:space-between;font-size:12px;color:#9ca3af">
+            <span>Total: ${formatTime(state.elapsed)}</span>
+            <span>${new Date().toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}</span>
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:16px">
+          <p style="font-size:12px;color:#9ca3af">✓ Auto-saved</p>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div style="position:sticky;top:0;background:white;border-bottom:1px solid #f3f4f6;padding:12px 16px;z-index:10">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <button onclick="stopTimer();state.screen='home';loadHomeData()" style="color:#2563eb;font-size:14px;font-weight:500;background:none;border:none;cursor:pointer">← Back</button>
+        <span style="font-size:14px;font-family:monospace;color:#6b7280">${formatTime(state.elapsed)}</span>
+      </div>
+      <h2 style="font-size:18px;font-weight:700;margin:4px 0 0">${w.name}</h2>
+      <div style="margin-top:8px;height:6px;background:#f3f4f6;border-radius:9999px;overflow:hidden">
+        <div style="height:100%;background:#3b82f6;border-radius:9999px;transition:width 0.3s;width:${pct}%"></div>
+      </div>
+      <p style="font-size:12px;color:#9ca3af;margin:4px 0 0">${done}/${total} sets</p>
+    </div>
+    ${renderRestTimer()}
+    <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
+      ${w.warmup ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px"><p style="font-size:14px;color:#92400e;margin:0">🔥 <strong>Warm-up:</strong> ${w.warmup}</p></div>` : ''}
+      ${exerciseCards}
+      ${completionHTML}
+      ${done > 0 && state.sessionId ? `
+        <div style="text-align:center;padding:8px 0">
+          <p style="font-size:11px;color:#9ca3af">✓ Auto-saving</p>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderHistory() {
+  const items = state.history.map(s => {
+    const dur = s.duration_sec ? formatTime(s.duration_sec) : "?";
+    const setsHTML = s.sets.map(st => {
+      const label = st.set_type === "warmup" ? "W" : `#${st.set_number}`;
+      const w = st.weight_lb ? `@ ${st.weight_lb}lb / ${lbToKg(st.weight_lb)}kg` : "";
+      return `<p style="font-size:12px;color:#6b7280;font-family:monospace;margin:1px 0 1px 8px">${st.exercise} [${label}]: ${st.reps} reps ${w}</p>`;
+    }).join("");
+    return `
+      <div class="card" style="padding:16px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <strong style="color:#111827">${s.workout_name}</strong>
+          <span style="font-size:12px;color:#9ca3af">${s.date} · ${dur}</span>
+        </div>
+        ${setsHTML}
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div style="padding:32px 16px 16px">
+      <button onclick="state.screen='home';loadHomeData()" style="color:#2563eb;font-size:14px;font-weight:500;background:none;border:none;cursor:pointer;margin-bottom:12px">← Back</button>
+      <h1 style="font-size:24px;font-weight:700;color:#111827;margin:0">Workout History</h1>
+    </div>
+    <div style="padding:0 16px">
+      ${items.length ? items : '<p style="color:#9ca3af;text-align:center;padding:32px 0">No sessions logged yet. Complete a workout to see it here.</p>'}
+    </div>
+  `;
+}
+
+// Load home screen data
+async function loadHomeData() {
+  try {
+    const [histRes, activeRes] = await Promise.all([
+      fetch("/api/history?limit=30"),
+      fetch("/api/active-sessions"),
+    ]);
+    const history = await histRes.json();
+    muscleStatus = computeMuscleStatus(history);
+    state._activeSessions = await activeRes.json();
+    render();
+  } catch (e) { console.error("[HOME] Error:", e); }
+}
+
+// Initial render
+render();
+loadHomeData();
+</script>
+</body>
+</html>

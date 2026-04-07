@@ -1,0 +1,4 @@
+workouts.db
+.fuse_hidden*
+__pycache__/
+*.pyc

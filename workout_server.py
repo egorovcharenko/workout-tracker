@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+"""
+Workout Tracker Server
+Run: python3 workout_server.py
+Open: http://localhost:8000
+"""
+
+import http.server
+import json
+import sqlite3
+import os
+import urllib.parse
+
+PORT = 8000
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workouts.db")
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    # Create tables if they don't exist
+    conn.execute('''CREATE TABLE IF NOT EXISTS sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workout_name TEXT NOT NULL,
+        date TEXT NOT NULL,
+        duration_sec INTEGER,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS sets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        exercise TEXT NOT NULL,
+        set_type TEXT NOT NULL DEFAULT 'working',
+        set_number INTEGER,
+        reps TEXT,
+        weight_lb REAL,
+        completed INTEGER DEFAULT 1,
+        FOREIGN KEY (session_id) REFERENCES sessions(id)
+    )''')
+    conn.commit()
+    return conn
+
+
+def save_session(data):
+    conn = get_db()
+    c = conn.cursor()
+    session_id = data.get("session_id")
+
+    if session_id:
+        # Update existing session
+        c.execute(
+            "UPDATE sessions SET duration_sec = ?, notes = ? WHERE id = ?",
+            (data.get("duration_sec", 0), data.get("notes", ""), session_id),
+        )
+        # Replace all sets
+        c.execute("DELETE FROM sets WHERE session_id = ?", (session_id,))
+    else:
+        # Create new session
+        c.execute(
+            "INSERT INTO sessions (workout_name, date, duration_sec, notes) VALUES (?, ?, ?, ?)",
+            (data["workout"], data["date"], data.get("duration_sec", 0), data.get("notes", "")),
+        )
+        session_id = c.lastrowid
+
+    for s in data.get("sets", []):
+        c.execute(
+            "INSERT INTO sets (session_id, exercise, set_type, set_number, reps, weight_lb, completed) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (session_id, s["exercise"], s["set_type"], s.get("set_number", 0), s.get("reps", ""), s.get("weight_lb"), 1),
+        )
+    conn.commit()
+    conn.close()
+    return session_id
+
+
+def get_history(limit=20):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM sessions ORDER BY date DESC, id DESC LIMIT ?", (limit,))
+    sessions = [dict(r) for r in c.fetchall()]
+    for sess in sessions:
+        c.execute("SELECT * FROM sets WHERE session_id = ? ORDER BY id", (sess["id"],))
+        sess["sets"] = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return sessions
+
+
+def get_last_session(workout_name):
+    """Get the most recent session data for a workout (for hints)."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "SELECT id FROM sessions WHERE workout_name = ? ORDER BY date DESC, id DESC LIMIT 1",
+        (workout_name,),
+    )
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return {}
+    c.execute("SELECT exercise, set_type, set_number, weight_lb, reps FROM sets WHERE session_id = ?", (row["id"],))
+    data = {}
+    for r in c.fetchall():
+        key = f"{r['exercise']}|{r['set_type']}|{r['set_number']}"
+        data[key] = {"weight_lb": r["weight_lb"], "reps": r["reps"]}
+    conn.close()
+    return data
+
+
+def get_exercise_hints():
+    """Get most recent weight/reps for every exercise across ALL workouts."""
+    conn = get_db()
+    c = conn.cursor()
+    # For each exercise+set_type+set_number combo, get the most recent entry
+    c.execute('''
+        SELECT s2.exercise, s2.set_type, s2.set_number, s2.weight_lb, s2.reps
+        FROM sets s2
+        INNER JOIN sessions sess ON sess.id = s2.session_id
+        WHERE s2.id IN (
+            SELECT s1.id FROM sets s1
+            INNER JOIN sessions ss ON ss.id = s1.session_id
+            WHERE s1.exercise = s2.exercise AND s1.set_type = s2.set_type AND s1.set_number = s2.set_number
+            ORDER BY ss.date DESC, ss.id DESC
+            LIMIT 1
+        )
+    ''')
+    data = {}
+    for r in c.fetchall():
+        key = f"{r[0]}|{r[1]}|{r[2]}"
+        data[key] = {"weight_lb": r[3], "reps": r[4]}
+    conn.close()
+    return data
+
+
+def get_active_sessions(today=None):
+    """Get all sessions from the last 24h (for home screen active indicator)."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "SELECT id, workout_name, duration_sec FROM sessions WHERE date >= date('now', '-1 day') ORDER BY id DESC",
+    )
+    sessions = []
+    for row in c.fetchall():
+        c2 = conn.cursor()
+        c2.execute("SELECT COUNT(*) as cnt FROM sets WHERE session_id = ?", (row["id"],))
+        cnt = c2.fetchone()["cnt"]
+        if cnt > 0:
+            sessions.append({
+                "id": row["id"],
+                "workout_name": row["workout_name"],
+                "duration_sec": row["duration_sec"],
+                "sets_done": cnt,
+            })
+    conn.close()
+    return sessions
+
+
+def get_today_session(workout_name, today=None):
+    """Get the most recent session for a workout within the last 24h."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "SELECT id, duration_sec FROM sessions WHERE workout_name = ? AND date >= date('now', '-1 day') ORDER BY id DESC LIMIT 1",
+        (workout_name,),
+    )
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return None
+    session = {"id": row["id"], "duration_sec": row["duration_sec"], "sets": []}
+    c.execute("SELECT exercise, set_type, set_number, weight_lb, reps FROM sets WHERE session_id = ? ORDER BY id", (row["id"],))
+    session["sets"] = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return session
+
+
+# Read the HTML file
+HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workout.html")
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/" or parsed.path == "/index.html":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            with open(HTML_PATH, "rb") as f:
+                self.wfile.write(f.read())
+        elif parsed.path == "/api/history":
+            params = urllib.parse.parse_qs(parsed.query)
+            limit = int(params.get("limit", [20])[0])
+            data = get_history(limit)
+            print(f"  [HISTORY] Returning {len(data)} sessions")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+        elif parsed.path == "/api/last-session":
+            params = urllib.parse.parse_qs(parsed.query)
+            workout = params.get("workout", [""])[0]
+            data = get_last_session(workout)
+            print(f"  [LAST] Last session for '{workout}': {len(data)} entries")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+        elif parsed.path == "/api/exercise-hints":
+            data = get_exercise_hints()
+            print(f"  [HINTS] {len(data)} exercise hints")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+        elif parsed.path == "/api/active-sessions":
+            data = get_active_sessions()
+            print(f"  [ACTIVE] {len(data)} active sessions")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+        elif parsed.path == "/api/today-session":
+            params = urllib.parse.parse_qs(parsed.query)
+            workout = params.get("workout", [""])[0]
+            data = get_today_session(workout)
+            print(f"  [TODAY] Today's session for '{workout}': {data['id'] if data else 'none'}")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_POST(self):
+        if self.path == "/api/save":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length)
+                print(f"\n  [SAVE] Received {length} bytes")
+                print(f"  [SAVE] Body: {raw.decode()[:500]}")
+                body = json.loads(raw)
+                session_id = save_session(body)
+                print(f"  [SAVE] ✅ Saved session #{session_id}")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"id": session_id, "ok": True}).encode())
+            except Exception as e:
+                print(f"  [SAVE] ❌ Error: {e}")
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_OPTIONS(self):
+        """Handle CORS preflight requests."""
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        print(f"  [{self.command}] {args[0]}")
+
+
+if __name__ == "__main__":
+    # Ensure DB exists
+    get_db().close()
+    print(f"\n  🏋️  Workout Tracker running at http://localhost:{PORT}")
+    print(f"  📁  Database: {DB_PATH}")
+    print(f"  Press Ctrl+C to stop\n")
+    server = http.server.HTTPServer(("", PORT), Handler)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n  Stopped.")
