@@ -54,7 +54,7 @@ const WORKOUTS = [
       { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4" },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
       { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo" },
-      { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "12", notes: "Hinge at hips, slight knee bend", superset: false, video: "https://www.youtube.com/shorts/cGMaBqaExBo" },
+      { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
       { name: "Seated Overhead Press", sets: 2, reps: "10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
       { name: "Dumbbell Bicep Curls", sets: 2, reps: "8-12", notes: "Finish strong", superset: false, video: "https://www.youtube.com/shorts/MKWBV29S6c0" },
     ],
@@ -102,10 +102,10 @@ const EXERCISE_MUSCLES = {
 // Band resistance levels (Tribe set: 5 stackable bands)
 const BANDS = [
   { name: "Yellow", lb: 5, color: "#fde047", text: "#854d0e" },
-  { name: "Green", lb: 10, color: "#86efac", text: "#166534" },
-  { name: "Red", lb: 15, color: "#fca5a5", text: "#991b1b" },
-  { name: "Blue", lb: 20, color: "#93c5fd", text: "#1e40af" },
-  { name: "Black", lb: 25, color: "#374151", text: "#f9fafb" },
+  { name: "Green", lb: 15, color: "#86efac", text: "#166534" },
+  { name: "Red", lb: 20, color: "#fca5a5", text: "#991b1b" },
+  { name: "Blue", lb: 30, color: "#93c5fd", text: "#1e40af" },
+  { name: "Black", lb: 35, color: "#374151", text: "#f9fafb" },
 ];
 
 // All trackable muscle groups with display info
@@ -293,9 +293,39 @@ function getEffectiveWeight(exIdx, setKey) {
   return getSetWeight(exIdx, setKey) || getHintWeight(exIdx, setKey);
 }
 
-function totalSets() { return state.workout.exercises.reduce((s, e) => s + e.sets + 1, 0); }
+function getSetCount(exIdx) {
+  const base = state.workout.exercises[exIdx].sets;
+  return base + (state.extraSets?.[exIdx] || 0);
+}
+function totalSets() { return state.workout.exercises.reduce((s, e, i) => s + getSetCount(i) + 1, 0); }
 function completedSets() { return Object.values(state.completed).filter(Boolean).length; }
 function allDone() { return completedSets() === totalSets(); }
+
+function addSet(exIdx) {
+  if (!state.extraSets) state.extraSets = {};
+  state.extraSets[exIdx] = (state.extraSets[exIdx] || 0) + 1;
+  render();
+}
+function removeLastSet(exIdx) {
+  const count = getSetCount(exIdx);
+  const lastIdx = count - 1;
+  // Only remove if the last set isn't completed
+  if (state.completed[`${exIdx}-${lastIdx}`]) return;
+  // Clean up any state for the removed set
+  delete state.weights[`${exIdx}-${lastIdx}`];
+  delete state.reps[`${exIdx}-${lastIdx}`];
+  delete state.completed[`${exIdx}-${lastIdx}`];
+  if (!state.extraSets) state.extraSets = {};
+  const base = state.workout.exercises[exIdx].sets;
+  const extra = state.extraSets[exIdx] || 0;
+  if (extra > 0) {
+    state.extraSets[exIdx] = extra - 1;
+  } else if (count > 1) {
+    state.extraSets[exIdx] = (state.extraSets[exIdx] || 0) - 1;
+  }
+  triggerSave();
+  render();
+}
 function formatTime(s) { return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`; }
 function localDate() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
@@ -309,7 +339,7 @@ async function autoSave() {
     if (state.completed[`${exIdx}-warmup`]) {
       sets.push({ exercise: ex.name, set_type: "warmup", set_number: 0, reps: String(state.reps[`${exIdx}-warmup`] || ex.reps), weight_lb: getEffectiveWeight(exIdx, "warmup") });
     }
-    for (let i = 0; i < ex.sets; i++) {
+    for (let i = 0; i < getSetCount(exIdx); i++) {
       if (state.completed[`${exIdx}-${i}`]) {
         sets.push({ exercise: ex.name, set_type: "working", set_number: i + 1, reps: String(state.reps[`${exIdx}-${i}`] || ex.reps), weight_lb: getEffectiveWeight(exIdx, i) });
       }
@@ -364,13 +394,15 @@ async function loadSessionData(workoutName) {
       console.log(`[RESUME] Restored session #${todayData.id} with ${todayData.sets.length} sets`);
     }
 
-    // Load hints: first try same-workout last session, then cross-workout exercise hints
-    const [lastRes, hintsRes] = await Promise.all([
+    // Load hints + 1RM history
+    const [lastRes, hintsRes, ormRes] = await Promise.all([
       fetch(`/api/last-session?workout=${encodeURIComponent(workoutName)}`),
       fetch("/api/exercise-hints"),
+      fetch("/api/1rm-history"),
     ]);
     state.lastSession = await lastRes.json();
     state.exerciseHints = await hintsRes.json();
+    state.ormHistory = await ormRes.json();
 
     // Merge: same-workout session takes priority, cross-workout fills gaps
     const merged = { ...state.exerciseHints, ...state.lastSession };
@@ -421,7 +453,7 @@ function skipRest() { clearInterval(restInterval); restInterval = null; state.re
 // Sets are now logged via logReps() in renderSetRow
 
 function startWorkout(w) {
-  state.screen = "workout"; state.workout = w; state.completed = {}; state.weights = {}; state.reps = {}; state.bands = {};
+  state.screen = "workout"; state.workout = w; state.completed = {}; state.weights = {}; state.reps = {};
   state.elapsed = 0; state.running = false; state.saved = false; state.showGif = {};
   state.sessionId = null; state.lastSaved = null;
   render();
@@ -687,6 +719,66 @@ function undoSet(exIdx, setKey) {
   render();
 }
 
+function currentSessionOrm(exerciseName) {
+  // Calculate best 1RM from current session's completed working sets for this exercise
+  const exIdx = state.workout ? state.workout.exercises.findIndex(e => e.name === exerciseName) : -1;
+  if (exIdx < 0) return 0;
+  const ex = state.workout.exercises[exIdx];
+  let best = 0;
+  for (let i = 0; i < getSetCount(exIdx); i++) {
+    if (!state.completed[`${exIdx}-${i}`]) continue;
+    const w = state.weights[`${exIdx}-${i}`];
+    const r = parseInt(state.reps[`${exIdx}-${i}`]) || 0;
+    if (!w || r <= 0) continue;
+    const orm = r > 1 ? w * (1 + r / 30) : w;
+    if (orm > best) best = orm;
+  }
+  return Math.round(best * 10) / 10;
+}
+
+function renderSparkline(exerciseName) {
+  const serverData = (state.ormHistory || {})[exerciseName] || [];
+  const liveOrm = currentSessionOrm(exerciseName);
+  const today = localDate();
+  // Merge: replace today's entry with live value if higher, or append
+  let data = serverData.map(d => ({ ...d }));
+  if (liveOrm > 0) {
+    const todayIdx = data.findIndex(d => d.date === today);
+    if (todayIdx >= 0) {
+      data[todayIdx].orm = Math.max(data[todayIdx].orm, liveOrm);
+    } else {
+      data.push({ date: today, orm: liveOrm });
+    }
+  }
+  if (!data || data.length < 2) return "";
+  const vals = data.map(d => d.orm);
+  const latest = vals[vals.length - 1];
+  const prev = vals[vals.length - 2];
+  const max = Math.max(...vals);
+  const min = Math.min(...vals);
+  const range = max - min || 1;
+  const w = 80, h = 28, pad = 2;
+  const points = vals.map((v, i) =>
+    `${pad + (i / (vals.length - 1)) * (w - pad * 2)},${pad + (1 - (v - min) / range) * (h - pad * 2)}`
+  ).join(" ");
+  const trend = latest >= prev ? "#16a34a" : "#ef4444";
+  const arrow = latest >= prev ? "↑" : "↓";
+  const diff = Math.abs(latest - prev).toFixed(0);
+  return `<div style="display:flex;flex-direction:column;align-items:flex-end">
+    <div style="font-size:8px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em">Est. 1RM</div>
+    <div style="display:flex;align-items:center;gap:3px">
+      <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+        <polyline points="${points}" fill="none" stroke="${trend}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="${pad + ((vals.length - 1) / (vals.length - 1)) * (w - pad * 2)}" cy="${pad + (1 - (latest - min) / range) * (h - pad * 2)}" r="2.5" fill="${trend}"/>
+      </svg>
+      <div style="font-size:10px;color:${trend};font-weight:600;line-height:1.1;text-align:right">
+        <div>${Math.round(latest)}lb</div>
+        <div>${arrow}${diff}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function getBandSelection(exIdx, setKey) {
   const k = `${exIdx}-${setKey}-bands`;
   return state.bands?.[k] || [];
@@ -695,15 +787,9 @@ function getBandSelection(exIdx, setKey) {
 function toggleBand(exIdx, setKey, bandLb) {
   const k = `${exIdx}-${setKey}-bands`;
   if (!state.bands) state.bands = {};
-  const current = state.bands[k] || [];
-  if (current.includes(bandLb)) {
-    state.bands[k] = current.filter(b => b !== bandLb);
-  } else {
-    state.bands[k] = [...current, bandLb];
-  }
-  // Store total band lb as the weight for saving
-  const total = state.bands[k].reduce((a, b) => a + b, 0);
-  state.weights[`${exIdx}-${setKey}`] = total || null;
+  if (!state.bands) state.bands = {};
+  state.bands[k] = [bandLb];
+  state.weights[`${exIdx}-${setKey}`] = bandLb;
   triggerSave();
   render();
 }
@@ -750,15 +836,15 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
   if (isBand) {
     resistanceHTML = `
       <div style="margin-bottom:6px">
-        <div style="font-size:10px;color:#9ca3af;margin-bottom:3px;padding-left:26px">Bands (tap to stack)</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;padding-left:26px">
+        <div style="font-size:10px;color:#9ca3af;margin-bottom:3px;padding-left:26px">Band</div>
+        <div style="display:flex;gap:3px;padding-left:26px">
           ${BANDS.map(b => {
             const sel = selectedBands.includes(b.lb);
             const style = sel
               ? `background:${b.color};color:${b.text};outline:2px solid ${b.color};box-shadow:0 1px 3px rgba(0,0,0,0.2);`
-              : `background:white;color:${b.text};border:2px solid ${b.color};opacity:0.7;`;
-            return `<button class="weight-btn" style="${style}" onclick="toggleBand(${exIdx},'${setKey}',${b.lb})">
-              ${b.name} ${b.lb}lb
+              : `background:white;color:${b.color};border:2px solid ${b.color};opacity:0.7;`;
+            return `<button class="weight-btn" style="${style};font-size:11px;padding:4px 6px;min-width:0" onclick="toggleBand(${exIdx},'${setKey}',${b.lb})">
+              ${b.lb}lb
             </button>`;
           }).join("")}
         </div>
@@ -810,13 +896,21 @@ function renderWorkout() {
 
   let exerciseCards = w.exercises.map((ex, exIdx) => {
     const warmupDone = !!state.completed[`${exIdx}-warmup`];
-    const exDone = warmupDone && Array.from({length:ex.sets}).every((_,i) => state.completed[`${exIdx}-${i}`]);
+    const setCount = getSetCount(exIdx);
+    const exDone = warmupDone && Array.from({length:setCount}).every((_,i) => state.completed[`${exIdx}-${i}`]);
     const gifVisible = state.showGif[exIdx];
 
     let setsHTML = renderSetRow(exIdx, "warmup", "W", warmupDone, ex.reps, true);
-    for (let i = 0; i < ex.sets; i++) {
+    for (let i = 0; i < setCount; i++) {
       setsHTML += renderSetRow(exIdx, i, `${i+1}`, !!state.completed[`${exIdx}-${i}`], ex.reps, false);
     }
+    // Can remove last set only if it's not completed and there's more than 1 set
+    const lastCompleted = !!state.completed[`${exIdx}-${setCount - 1}`];
+    const canRemove = setCount > 1 && !lastCompleted;
+    setsHTML += `<div style="display:flex;gap:8px;padding:6px 0 2px 26px">
+      <button onclick="addSet(${exIdx})" style="font-size:11px;color:#6b7280;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:3px 10px;cursor:pointer">+ set</button>
+      ${canRemove ? `<button onclick="removeLastSet(${exIdx})" style="font-size:11px;color:#ef4444;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:3px 10px;cursor:pointer">− set</button>` : ''}
+    </div>`;
 
     return `
       <div class="card ${exDone ? 'done' : ''}">
@@ -827,6 +921,7 @@ function renderWorkout() {
               <p style="font-size:12px;color:#6b7280;margin:2px 0 0">${ex.sets} × ${ex.reps} reps</p>
             </div>
             <div style="display:flex;gap:6px;align-items:center">
+              ${renderSparkline(ex.name)}
               ${ex.superset ? '<span style="font-size:11px;background:#f3e8ff;color:#7c3aed;padding:2px 8px;border-radius:9999px;font-weight:500">Superset</span>' : ''}
               ${ex.video ? `<a href="${ex.video}" target="_blank" rel="noopener" style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:9999px;font-weight:500;text-decoration:none;display:inline-block">▶ How to</a>` : ''}
             </div>
@@ -847,7 +942,7 @@ function renderWorkout() {
         const rp = state.reps[`${exIdx}-warmup`] || ex.reps;
         lines += `<p style="font-size:12px;color:#d97706;font-family:monospace;margin:2px 0 2px 8px">W: ${rp} reps ${wt ? `@ ${wt}lb / ${lbToKg(wt)}kg` : ""}</p>`;
       }
-      for (let i = 0; i < ex.sets; i++) {
+      for (let i = 0; i < getSetCount(exIdx); i++) {
         if (state.completed[`${exIdx}-${i}`]) {
           const wt = getEffectiveWeight(exIdx, i);
           const rp = state.reps[`${exIdx}-${i}`] || ex.reps;

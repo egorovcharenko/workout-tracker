@@ -131,6 +131,35 @@ def get_exercise_hints():
     return data
 
 
+def get_exercise_1rm_history():
+    """Get per-exercise best estimated 1RM per session (Epley formula)."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''
+        SELECT sess.date, s.exercise, s.weight_lb, s.reps
+        FROM sets s
+        INNER JOIN sessions sess ON sess.id = s.session_id
+        WHERE s.set_type = 'working' AND s.weight_lb > 0 AND s.reps > 0
+        ORDER BY sess.date ASC, sess.id ASC
+    ''')
+    # Group by exercise -> list of (date, best_1rm)
+    from collections import defaultdict
+    raw = defaultdict(list)
+    for r in c.fetchall():
+        reps = int(r["reps"]) if str(r["reps"]).isdigit() else 0
+        if reps <= 0 or not r["weight_lb"]:
+            continue
+        w = float(r["weight_lb"])
+        orm = w * (1 + reps / 30.0) if reps > 1 else w
+        raw[(r["exercise"], r["date"])].append(round(orm, 1))
+    # Best 1RM per exercise per date
+    result = defaultdict(list)
+    for (ex, date), orms in raw.items():
+        result[ex].append({"date": date, "orm": max(orms)})
+    conn.close()
+    return dict(result)
+
+
 def get_active_sessions(today=None):
     """Get all sessions from the last 24h (for home screen active indicator)."""
     conn = get_db()
@@ -209,6 +238,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif parsed.path == "/api/exercise-hints":
             data = get_exercise_hints()
             print(f"  [HINTS] {len(data)} exercise hints")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+        elif parsed.path == "/api/1rm-history":
+            data = get_exercise_1rm_history()
+            print(f"  [1RM] {len(data)} exercises with history")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
