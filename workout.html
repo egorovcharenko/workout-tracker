@@ -66,15 +66,15 @@ const WORKOUTS = [
     name: "Full Body B",
     duration: "~35 min",
     exercises: [
-      { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4" },
+      { name: "Band Squat", sets: 3, reps: "12-15", notes: "Stand on band, handles at shoulders", superset: false, video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
-      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo" },
-      { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "12", notes: "Hinge at hips, slight knee bend", superset: false, video: "https://www.youtube.com/shorts/cGMaBqaExBo" },
+      { name: "Band Row", sets: 3, reps: "12-15", notes: "Stand on band, pull to chest, squeeze back", superset: false, video: "https://www.youtube.com/shorts/BAlsaA1wIhY", equipment: "band" },
+      { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
       { name: "Seated Overhead Press", sets: 2, reps: "10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
       { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", superset: false, video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
     ],
     rest: 75,
-    warmup: "Light goblet squats and arm circles to warm up",
+    warmup: "Light band squats to warm up legs",
   },
 ];
 
@@ -91,10 +91,22 @@ const EXERCISE_MUSCLES = {
   "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
   "Dumbbell Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"] },
   "Seated Overhead Press": { primary: ["shoulders"], secondary: ["triceps"] },
+  "Band Squat": { primary: ["quads", "glutes"], secondary: ["core"] },
+  "Band Row": { primary: ["lats", "upper_back"], secondary: ["biceps"] },
+  "Band Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"] },
   // Future
   "Lunges": { primary: ["quads", "glutes"], secondary: ["hamstrings"] },
   "Calf Raises": { primary: ["calves"], secondary: [] },
 };
+
+// Band resistance levels (Tribe set: 5 stackable bands)
+const BANDS = [
+  { name: "Yellow", lb: 5, color: "#fde047", text: "#854d0e" },
+  { name: "Green", lb: 10, color: "#86efac", text: "#166534" },
+  { name: "Red", lb: 15, color: "#fca5a5", text: "#991b1b" },
+  { name: "Blue", lb: 20, color: "#93c5fd", text: "#1e40af" },
+  { name: "Black", lb: 25, color: "#374151", text: "#f9fafb" },
+];
 
 // All trackable muscle groups with display info
 const MUSCLE_GROUPS = {
@@ -409,7 +421,7 @@ function skipRest() { clearInterval(restInterval); restInterval = null; state.re
 // Sets are now logged via logReps() in renderSetRow
 
 function startWorkout(w) {
-  state.screen = "workout"; state.workout = w; state.completed = {}; state.weights = {}; state.reps = {};
+  state.screen = "workout"; state.workout = w; state.completed = {}; state.weights = {}; state.reps = {}; state.bands = {};
   state.elapsed = 0; state.running = false; state.saved = false; state.showGif = {};
   state.sessionId = null; state.lastSaved = null;
   render();
@@ -675,41 +687,84 @@ function undoSet(exIdx, setKey) {
   render();
 }
 
+function getBandSelection(exIdx, setKey) {
+  const k = `${exIdx}-${setKey}-bands`;
+  return state.bands?.[k] || [];
+}
+
+function toggleBand(exIdx, setKey, bandLb) {
+  const k = `${exIdx}-${setKey}-bands`;
+  if (!state.bands) state.bands = {};
+  const current = state.bands[k] || [];
+  if (current.includes(bandLb)) {
+    state.bands[k] = current.filter(b => b !== bandLb);
+  } else {
+    state.bands[k] = [...current, bandLb];
+  }
+  // Store total band lb as the weight for saving
+  const total = state.bands[k].reduce((a, b) => a + b, 0);
+  state.weights[`${exIdx}-${setKey}`] = total || null;
+  triggerSave();
+  render();
+}
+
 function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
+  const ex = state.workout.exercises[exIdx];
+  const isBand = ex.equipment === "band";
   const w = getSetWeight(exIdx, setKey);
   const wHint = w == null ? getHintWeight(exIdx, setKey) : null;
   const loggedReps = state.reps[`${exIdx}-${setKey}`];
   const labelColor = isWarmup ? '#d97706' : '#6b7280';
   const doneColor = isWarmup ? '#f59e0b' : '#22c55e';
+  const selectedBands = getBandSelection(exIdx, setKey);
 
   if (isDone && loggedReps) {
-    // Completed set — show summary with undo
+    const bandSummary = isBand && selectedBands.length > 0
+      ? `<span style="font-size:12px;font-family:monospace;color:#7c3aed">@ ${selectedBands.reduce((a,b)=>a+b,0)}lb bands</span>`
+      : (w ? `<span style="font-size:12px;font-family:monospace;color:#2563eb">@ ${w}lb</span>` : '');
     return `
       <div style="border-bottom:1px solid #f9fafb;padding:10px 0;display:flex;align-items:center;gap:8px;opacity:0.85">
         <span style="font-size:11px;font-weight:700;color:${doneColor};width:20px;text-align:center">✓</span>
         <span style="font-size:12px;color:#374151;font-weight:500">${label}</span>
         <span style="font-size:12px;color:#6b7280">${loggedReps} reps</span>
-        ${w ? `<span style="font-size:12px;font-family:monospace;color:#2563eb">@ ${w}lb</span>` : ''}
+        ${bandSummary}
         <button onclick="undoSet(${exIdx},'${setKey}')" style="margin-left:auto;font-size:10px;color:#9ca3af;background:none;border:1px solid #e5e7eb;border-radius:4px;padding:2px 6px;cursor:pointer">undo</button>
       </div>
     `;
   }
 
-  // Active set — show weight + reps pickers
+  // Active set — show weight/band + reps pickers
   let weightDisplay = '';
-  if (w) {
+  if (isBand) {
+    const total = selectedBands.reduce((a, b) => a + b, 0);
+    if (total > 0) {
+      weightDisplay = `<span style="font-size:12px;font-family:monospace;color:#7c3aed">${total}lb bands</span>`;
+    }
+  } else if (w) {
     weightDisplay = `<span style="font-size:12px;font-family:monospace;color:#2563eb">${w}lb / ${lbToKg(w)}kg</span>`;
   } else if (wHint) {
     weightDisplay = `<span style="font-size:11px;font-family:monospace;color:#93c5fd;border-bottom:1px dashed #93c5fd">${wHint}lb?</span>`;
   }
 
-  return `
-    <div style="border-bottom:1px solid #f0f0f0;padding:10px 0">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <span style="font-size:11px;font-weight:700;color:${labelColor};width:20px;text-align:center">${label}</span>
-        <span style="font-size:12px;color:#9ca3af">${targetReps} reps</span>
-        ${weightDisplay ? `<span style="margin-left:auto">${weightDisplay}</span>` : ''}
-      </div>
+  let resistanceHTML;
+  if (isBand) {
+    resistanceHTML = `
+      <div style="margin-bottom:6px">
+        <div style="font-size:10px;color:#9ca3af;margin-bottom:3px;padding-left:26px">Bands (tap to stack)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;padding-left:26px">
+          ${BANDS.map(b => {
+            const sel = selectedBands.includes(b.lb);
+            const style = sel
+              ? `background:${b.color};color:${b.text};outline:2px solid ${b.color};box-shadow:0 1px 3px rgba(0,0,0,0.2);`
+              : `background:white;color:${b.text};border:2px solid ${b.color};opacity:0.7;`;
+            return `<button class="weight-btn" style="${style}" onclick="toggleBand(${exIdx},'${setKey}',${b.lb})">
+              ${b.name} ${b.lb}lb
+            </button>`;
+          }).join("")}
+        </div>
+      </div>`;
+  } else {
+    resistanceHTML = `
       <div style="margin-bottom:6px">
         <div style="font-size:10px;color:#9ca3af;margin-bottom:3px;padding-left:26px">Weight (lb)</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;padding-left:26px">
@@ -720,7 +775,17 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
             </button>
           `).join("")}
         </div>
+      </div>`;
+  }
+
+  return `
+    <div style="border-bottom:1px solid #f0f0f0;padding:10px 0">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:700;color:${labelColor};width:20px;text-align:center">${label}</span>
+        <span style="font-size:12px;color:#9ca3af">${targetReps} reps</span>
+        ${weightDisplay ? `<span style="margin-left:auto">${weightDisplay}</span>` : ''}
       </div>
+      ${resistanceHTML}
       <div>
         <div style="font-size:10px;color:#9ca3af;margin-bottom:3px;padding-left:26px">Reps done (tap to log set)</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;padding-left:26px">
