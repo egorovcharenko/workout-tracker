@@ -23,6 +23,38 @@
 <script>
 const WORKOUTS = [
   {
+    id: "full-body-a",
+    name: "Full Body A",
+    main: true,
+    duration: "~35 min",
+    exercises: [
+      { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4" },
+      { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
+      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo" },
+      { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
+      { name: "Seated Overhead Press", sets: 2, reps: "10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
+      { name: "Dumbbell Bicep Curls", sets: 2, reps: "8-12", notes: "Finish strong", superset: false, video: "https://www.youtube.com/shorts/MKWBV29S6c0" },
+    ],
+    rest: 75,
+    warmup: "Light goblet squats and arm circles to warm up",
+  },
+  {
+    id: "full-body-b",
+    name: "Full Body B",
+    main: true,
+    duration: "~35 min",
+    exercises: [
+      { name: "Band Squat", sets: 3, reps: "12-15", notes: "Stand on band, handles at shoulders", superset: false, video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" },
+      { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
+      { name: "Band Row", sets: 3, reps: "12-15", notes: "Stand on band, pull to chest, squeeze back", superset: false, video: "https://www.youtube.com/shorts/BAlsaA1wIhY", equipment: "band" },
+      { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
+      { name: "Seated Overhead Press", sets: 2, reps: "10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
+      { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", superset: false, video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
+    ],
+    rest: 75,
+    warmup: "Light band squats to warm up legs",
+  },
+  {
     id: "arms-shoulders",
     name: "Arms & Shoulders",
     duration: "~15 min",
@@ -46,43 +78,15 @@ const WORKOUTS = [
     rest: 60,
     warmup: "Light rows to warm up shoulders and back",
   },
-  {
-    id: "full-body-a",
-    name: "Full Body A",
-    duration: "~35 min",
-    exercises: [
-      { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4" },
-      { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
-      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo" },
-      { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
-      { name: "Seated Overhead Press", sets: 2, reps: "10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
-      { name: "Dumbbell Bicep Curls", sets: 2, reps: "8-12", notes: "Finish strong", superset: false, video: "https://www.youtube.com/shorts/MKWBV29S6c0" },
-    ],
-    rest: 75,
-    warmup: "Light goblet squats and arm circles to warm up",
-  },
-  {
-    id: "full-body-b",
-    name: "Full Body B",
-    duration: "~35 min",
-    exercises: [
-      { name: "Band Squat", sets: 3, reps: "12-15", notes: "Stand on band, handles at shoulders", superset: false, video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" },
-      { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
-      { name: "Band Row", sets: 3, reps: "12-15", notes: "Stand on band, pull to chest, squeeze back", superset: false, video: "https://www.youtube.com/shorts/BAlsaA1wIhY", equipment: "band" },
-      { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
-      { name: "Seated Overhead Press", sets: 2, reps: "10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
-      { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", superset: false, video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
-    ],
-    rest: 75,
-    warmup: "Light band squats to warm up legs",
-  },
 ];
 
 // Exercise → muscle group mappings (primary muscles get full load, secondary get half)
 const EXERCISE_MUSCLES = {
   "Overhead Dumbbell Press": { primary: ["shoulders"], secondary: ["triceps"] },
   "Dumbbell Bicep Curls": { primary: ["biceps"], secondary: ["forearms"] },
+  "Band Bicep Curls": { primary: ["biceps"], secondary: ["forearms"] },
   "Overhead Tricep Extension": { primary: ["triceps"], secondary: [] },
+  "Bench Dips": { primary: ["triceps"], secondary: ["chest", "shoulders"] },
   "Dumbbell Bent-Over Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
   "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
   "Reverse Flyes": { primary: ["rear_delts"], secondary: ["upper_back"] },
@@ -257,29 +261,22 @@ function getSetWeight(exIdx, setKey) {
 // Returns the weight from a previous set as a suggestion (dashed hint)
 // Only looks within the SAME exercise — previous sets, warmup, or last session
 function getHintWeight(exIdx, setKey) {
-  // Look back through previous sets in same exercise
+  // For working sets: check previous working set in THIS session first
   if (typeof setKey === "number" && setKey > 0) {
     const prev = getSetWeight(exIdx, setKey - 1);
     if (prev != null) return prev;
     return getHintWeight(exIdx, setKey - 1);
   }
-  if (typeof setKey === "number" && setKey === 0) {
-    const warmup = getSetWeight(exIdx, "warmup");
-    if (warmup != null) return warmup;
-  }
-  // Fall back to last session weight for this specific exercise
+  // For working set 0 or warmup: go to last session data (don't use warmup weight for working sets)
   if (state.lastSession && state.workout) {
     const ex = state.workout.exercises[exIdx];
     const setType = setKey === "warmup" ? "warmup" : "working";
     const setNum = setKey === "warmup" ? 0 : setKey + 1;
-    // Try: exact match → working set 1 → any working set → warmup
-    const tryKeys = [
-      `${ex.name}|${setType}|${setNum}`,
-      `${ex.name}|working|1`,
-      `${ex.name}|working|2`,
-      `${ex.name}|working|3`,
-      `${ex.name}|warmup|0`,
-    ];
+    // For working sets: try working sets first, warmup last
+    // For warmup: try warmup first, then working set 1
+    const tryKeys = setKey === "warmup"
+      ? [`${ex.name}|warmup|0`, `${ex.name}|working|1`]
+      : [`${ex.name}|${setType}|${setNum}`, `${ex.name}|working|1`, `${ex.name}|working|2`, `${ex.name}|working|3`];
     for (const k of tryKeys) {
       const data = state.lastSession[k];
       if (data?.weight_lb) return data.weight_lb;
@@ -290,6 +287,7 @@ function getHintWeight(exIdx, setKey) {
 
 // For saving: use explicit weight, or fall back to hint
 function getEffectiveWeight(exIdx, setKey) {
+  if (state.workout.exercises[exIdx]?.bodyweight) return null;
   return getSetWeight(exIdx, setKey) || getHintWeight(exIdx, setKey);
 }
 
@@ -308,10 +306,9 @@ function addSet(exIdx) {
 }
 function removeLastSet(exIdx) {
   const count = getSetCount(exIdx);
+  if (count <= 1) return;
   const lastIdx = count - 1;
-  // Only remove if the last set isn't completed
-  if (state.completed[`${exIdx}-${lastIdx}`]) return;
-  // Clean up any state for the removed set
+  // Remove last set — even if completed
   delete state.weights[`${exIdx}-${lastIdx}`];
   delete state.reps[`${exIdx}-${lastIdx}`];
   delete state.completed[`${exIdx}-${lastIdx}`];
@@ -320,12 +317,64 @@ function removeLastSet(exIdx) {
   const extra = state.extraSets[exIdx] || 0;
   if (extra > 0) {
     state.extraSets[exIdx] = extra - 1;
-  } else if (count > 1) {
+  } else {
     state.extraSets[exIdx] = (state.extraSets[exIdx] || 0) - 1;
   }
   triggerSave();
   render();
 }
+// Swappable exercise groups — any exercise can be swapped for others in its group
+const SWAP_GROUPS = [
+  [
+    { name: "Dumbbell Bicep Curls", sets: 2, reps: "8-12", notes: "Finish strong", superset: false, video: "https://www.youtube.com/shorts/MKWBV29S6c0" },
+    { name: "Band Bicep Curls", sets: 2, reps: "12-15", notes: "Stand on band, curl handles up", superset: false, video: "https://www.youtube.com/shorts/5ACsDBt_sMQ", equipment: "band" },
+    { name: "Bench Dips", sets: 2, reps: "10-15", notes: "Hands on bench behind you, lower until 90°", superset: false, video: "https://www.youtube.com/shorts/0326dy_-CzM", bodyweight: true },
+    { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", superset: false, video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
+  ],
+  [
+    { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
+    { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "12", notes: "Hinge at hips, slight knee bend", superset: false, video: "https://www.youtube.com/shorts/cGMaBqaExBo" },
+  ],
+];
+function getSwapOptions(exerciseName) {
+  for (const group of SWAP_GROUPS) {
+    if (group.some(e => e.name === exerciseName)) {
+      return group.filter(e => e.name !== exerciseName);
+    }
+  }
+  return [];
+}
+function isSwappable(exerciseName) {
+  return SWAP_GROUPS.some(g => g.some(e => e.name === exerciseName));
+}
+function getSwapGroup(exerciseName) {
+  return SWAP_GROUPS.find(g => g.some(e => e.name === exerciseName));
+}
+function swapExercise(exIdx, newName) {
+  const group = getSwapGroup(state.workout.exercises[exIdx].name);
+  if (!group) return;
+  const swap = group.find(e => e.name === newName);
+  if (!swap) return;
+  // Clear progress for this exercise
+  delete state.completed[`${exIdx}-warmup`];
+  delete state.weights[`${exIdx}-warmup`];
+  delete state.reps[`${exIdx}-warmup`];
+  for (let i = 0; i < getSetCount(exIdx); i++) {
+    delete state.completed[`${exIdx}-${i}`];
+    delete state.weights[`${exIdx}-${i}`];
+    delete state.reps[`${exIdx}-${i}`];
+  }
+  if (state.extraSets) state.extraSets[exIdx] = 0;
+  state.workout.exercises[exIdx] = { ...swap };
+  state.swapOpen = null;
+  triggerSave();
+  render();
+}
+function toggleSwapMenu(exIdx) {
+  state.swapOpen = state.swapOpen === exIdx ? null : exIdx;
+  render();
+}
+
 function formatTime(s) { return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`; }
 function localDate() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
@@ -382,6 +431,25 @@ async function loadSessionData(workoutName) {
       // Resume today's session
       state.sessionId = todayData.id;
       state.elapsed = todayData.duration_sec || 0;
+      // Auto-detect swapped exercises: if saved exercise isn't in template but is in a swap group, replace the template entry
+      const savedNames = new Set(todayData.sets.map(s => s.exercise));
+      savedNames.forEach(name => {
+        const inTemplate = state.workout.exercises.some(e => e.name === name);
+        if (!inTemplate) {
+          const group = getSwapGroup(name);
+          if (group) {
+            // Find which template exercise is in the same group and replace it
+            const pairIdx = state.workout.exercises.findIndex(e => group.some(g => g.name === e.name));
+            if (pairIdx >= 0) {
+              const savedEx = group.find(g => g.name === name);
+              state.workout.exercises[pairIdx] = { ...savedEx };
+              console.log(`[RESUME] Auto-swapped → ${name}`);
+            }
+          }
+        }
+      });
+      // Track max set_number per exercise to compute extraSets
+      const maxSetNum = {};
       todayData.sets.forEach(s => {
         const exIdx = state.workout.exercises.findIndex(e => e.name === s.exercise);
         if (exIdx < 0) return;
@@ -390,6 +458,17 @@ async function loadSessionData(workoutName) {
         state.completed[key] = true;
         if (s.weight_lb) state.weights[key] = s.weight_lb;
         if (s.reps) state.reps[key] = parseInt(s.reps) || 0;
+        if (s.set_type === "working") {
+          maxSetNum[exIdx] = Math.max(maxSetNum[exIdx] || 0, s.set_number);
+        }
+      });
+      // Restore extra/fewer sets from DB
+      state.extraSets = {};
+      Object.entries(maxSetNum).forEach(([exIdx, maxNum]) => {
+        const base = state.workout.exercises[exIdx].sets;
+        if (maxNum !== base) {
+          state.extraSets[exIdx] = maxNum - base;
+        }
       });
       console.log(`[RESUME] Restored session #${todayData.id} with ${todayData.sets.length} sets`);
     }
@@ -402,7 +481,10 @@ async function loadSessionData(workoutName) {
     ]);
     state.lastSession = await lastRes.json();
     state.exerciseHints = await hintsRes.json();
-    state.ormHistory = await ormRes.json();
+    const ormData = await ormRes.json();
+    state.ormHistory = ormData.orm || {};
+    state.repsHistory = ormData.reps || {};
+    state.volHistory = ormData.vol || {};
 
     // Merge: same-workout session takes priority, cross-workout fills gaps
     const merged = { ...state.exerciseHints, ...state.lastSession };
@@ -426,11 +508,8 @@ async function loadSessionData(workoutName) {
 }
 
 async function loadHistory() {
-  try {
-    const res = await fetch("/api/history?limit=20");
-    state.history = await res.json();
-    render();
-  } catch (e) { state.history = []; render(); }
+  // kept for compat but home now loads history directly
+  loadHomeData();
 }
 
 // Timer controls
@@ -465,7 +544,7 @@ function render() {
   const app = document.getElementById("app");
   if (state.screen === "home") app.innerHTML = renderHome();
   else if (state.screen === "workout") app.innerHTML = renderWorkout();
-  else if (state.screen === "history") app.innerHTML = renderHistory();
+  // history merged into home
 }
 
 function renderMuscleMap() {
@@ -578,7 +657,7 @@ function renderWorkoutCard(w, i) {
 
   return '<button onclick="startWorkout(WORKOUTS[' + i + '])" style="width:100%;text-align:left;background:white;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px;cursor:pointer">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-      '<div style="font-weight:600;color:#111827">' + w.name + '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px"><span style="font-weight:600;color:#111827">' + w.name + '</span>' + (w.main ? '<span style="font-size:10px;background:#dbeafe;color:#2563eb;padding:1px 6px;border-radius:4px;font-weight:600">MAIN</span>' : '') + '</div>' +
       '<div style="display:flex;align-items:center;gap:8px">' +
         recoveryBadge(rec.avg) +
         '<span style="color:#d1d5db;font-size:18px">&rarr;</span>' +
@@ -616,11 +695,11 @@ function renderHome() {
     </div>
     <div style="padding:0 16px">
       ${activeSessionHTML ? `<div style="margin-bottom:4px"><p style="font-size:11px;font-weight:600;color:#3b82f6;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">In Progress</p>${activeSessionHTML}</div>` : ""}
-      ${renderMuscleMap()}
       ${WORKOUTS.map((w,i) => renderWorkoutCard(w, i)).join("")}
-      <button onclick="state.screen='history';loadHistory()" style="width:100%;text-align:center;background:none;border:1px solid #e5e7eb;border-radius:12px;padding:12px;cursor:pointer;font-size:14px;color:#6b7280;margin-top:4px">
-        View History
-      </button>
+      ${renderCalendar()}
+      <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0 0 12px">Recent Sessions</h3>
+      ${renderSessionList()}
+      ${renderMuscleMap()}
     </div>
   `;
 }
@@ -630,23 +709,21 @@ function renderRestTimer() {
   const dur = state.workout.rest;
   const pct = ((dur - state.restLeft) / dur) * 100;
   const isLow = state.restLeft <= 10;
-  const color = isLow ? "#ef4444" : "#3b82f6";
-  const r = 45, circ = 2 * Math.PI * r;
+  const barColor = isLow ? "#ef4444" : "#3b82f6";
   return `
-    <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
-      <p style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.1em">Rest</p>
-      <div style="position:relative;width:200px;height:200px;display:flex;align-items:center;justify-content:center">
-        <svg style="position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="${r}" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="4"/>
-          <circle cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="4"
-            stroke-dasharray="${circ}" stroke-dashoffset="${circ*(1-pct/100)}" stroke-linecap="round" class="timer-circle"/>
-        </svg>
-        <span style="font-size:72px;font-weight:700;color:${isLow ? '#ef4444' : 'white'}">${state.restLeft}</span>
+    <div style="position:fixed;top:0;left:0;right:0;z-index:100">
+      <div style="height:3px;background:#e5e7eb">
+        <div style="height:100%;width:${pct}%;background:${barColor};transition:width 1s linear"></div>
       </div>
-      <p style="font-size:13px;color:rgba(255,255,255,0.4);margin:0">${dur - state.restLeft}s / ${dur}s</p>
-      <button onclick="skipRest()" style="font-size:15px;color:rgba(255,255,255,0.5);background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:10px 32px;cursor:pointer;margin-top:8px">
-        Skip rest →
-      </button>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:${isLow ? '#fef2f2' : '#f0f9ff'};border-bottom:1px solid ${isLow ? '#fecaca' : '#bfdbfe'}">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:22px;font-weight:700;color:${isLow ? '#ef4444' : '#2563eb'};font-variant-numeric:tabular-nums;min-width:36px">${state.restLeft}s</span>
+          <span style="font-size:12px;color:#6b7280">rest</span>
+        </div>
+        <button onclick="skipRest()" style="font-size:12px;color:#6b7280;background:white;border:1px solid #e5e7eb;border-radius:6px;padding:4px 12px;cursor:pointer">
+          Skip →
+        </button>
+      </div>
     </div>
   `;
 }
@@ -736,47 +813,95 @@ function currentSessionOrm(exerciseName) {
   return Math.round(best * 10) / 10;
 }
 
-function renderSparkline(exerciseName) {
-  const serverData = (state.ormHistory || {})[exerciseName] || [];
-  const liveOrm = currentSessionOrm(exerciseName);
-  const today = localDate();
-  // Merge: replace today's entry with live value if higher, or append
-  let data = serverData.map(d => ({ ...d }));
-  if (liveOrm > 0) {
-    const todayIdx = data.findIndex(d => d.date === today);
-    if (todayIdx >= 0) {
-      data[todayIdx].orm = Math.max(data[todayIdx].orm, liveOrm);
-    } else {
-      data.push({ date: today, orm: liveOrm });
-    }
+function currentSessionBestReps(exerciseName) {
+  const exIdx = state.workout ? state.workout.exercises.findIndex(e => e.name === exerciseName) : -1;
+  if (exIdx < 0) return 0;
+  let best = 0;
+  for (let i = 0; i < getSetCount(exIdx); i++) {
+    if (!state.completed[`${exIdx}-${i}`]) continue;
+    const r = parseInt(state.reps[`${exIdx}-${i}`]) || 0;
+    if (r > best) best = r;
   }
-  if (!data || data.length < 2) return "";
-  const vals = data.map(d => d.orm);
+  return best;
+}
+
+function renderBWSparkline(exerciseName) {
+  const data = mergeWithLive((state.repsHistory || {})[exerciseName] || [], currentSessionBestReps(exerciseName), "reps");
+  const vals = data.map(d => d.reps);
+  return miniSparkline(vals, "Reps", "", "#8b5cf6");
+}
+
+function currentSessionVolume(exerciseName) {
+  const exIdx = state.workout ? state.workout.exercises.findIndex(e => e.name === exerciseName) : -1;
+  if (exIdx < 0) return 0;
+  let vol = 0;
+  for (let i = 0; i < getSetCount(exIdx); i++) {
+    if (!state.completed[`${exIdx}-${i}`]) continue;
+    const w = state.weights[`${exIdx}-${i}`] || 0;
+    const r = parseInt(state.reps[`${exIdx}-${i}`]) || 0;
+    if (w > 0 && r > 0) vol += w * r;
+  }
+  return Math.round(vol);
+}
+
+function miniSparkline(vals, label, unit, color) {
+  if (vals.length < 2) return "";
   const latest = vals[vals.length - 1];
   const prev = vals[vals.length - 2];
   const max = Math.max(...vals);
   const min = Math.min(...vals);
   const range = max - min || 1;
-  const w = 80, h = 28, pad = 2;
+  const w = 48, h = 20, pad = 2;
   const points = vals.map((v, i) =>
     `${pad + (i / (vals.length - 1)) * (w - pad * 2)},${pad + (1 - (v - min) / range) * (h - pad * 2)}`
   ).join(" ");
   const trend = latest >= prev ? "#16a34a" : "#ef4444";
   const arrow = latest >= prev ? "↑" : "↓";
-  const diff = Math.abs(latest - prev).toFixed(0);
-  return `<div style="display:flex;flex-direction:column;align-items:flex-end">
-    <div style="font-size:8px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em">Est. 1RM</div>
-    <div style="display:flex;align-items:center;gap:3px">
-      <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-        <polyline points="${points}" fill="none" stroke="${trend}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="${pad + ((vals.length - 1) / (vals.length - 1)) * (w - pad * 2)}" cy="${pad + (1 - (latest - min) / range) * (h - pad * 2)}" r="2.5" fill="${trend}"/>
-      </svg>
-      <div style="font-size:10px;color:${trend};font-weight:600;line-height:1.1;text-align:right">
-        <div>${Math.round(latest)}lb</div>
-        <div>${arrow}${diff}</div>
-      </div>
+  const diff = Math.abs(latest - prev);
+  const dispVal = latest >= 1000 ? (latest / 1000).toFixed(1) + "k" : Math.round(latest);
+  return `<div style="display:flex;align-items:center;gap:2px">
+    <div style="text-align:right">
+      <div style="font-size:7px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.03em">${label}</div>
+      <div style="font-size:9px;color:${trend};font-weight:600;line-height:1">${dispVal}${unit}</div>
     </div>
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <polyline points="${points}" fill="none" stroke="${trend}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="${pad + ((vals.length - 1) / (vals.length - 1)) * (w - pad * 2)}" cy="${pad + (1 - (latest - min) / range) * (h - pad * 2)}" r="2" fill="${trend}"/>
+    </svg>
   </div>`;
+}
+
+function mergeWithLive(serverData, liveVal, key) {
+  const today = localDate();
+  let data = serverData.map(d => ({ ...d }));
+  if (liveVal > 0) {
+    const todayIdx = data.findIndex(d => d.date === today);
+    if (todayIdx >= 0) {
+      data[todayIdx][key] = Math.max(data[todayIdx][key], liveVal);
+    } else {
+      data.push({ date: today, [key]: liveVal });
+    }
+  }
+  return data;
+}
+
+function renderSparkline(exerciseName) {
+  const exInWorkout = state.workout?.exercises.find(e => e.name === exerciseName);
+  const isBW = exInWorkout?.bodyweight;
+  if (isBW) return renderBWSparkline(exerciseName);
+
+  // 1RM sparkline
+  const ormData = mergeWithLive((state.ormHistory || {})[exerciseName] || [], currentSessionOrm(exerciseName), "orm");
+  const ormVals = ormData.map(d => d.orm);
+  const ormHTML = miniSparkline(ormVals, "1RM", "lb", "#3b82f6");
+
+  // Volume sparkline
+  const volData = mergeWithLive((state.volHistory || {})[exerciseName] || [], currentSessionVolume(exerciseName), "vol");
+  const volVals = volData.map(d => d.vol);
+  const volHTML = miniSparkline(volVals, "Vol", "lb", "#8b5cf6");
+
+  if (!ormHTML && !volHTML) return "";
+  return `<div style="display:flex;gap:8px;align-items:center">${ormHTML}${volHTML}</div>`;
 }
 
 function getBandSelection(exIdx, setKey) {
@@ -797,6 +922,7 @@ function toggleBand(exIdx, setKey, bandLb) {
 function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
   const ex = state.workout.exercises[exIdx];
   const isBand = ex.equipment === "band";
+  const isBW = ex.bodyweight;
   const w = getSetWeight(exIdx, setKey);
   const wHint = w == null ? getHintWeight(exIdx, setKey) : null;
   const loggedReps = state.reps[`${exIdx}-${setKey}`];
@@ -805,7 +931,7 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
   const selectedBands = getBandSelection(exIdx, setKey);
 
   if (isDone && loggedReps) {
-    const bandSummary = isBand && selectedBands.length > 0
+    const bandSummary = isBW ? '' : isBand && selectedBands.length > 0
       ? `<span style="font-size:12px;font-family:monospace;color:#7c3aed">@ ${selectedBands.reduce((a,b)=>a+b,0)}lb bands</span>`
       : (w ? `<span style="font-size:12px;font-family:monospace;color:#2563eb">@ ${w}lb</span>` : '');
     return `
@@ -821,7 +947,9 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
 
   // Active set — show weight/band + reps pickers
   let weightDisplay = '';
-  if (isBand) {
+  if (isBW) {
+    // no weight for bodyweight exercises
+  } else if (isBand) {
     const total = selectedBands.reduce((a, b) => a + b, 0);
     if (total > 0) {
       weightDisplay = `<span style="font-size:12px;font-family:monospace;color:#7c3aed">${total}lb bands</span>`;
@@ -833,7 +961,9 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
   }
 
   let resistanceHTML;
-  if (isBand) {
+  if (isBW) {
+    resistanceHTML = '';
+  } else if (isBand) {
     resistanceHTML = `
       <div style="margin-bottom:6px">
         <div style="font-size:10px;color:#9ca3af;margin-bottom:3px;padding-left:26px">Band</div>
@@ -905,8 +1035,7 @@ function renderWorkout() {
       setsHTML += renderSetRow(exIdx, i, `${i+1}`, !!state.completed[`${exIdx}-${i}`], ex.reps, false);
     }
     // Can remove last set only if it's not completed and there's more than 1 set
-    const lastCompleted = !!state.completed[`${exIdx}-${setCount - 1}`];
-    const canRemove = setCount > 1 && !lastCompleted;
+    const canRemove = setCount > 1;
     setsHTML += `<div style="display:flex;gap:8px;padding:6px 0 2px 26px">
       <button onclick="addSet(${exIdx})" style="font-size:11px;color:#6b7280;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:3px 10px;cursor:pointer">+ set</button>
       ${canRemove ? `<button onclick="removeLastSet(${exIdx})" style="font-size:11px;color:#ef4444;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:3px 10px;cursor:pointer">− set</button>` : ''}
@@ -924,6 +1053,12 @@ function renderWorkout() {
               ${renderSparkline(ex.name)}
               ${ex.superset ? '<span style="font-size:11px;background:#f3e8ff;color:#7c3aed;padding:2px 8px;border-radius:9999px;font-weight:500">Superset</span>' : ''}
               ${ex.video ? `<a href="${ex.video}" target="_blank" rel="noopener" style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:9999px;font-weight:500;text-decoration:none;display:inline-block">▶ How to</a>` : ''}
+              ${isSwappable(ex.name) ? `<div style="position:relative;display:inline-block">
+                <button onclick="toggleSwapMenu(${exIdx})" style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:9999px;font-weight:500;border:none;cursor:pointer">⇄</button>
+                ${state.swapOpen === exIdx ? `<div style="position:absolute;right:0;top:24px;background:white;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:50;min-width:180px;overflow:hidden">
+                  ${getSwapOptions(ex.name).map(opt => `<button onclick="swapExercise(${exIdx},'${opt.name.replace(/'/g,"\\'")}')" style="display:block;width:100%;text-align:left;padding:8px 12px;font-size:12px;color:#374151;background:white;border:none;border-bottom:1px solid #f3f4f6;cursor:pointer">${opt.name}</button>`).join("")}
+                </div>` : ''}
+              </div>` : ''}
             </div>
           </div>
           ${ex.notes ? `<p style="font-size:12px;color:#9ca3af;margin:0">${ex.notes}</p>` : ''}
@@ -1000,45 +1135,128 @@ function renderWorkout() {
   `;
 }
 
-function renderHistory() {
-  const items = state.history.map(s => {
-    const dur = s.duration_sec ? formatTime(s.duration_sec) : "?";
-    const setsHTML = s.sets.map(st => {
-      const label = st.set_type === "warmup" ? "W" : `#${st.set_number}`;
-      const w = st.weight_lb ? `@ ${st.weight_lb}lb / ${lbToKg(st.weight_lb)}kg` : "";
-      return `<p style="font-size:12px;color:#6b7280;font-family:monospace;margin:1px 0 1px 8px">${st.exercise} [${label}]: ${st.reps} reps ${w}</p>`;
-    }).join("");
-    return `
-      <div class="card" style="padding:16px;margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-          <strong style="color:#111827">${s.workout_name}</strong>
-          <span style="font-size:12px;color:#9ca3af">${s.date} · ${dur}</span>
-        </div>
-        ${setsHTML}
-      </div>
-    `;
-  }).join("");
+function renderCalendar() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+  const monthName = today.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  // Build a map of date -> workout colors
+  const WORKOUT_COLORS = {
+    "Arms & Shoulders": "#8b5cf6",
+    "Back": "#f59e0b",
+    "Full Body A": "#3b82f6",
+    "Full Body B": "#10b981",
+  };
+  const dateMap = {};
+  (state.history || []).forEach(s => {
+    if (!dateMap[s.date]) dateMap[s.date] = [];
+    dateMap[s.date].push(s.workout_name);
+  });
+
+  const dayHeaders = ["Su","Mo","Tu","We","Th","Fr","Sa"].map(d =>
+    `<div style="font-size:10px;color:#9ca3af;text-align:center;font-weight:600">${d}</div>`
+  ).join("");
+
+  let cells = "";
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) {
+    cells += `<div></div>`;
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const isToday = d === today.getDate();
+    const workouts = dateMap[dateStr] || [];
+    const dots = workouts.map(w =>
+      `<span style="width:5px;height:5px;border-radius:50%;background:${WORKOUT_COLORS[w] || '#6b7280'};display:inline-block"></span>`
+    ).join("");
+    const bg = isToday ? "background:#eff6ff;border-radius:8px;" : "";
+    const fw = isToday ? "font-weight:700;color:#2563eb;" : "color:#374151;";
+    cells += `<div style="text-align:center;padding:4px 0;${bg}">
+      <div style="font-size:12px;${fw}">${d}</div>
+      <div style="display:flex;justify-content:center;gap:2px;min-height:7px">${dots}</div>
+    </div>`;
+  }
+
+  const colorLegend = Object.entries(WORKOUT_COLORS).map(([name, color]) =>
+    `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#6b7280">
+      <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>${name}
+    </span>`
+  ).join("");
 
   return `
-    <div style="padding:32px 16px 16px">
-      <button onclick="state.screen='home';loadHomeData()" style="color:#2563eb;font-size:14px;font-weight:500;background:none;border:none;cursor:pointer;margin-bottom:12px">← Back</button>
-      <h1 style="font-size:24px;font-weight:700;color:#111827;margin:0">Workout History</h1>
-    </div>
-    <div style="padding:0 16px">
-      ${items.length ? items : '<p style="color:#9ca3af;text-align:center;padding:32px 0">No sessions logged yet. Complete a workout to see it here.</p>'}
+    <div class="card" style="padding:16px;margin-bottom:16px">
+      <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0 0 12px">${monthName}</h3>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:8px">
+        ${dayHeaders}
+        ${cells}
+      </div>
+      <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap">${colorLegend}</div>
     </div>
   `;
+}
+
+function renderSessionList() {
+  const byDate = {};
+  (state.history || []).forEach(s => {
+    if (!byDate[s.date]) byDate[s.date] = [];
+    byDate[s.date].push(s);
+  });
+  const dates = Object.keys(byDate).sort().reverse();
+
+  const sessionList = dates.map(date => {
+    const sessions = byDate[date];
+    const dateLabel = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    const sessionCards = sessions.map(s => {
+      const dur = s.duration_sec ? formatTime(s.duration_sec) : "?";
+      const byEx = {};
+      s.sets.forEach(st => {
+        if (!byEx[st.exercise]) byEx[st.exercise] = [];
+        byEx[st.exercise].push(st);
+      });
+      const exSummary = Object.entries(byEx).map(([ex, sets]) => {
+        const workingSets = sets.filter(st => st.set_type === "working");
+        const maxWeight = Math.max(...workingSets.map(st => st.weight_lb || 0));
+        const repsRange = workingSets.map(st => st.reps);
+        const minR = Math.min(...repsRange.map(Number));
+        const maxR = Math.max(...repsRange.map(Number));
+        const repsStr = minR === maxR ? `${maxR}` : `${minR}-${maxR}`;
+        const weightStr = maxWeight > 0 ? ` @ ${maxWeight}lb` : "";
+        return `<div style="display:flex;justify-content:space-between;padding:2px 0">
+          <span style="font-size:12px;color:#374151">${ex}</span>
+          <span style="font-size:12px;color:#6b7280;font-family:monospace">${workingSets.length}×${repsStr}${weightStr}</span>
+        </div>`;
+      }).join("");
+
+      return `<div style="background:#f9fafb;border-radius:8px;padding:10px 12px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:13px;font-weight:600;color:#111827">${s.workout_name}</span>
+          <span style="font-size:11px;color:#9ca3af">${dur}</span>
+        </div>
+        ${exSummary}
+      </div>`;
+    }).join("");
+
+    return `<div style="margin-bottom:16px">
+      <p style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 6px">${dateLabel}</p>
+      ${sessionCards}
+    </div>`;
+  }).join("");
+
+  return sessionList || '<p style="color:#9ca3af;text-align:center;padding:32px 0">No sessions logged yet.</p>';
 }
 
 // Load home screen data
 async function loadHomeData() {
   try {
     const [histRes, activeRes] = await Promise.all([
-      fetch("/api/history?limit=30"),
+      fetch("/api/history?limit=100"),
       fetch("/api/active-sessions"),
     ]);
-    const history = await histRes.json();
-    muscleStatus = computeMuscleStatus(history);
+    state.history = await histRes.json();
+    muscleStatus = computeMuscleStatus(state.history);
     state._activeSessions = await activeRes.json();
     render();
   } catch (e) { console.error("[HOME] Error:", e); }

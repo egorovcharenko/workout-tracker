@@ -132,32 +132,56 @@ def get_exercise_hints():
 
 
 def get_exercise_1rm_history():
-    """Get per-exercise best estimated 1RM per session (Epley formula)."""
+    """Get per-exercise best estimated 1RM and best reps per session."""
     conn = get_db()
     c = conn.cursor()
     c.execute('''
         SELECT sess.date, s.exercise, s.weight_lb, s.reps
         FROM sets s
         INNER JOIN sessions sess ON sess.id = s.session_id
-        WHERE s.set_type = 'working' AND s.weight_lb > 0 AND s.reps > 0
+        WHERE s.set_type = 'working' AND s.reps > 0
         ORDER BY sess.date ASC, sess.id ASC
     ''')
-    # Group by exercise -> list of (date, best_1rm)
     from collections import defaultdict
-    raw = defaultdict(list)
+    orm_raw = defaultdict(list)
+    reps_raw = defaultdict(list)
     for r in c.fetchall():
         reps = int(r["reps"]) if str(r["reps"]).isdigit() else 0
-        if reps <= 0 or not r["weight_lb"]:
+        if reps <= 0:
             continue
-        w = float(r["weight_lb"])
-        orm = w * (1 + reps / 30.0) if reps > 1 else w
-        raw[(r["exercise"], r["date"])].append(round(orm, 1))
-    # Best 1RM per exercise per date
+        reps_raw[(r["exercise"], r["date"])].append(reps)
+        if r["weight_lb"] and float(r["weight_lb"]) > 0:
+            w = float(r["weight_lb"])
+            orm = w * (1 + reps / 30.0) if reps > 1 else w
+            orm_raw[(r["exercise"], r["date"])].append(round(orm, 1))
     result = defaultdict(list)
-    for (ex, date), orms in raw.items():
+    vol_raw = defaultdict(float)
+    # Best 1RM per exercise per date + accumulate volume
+    for (ex, date), orms in orm_raw.items():
         result[ex].append({"date": date, "orm": max(orms)})
+    # Volume = sum(weight * reps) per exercise per date
+    for r in c.execute('''
+        SELECT sess.date, s.exercise, s.weight_lb, s.reps
+        FROM sets s INNER JOIN sessions sess ON sess.id = s.session_id
+        WHERE s.set_type = 'working' AND s.reps > 0
+        ORDER BY sess.date ASC
+    '''):
+        reps = int(r["reps"]) if str(r["reps"]).isdigit() else 0
+        w = float(r["weight_lb"]) if r["weight_lb"] else 0
+        if reps > 0 and w > 0:
+            vol_raw[(r["exercise"], r["date"])] += w * reps
+    vol_result = defaultdict(list)
+    for (ex, date), vol in vol_raw.items():
+        vol_result[ex].append({"date": date, "vol": round(vol)})
+    # Sort by date
+    for ex in vol_result:
+        vol_result[ex].sort(key=lambda x: x["date"])
+    # Best reps per exercise per date (for bodyweight exercises)
+    reps_result = defaultdict(list)
+    for (ex, date), reps_list in reps_raw.items():
+        reps_result[ex].append({"date": date, "reps": max(reps_list)})
     conn.close()
-    return dict(result)
+    return {"orm": dict(result), "reps": dict(reps_result), "vol": dict(vol_result)}
 
 
 def get_active_sessions(today=None):
