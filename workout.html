@@ -27,14 +27,18 @@ const WORKOUTS = [
     id: "full-body-a",
     name: "Full Body A",
     main: true,
-    duration: "~35 min",
+    duration: "~40 min",
     exercises: [
       { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4" },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
       { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo" },
       { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
       { name: "Seated Overhead Press", sets: 2, reps: "8-10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
-      { name: "Dumbbell Bicep Curls", sets: 2, reps: "8-12", notes: "Finish strong", superset: false, video: "https://www.youtube.com/shorts/MKWBV29S6c0" },
+      { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
+        supersetExercises: [
+          { name: "Band Tricep Pushdowns", reps: "15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
+          { name: "Dumbbell Hammer Curls", reps: "10-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Neutral grip" },
+        ]},
     ],
     rest: 75,
     warmup: "Light goblet squats and arm circles to warm up",
@@ -43,7 +47,7 @@ const WORKOUTS = [
     id: "full-body-b",
     name: "Full Body B",
     main: true,
-    duration: "~35 min",
+    duration: "~40 min",
     exercises: [
       { name: "Band Squat", sets: 3, reps: "12-15", notes: "Stand on band, handles at shoulders", superset: false, video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
@@ -51,6 +55,11 @@ const WORKOUTS = [
       { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
       { name: "Seated Overhead Press", sets: 2, reps: "8-10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
       { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", superset: false, video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
+      { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
+        supersetExercises: [
+          { name: "Band Tricep Pushdowns", reps: "15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
+          { name: "Dumbbell Hammer Curls", reps: "10-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Neutral grip" },
+        ]},
     ],
     rest: 75,
     warmup: "Light band squats to warm up legs",
@@ -217,7 +226,12 @@ function getRecoveryColor(hoursAgo) {
 function getWorkoutRecovery(workout) {
   // Collect all muscles this workout targets
   const musclePcts = {};
+  const allExercises = [];
   for (const ex of workout.exercises) {
+    if (ex.supersetExercises) ex.supersetExercises.forEach(sub => allExercises.push(sub));
+    else allExercises.push(ex);
+  }
+  for (const ex of allExercises) {
     const mapping = EXERCISE_MUSCLES[ex.name];
     if (!mapping) continue;
     for (const m of mapping.primary) {
@@ -293,10 +307,25 @@ function getEffectiveWeight(exIdx, setKey) {
 }
 
 function getSetCount(exIdx) {
-  const base = state.workout.exercises[exIdx].sets;
+  const ex = state.workout.exercises[exIdx];
+  const base = ex.supersetExercises ? ex.sets * ex.supersetExercises.length : ex.sets;
   return base + (state.extraSets?.[exIdx] || 0);
 }
-function totalSets() { return state.workout.exercises.reduce((s, e, i) => s + getSetCount(i) + (state.warmupOff?.[i] ? 0 : 1), 0); }
+
+// For superset exercises: get the sub-exercise for a given set index
+function getSubExercise(exIdx, setKey) {
+  const ex = state.workout.exercises[exIdx];
+  if (!ex.supersetExercises || setKey === "warmup") return null;
+  const subIdx = typeof setKey === "number" ? setKey % ex.supersetExercises.length : 0;
+  return ex.supersetExercises[subIdx];
+}
+
+function getSupersetRound(exIdx, setKey) {
+  const ex = state.workout.exercises[exIdx];
+  if (!ex.supersetExercises || typeof setKey !== "number") return null;
+  return Math.floor(setKey / ex.supersetExercises.length);
+}
+function totalSets() { return state.workout.exercises.reduce((s, e, i) => s + getSetCount(i) + (e.supersetExercises || state.warmupOff?.[i] ? 0 : 1), 0); }
 function completedSets() { return Object.values(state.completed).filter(Boolean).length; }
 function allDone() { return completedSets() === totalSets(); }
 
@@ -391,7 +420,10 @@ async function autoSave() {
     }
     for (let i = 0; i < getSetCount(exIdx); i++) {
       if (state.completed[`${exIdx}-${i}`]) {
-        sets.push({ exercise: ex.name, set_type: "working", set_number: i + 1, reps: String(state.reps[`${exIdx}-${i}`] || ex.reps), weight_lb: getEffectiveWeight(exIdx, i) });
+        const subEx = getSubExercise(exIdx, i);
+        const exName = subEx ? subEx.name : ex.name;
+        const exReps = subEx ? subEx.reps : ex.reps;
+        sets.push({ exercise: exName, set_type: "working", set_number: i + 1, reps: String(state.reps[`${exIdx}-${i}`] || exReps), weight_lb: getEffectiveWeight(exIdx, i) });
       }
     }
   });
@@ -451,22 +483,45 @@ async function loadSessionData(workoutName) {
       });
       // Track max set_number per exercise to compute extraSets
       const maxSetNum = {};
+      // Track per-sub-exercise occurrence counts for superset remapping
+      const supersetCounts = {};
       todayData.sets.forEach(s => {
-        const exIdx = state.workout.exercises.findIndex(e => e.name === s.exercise);
+        let exIdx = state.workout.exercises.findIndex(e => e.name === s.exercise);
+        let setNum = s.set_number;
+        // Check inside superset exercises if not found at top level
+        if (exIdx < 0) {
+          for (let ei = 0; ei < state.workout.exercises.length; ei++) {
+            const ex = state.workout.exercises[ei];
+            if (ex.supersetExercises) {
+              const subIdx = ex.supersetExercises.findIndex(sub => sub.name === s.exercise);
+              if (subIdx >= 0) {
+                exIdx = ei;
+                // Track how many times we've seen this sub-exercise to determine the round
+                const countKey = `${ei}-${subIdx}`;
+                supersetCounts[countKey] = (supersetCounts[countKey] || 0);
+                const round = supersetCounts[countKey];
+                supersetCounts[countKey]++;
+                setNum = round * ex.supersetExercises.length + subIdx + 1;
+                break;
+              }
+            }
+          }
+        }
         if (exIdx < 0) return;
-        const sk = s.set_type === "warmup" ? "warmup" : s.set_number - 1;
+        const sk = s.set_type === "warmup" ? "warmup" : setNum - 1;
         const key = `${exIdx}-${sk}`;
         state.completed[key] = true;
         if (s.weight_lb) state.weights[key] = s.weight_lb;
         if (s.reps) state.reps[key] = parseInt(s.reps) || 0;
         if (s.set_type === "working") {
-          maxSetNum[exIdx] = Math.max(maxSetNum[exIdx] || 0, s.set_number);
+          maxSetNum[exIdx] = Math.max(maxSetNum[exIdx] || 0, setNum);
         }
       });
       // Restore extra/fewer sets from DB
       state.extraSets = {};
       Object.entries(maxSetNum).forEach(([exIdx, maxNum]) => {
-        const base = state.workout.exercises[exIdx].sets;
+        const ex = state.workout.exercises[exIdx];
+        const base = ex.supersetExercises ? ex.sets * ex.supersetExercises.length : ex.sets;
         if (maxNum !== base) {
           state.extraSets[exIdx] = maxNum - base;
         }
@@ -638,7 +693,15 @@ function renderMuscleMap() {
 
 function renderWorkoutCard(w, i) {
   const rec = getWorkoutRecovery(w);
-  const exerciseList = w.exercises.map(ex => {
+  const exerciseNames = [];
+  w.exercises.forEach(ex => {
+    if (ex.supersetExercises) {
+      ex.supersetExercises.forEach(sub => exerciseNames.push(sub));
+    } else {
+      exerciseNames.push(ex);
+    }
+  });
+  const exerciseList = exerciseNames.map(ex => {
     const mapping = EXERCISE_MUSCLES[ex.name];
     const primaryMuscles = mapping ? mapping.primary : [];
     let worstPct = 100;
@@ -724,8 +787,9 @@ function getNextSet() {
   if (!state.workout) return null;
   const w = state.workout;
   for (let exIdx = 0; exIdx < w.exercises.length; exIdx++) {
+    const ex = w.exercises[exIdx];
     const warmupOff = state.warmupOff?.[exIdx];
-    if (!warmupOff && !state.completed[`${exIdx}-warmup`]) return { exIdx, setKey: "warmup" };
+    if (!ex.supersetExercises && !warmupOff && !state.completed[`${exIdx}-warmup`]) return { exIdx, setKey: "warmup" };
     for (let i = 0; i < getSetCount(exIdx); i++) {
       if (!state.completed[`${exIdx}-${i}`]) return { exIdx, setKey: i };
     }
@@ -803,10 +867,16 @@ function logReps(exIdx, setKey, reps, isWarmup) {
   // Skip rest only between superset partners (e.g. curls→extensions with no break)
   if (!isWarmup) {
     const ex = state.workout.exercises[exIdx];
-    const nextEx = state.workout.exercises[exIdx + 1];
-    const skipForSuperset = ex.superset && nextEx?.superset === ex.superset;
-    if (!skipForSuperset) {
-      startRest(state.workout.rest);
+    // For superset exercises: skip rest between sub-exercises within the same round
+    let skipRest = false;
+    if (ex.supersetExercises && typeof sk === "number") {
+      const subIdx = sk % ex.supersetExercises.length;
+      // Skip rest if not the last sub-exercise in a round
+      if (subIdx < ex.supersetExercises.length - 1) skipRest = true;
+    }
+    if (!skipRest) {
+      const restDur = ex.rest || state.workout.rest;
+      startRest(restDur);
     }
   }
   if (allDone()) { stopTimer(); skipRest(); }
@@ -952,8 +1022,10 @@ function toggleBand(exIdx, setKey, bandLb) {
 
 function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext) {
   const ex = state.workout.exercises[exIdx];
-  const isBand = ex.equipment === "band";
-  const isBW = ex.bodyweight;
+  const subEx = getSubExercise(exIdx, setKey);
+  const effectiveEx = subEx ? { ...ex, ...subEx } : ex;
+  const isBand = effectiveEx.equipment === "band";
+  const isBW = effectiveEx.bodyweight;
   const w = getSetWeight(exIdx, setKey);
   const wHint = w == null ? getHintWeight(exIdx, setKey) : null;
   const loggedReps = state.reps[`${exIdx}-${setKey}`];
@@ -965,10 +1037,12 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     const bandSummary = isBW ? '' : isBand && selectedBands.length > 0
       ? `<span style="font-size:12px;font-family:monospace;color:#7c3aed">@ ${selectedBands.reduce((a,b)=>a+b,0)}lb bands</span>`
       : (w ? `<span style="font-size:12px;font-family:monospace;color:#2563eb">@ ${w}lb</span>` : '');
+    const subNameTag = subEx ? `<span style="font-size:10px;color:#7c3aed;font-weight:500">${subEx.name.split(' ').pop()}</span>` : '';
     return `
       <div style="border-bottom:1px solid #f9fafb;padding:10px 0;display:flex;align-items:center;gap:8px;opacity:0.85">
         <span style="font-size:11px;font-weight:700;color:${doneColor};width:20px;text-align:center">✓</span>
         <span style="font-size:12px;color:#374151;font-weight:500">${label}</span>
+        ${subNameTag}
         <span style="font-size:12px;color:#6b7280">${loggedReps} reps</span>
         ${bandSummary}
         <button onclick="undoSet(${exIdx},'${setKey}')" style="margin-left:auto;font-size:10px;color:#9ca3af;background:none;border:1px solid #e5e7eb;border-radius:4px;padding:2px 6px;cursor:pointer">undo</button>
@@ -1084,33 +1158,88 @@ function renderWorkout() {
   const nextSet = getNextSet();
 
   let exerciseCards = w.exercises.map((ex, exIdx) => {
+    const isSuperset = !!ex.supersetExercises;
     const warmupDone = !!state.completed[`${exIdx}-warmup`];
     const setCount = getSetCount(exIdx);
-    const exDone = warmupDone && Array.from({length:setCount}).every((_,i) => state.completed[`${exIdx}-${i}`]);
+    const exDone = (isSuperset || warmupDone) && Array.from({length:setCount}).every((_,i) => state.completed[`${exIdx}-${i}`]);
     const gifVisible = state.showGif[exIdx];
 
     const warmupOff = state.warmupOff?.[exIdx];
     const warmupIsNext = !warmupOff && nextSet && nextSet.exIdx === exIdx && nextSet.setKey === "warmup";
     let setsHTML = '';
-    if (!warmupOff) {
+    if (!warmupOff && !isSuperset) {
       if (warmupIsNext && state.resting) setsHTML += renderRestSeparator();
       setsHTML += renderSetRow(exIdx, "warmup", "W", warmupDone, ex.reps, true, warmupIsNext);
     }
-    for (let i = 0; i < setCount; i++) {
-      const setIsNext = nextSet && nextSet.exIdx === exIdx && nextSet.setKey === i;
-      if (setIsNext && state.resting) setsHTML += renderRestSeparator();
-      setsHTML += renderSetRow(exIdx, i, `${i+1}`, !!state.completed[`${exIdx}-${i}`], ex.reps, false, setIsNext);
+    if (isSuperset) {
+      const subs = ex.supersetExercises;
+      const rounds = Math.ceil(setCount / subs.length);
+      for (let round = 0; round < rounds; round++) {
+        if (round > 0) {
+          setsHTML += `<div style="height:1px;background:linear-gradient(90deg,transparent,#e5e7eb,transparent);margin:6px 0"></div>`;
+        }
+        for (let s = 0; s < subs.length; s++) {
+          const i = round * subs.length + s;
+          if (i >= setCount) break;
+          const setIsNext = nextSet && nextSet.exIdx === exIdx && nextSet.setKey === i;
+          if (setIsNext && state.resting) setsHTML += renderRestSeparator();
+          const subName = subs[s].name;
+          const subColor = s === 0 ? '#7c3aed' : '#2563eb';
+          const isDoneSet = !!state.completed[`${exIdx}-${i}`];
+          if (!isDoneSet || setIsNext) {
+            setsHTML += `<div style="font-size:10px;font-weight:600;color:${subColor};padding-left:26px;margin-top:4px;margin-bottom:-4px">${subName}</div>`;
+          }
+          setsHTML += renderSetRow(exIdx, i, `${round+1}`, isDoneSet, subs[s].reps, false, setIsNext);
+        }
+      }
+    } else {
+      for (let i = 0; i < setCount; i++) {
+        const setIsNext = nextSet && nextSet.exIdx === exIdx && nextSet.setKey === i;
+        if (setIsNext && state.resting) setsHTML += renderRestSeparator();
+        setsHTML += renderSetRow(exIdx, i, `${i+1}`, !!state.completed[`${exIdx}-${i}`], ex.reps, false, setIsNext);
+      }
     }
     // Can remove last set only if it's not completed and there's more than 1 set
     const canRemove = setCount > 1;
     setsHTML += `<div style="display:flex;gap:8px;padding:6px 0 2px 26px">
-      <button onclick="addSet(${exIdx})" style="font-size:11px;color:#6b7280;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:3px 10px;cursor:pointer">+ set</button>
-      ${canRemove ? `<button onclick="removeLastSet(${exIdx})" style="font-size:11px;color:#ef4444;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:3px 10px;cursor:pointer">− set</button>` : ''}
-      <button onclick="toggleWarmup(${exIdx})" style="font-size:11px;color:${warmupOff ? '#d97706' : '#9ca3af'};background:${warmupOff ? '#fef3c7' : '#f9fafb'};border:1px solid ${warmupOff ? '#fde68a' : '#e5e7eb'};border-radius:6px;padding:3px 10px;cursor:pointer">${warmupOff ? '+ warmup' : '− warmup'}</button>
+      ${!isSuperset ? `<button onclick="addSet(${exIdx})" style="font-size:11px;color:#6b7280;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:3px 10px;cursor:pointer">+ set</button>` : ''}
+      ${!isSuperset && canRemove ? `<button onclick="removeLastSet(${exIdx})" style="font-size:11px;color:#ef4444;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:3px 10px;cursor:pointer">− set</button>` : ''}
+      ${!isSuperset ? `<button onclick="toggleWarmup(${exIdx})" style="font-size:11px;color:${warmupOff ? '#d97706' : '#9ca3af'};background:${warmupOff ? '#fef3c7' : '#f9fafb'};border:1px solid ${warmupOff ? '#fde68a' : '#e5e7eb'};border-radius:6px;padding:3px 10px;cursor:pointer">${warmupOff ? '+ warmup' : '− warmup'}</button>` : ''}
     </div>`;
 
     if (exDone) {
       // Collapsed summary for completed exercises
+      if (isSuperset) {
+        // Superset collapsed summary — show each sub-exercise's reps
+        const subs = ex.supersetExercises;
+        const rounds = Math.ceil(setCount / subs.length);
+        const subSummaries = subs.map((sub, s) => {
+          const reps = [];
+          const weights = [];
+          for (let r = 0; r < rounds; r++) {
+            const idx = r * subs.length + s;
+            if (idx < setCount) {
+              reps.push(state.reps[`${exIdx}-${idx}`] || 0);
+              weights.push(getEffectiveWeight(exIdx, idx) || 0);
+            }
+          }
+          const maxW = Math.max(...weights);
+          const repsStr = reps.filter(r => r > 0).join('·');
+          const isBandSub = sub.equipment === 'band';
+          const wStr = maxW > 0 ? (isBandSub ? `${maxW}lb` : `@ ${maxW}lb`) : '';
+          return `<span style="font-size:11px;color:#6b7280;font-family:monospace">${sub.name.split(' ').map(w => w[0]).join('')}: ${repsStr} ${wStr}</span>`;
+        });
+        return `
+          <div class="card done" style="padding:12px 16px;cursor:pointer;border-left:3px solid #7c3aed" onclick="state._expanded = state._expanded === ${exIdx} ? null : ${exIdx}; render()">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <span style="color:#15803d;font-size:14px">✓</span>
+              <span style="font-weight:600;color:#15803d;font-size:14px">${ex.name}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px;padding-left:22px">${subSummaries.join('')}</div>
+            ${state._expanded === exIdx ? `<div style="padding-top:8px;border-top:1px solid #dcfce7;margin-top:8px">${setsHTML}</div>` : ''}
+          </div>
+        `;
+      }
       const workingSets = [];
       for (let i = 0; i < setCount; i++) {
         const wt = getEffectiveWeight(exIdx, i);
@@ -1118,11 +1247,10 @@ function renderWorkout() {
         workingSets.push({ wt, rp });
       }
       const maxW = Math.max(...workingSets.map(s => s.wt || 0));
-      const reps = workingSets.map(s => s.rp).filter(r => r > 0);
-      const minR = Math.min(...reps), maxR = Math.max(...reps);
-      const repsStr = reps.length === 0 ? '' : minR === maxR ? `${maxR}` : `${minR}-${maxR}`;
+      const repsList = workingSets.map(s => s.rp).filter(r => r > 0);
       const isBandEx = ex.equipment === 'band';
-      const weightStr = maxW > 0 ? (isBandEx ? `${maxW}lb bands` : `${maxW}lb`) : '';
+      const weightStr = maxW > 0 ? (isBandEx ? `${maxW}lb bands` : `@ ${maxW}lb`) : '';
+      const repsDisplay = repsList.length > 0 ? repsList.join('·') : '';
       return `
         <div class="card done" style="padding:12px 16px;cursor:pointer" onclick="state._expanded = state._expanded === ${exIdx} ? null : ${exIdx}; render()">
           <div style="display:flex;align-items:center;justify-content:space-between">
@@ -1130,9 +1258,35 @@ function renderWorkout() {
               <span style="color:#15803d;font-size:14px">✓</span>
               <span style="font-weight:600;color:#15803d;font-size:14px">${ex.name}</span>
             </div>
-            <span style="font-size:12px;color:#6b7280;font-family:monospace">${setCount}×${repsStr}${weightStr ? ' @ ' + weightStr : ''}</span>
+            <span style="font-size:12px;color:#6b7280;font-family:monospace">${repsDisplay} ${weightStr}</span>
           </div>
           ${state._expanded === exIdx ? `<div style="padding-top:8px;border-top:1px solid #dcfce7;margin-top:8px">${setsHTML}</div>` : ''}
+        </div>
+      `;
+    }
+
+    if (isSuperset) {
+      const subs = ex.supersetExercises;
+      return `
+        <div class="card" style="border-left:3px solid #7c3aed">
+          <div style="padding:16px 16px 8px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <h3 style="font-weight:600;color:#111827;margin:0">${ex.name}</h3>
+              <span style="font-size:11px;background:#f3e8ff;color:#7c3aed;padding:2px 8px;border-radius:9999px;font-weight:500">${ex.sets} rounds</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:4px">
+              ${subs.map((sub, s) => `
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:11px;font-weight:700;color:#7c3aed;background:#f3e8ff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center">${s+1}</span>
+                  <span style="font-size:13px;color:#374151;font-weight:500">${sub.name}</span>
+                  <span style="font-size:11px;color:#9ca3af">${sub.reps} reps</span>
+                  ${sub.video ? `<a href="${sub.video}" target="_blank" rel="noopener" style="font-size:10px;color:#9ca3af;text-decoration:none">▶</a>` : ''}
+                </div>
+              `).join('')}
+            </div>
+            ${ex.notes ? `<p style="font-size:12px;color:#9ca3af;margin:0">${ex.notes}</p>` : ''}
+          </div>
+          <div style="padding:0 16px 12px">${setsHTML}</div>
         </div>
       `;
     }
@@ -1146,7 +1300,6 @@ function renderWorkout() {
               <p style="font-size:12px;color:#6b7280;margin:2px 0 0">${ex.sets} × ${ex.reps} reps</p>
             </div>
             <div style="display:flex;gap:6px;align-items:center">
-              ${ex.superset ? '<span style="font-size:11px;background:#f3e8ff;color:#7c3aed;padding:2px 8px;border-radius:9999px;font-weight:500">Superset</span>' : ''}
               ${ex.video ? `<a href="${ex.video}" target="_blank" rel="noopener" style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:9999px;font-weight:500;text-decoration:none;display:inline-block">▶ How to</a>` : ''}
               ${isSwappable(ex.name) ? `<div style="position:relative;display:inline-block">
                 <button onclick="toggleSwapMenu(${exIdx})" style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:9999px;font-weight:500;border:none;cursor:pointer">⇄</button>
@@ -1175,9 +1328,11 @@ function renderWorkout() {
       }
       for (let i = 0; i < getSetCount(exIdx); i++) {
         if (state.completed[`${exIdx}-${i}`]) {
+          const subEx = getSubExercise(exIdx, i);
           const wt = getEffectiveWeight(exIdx, i);
-          const rp = state.reps[`${exIdx}-${i}`] || ex.reps;
-          lines += `<p style="font-size:12px;color:#6b7280;font-family:monospace;margin:2px 0 2px 8px">#${i+1}: ${rp} reps ${wt ? `@ ${wt}lb / ${lbToKg(wt)}kg` : ""}</p>`;
+          const rp = state.reps[`${exIdx}-${i}`] || (subEx ? subEx.reps : ex.reps);
+          const label = subEx ? subEx.name.split(' ').map(w => w[0]).join('') : `#${i+1}`;
+          lines += `<p style="font-size:12px;color:#6b7280;font-family:monospace;margin:2px 0 2px 8px">${label}: ${rp} reps ${wt ? `@ ${wt}lb / ${lbToKg(wt)}kg` : ""}</p>`;
         }
       }
       return `<div style="margin-bottom:8px"><p style="font-weight:500;color:#374151;margin:0">${ex.name}</p>${lines}</div>`;
@@ -1392,8 +1547,44 @@ function renderSessionList() {
     "Full Body B": "#10b981",
   };
 
+  // Pre-compute per-workout volume trends for sparklines
+  const history = state.history || [];
+  const workoutVolTrend = {};
+  // Process oldest-first for sparklines
+  [...history].reverse().forEach(s => {
+    let vol = 0;
+    s.sets.forEach(st => {
+      if (st.set_type === 'working') vol += (st.weight_lb || 0) * (parseInt(st.reps) || 0);
+    });
+    if (!workoutVolTrend[s.workout_name]) workoutVolTrend[s.workout_name] = [];
+    workoutVolTrend[s.workout_name].push(vol);
+  });
+
+  function historySparkline(workoutName, currentIdx) {
+    const trend = workoutVolTrend[workoutName];
+    if (!trend || trend.length < 2) return '';
+    // Show up to this session's position in the trend
+    const vals = trend.slice(0, currentIdx + 1);
+    if (vals.length < 2) return '';
+    const max = Math.max(...vals), min = Math.min(...vals), range = max - min || 1;
+    const w = 50, h = 18, pad = 2;
+    const points = vals.map((v, i) =>
+      `${pad + (i / (vals.length - 1)) * (w - pad * 2)},${pad + (1 - (v - min) / range) * (h - pad * 2)}`
+    ).join(' ');
+    const latest = vals[vals.length - 1];
+    const prev = vals[vals.length - 2];
+    const trend2 = latest >= prev ? '#16a34a' : '#ef4444';
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block">
+      <polyline points="${points}" fill="none" stroke="${trend2}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+      <circle cx="${pad + ((vals.length - 1) / (vals.length - 1)) * (w - pad * 2)}" cy="${pad + (1 - (latest - min) / range) * (h - pad * 2)}" r="2" fill="${trend2}"/>
+    </svg>`;
+  }
+
+  // Track per-workout session index (oldest first)
+  const workoutSessionIdx = {};
+
   const byDate = {};
-  (state.history || []).forEach(s => {
+  history.forEach(s => {
     if (!byDate[s.date]) byDate[s.date] = [];
     byDate[s.date].push(s);
   });
@@ -1420,17 +1611,22 @@ function renderSessionList() {
       });
       const workingSetCount = s.sets.filter(st => st.set_type === "working").length;
 
+      // Get sparkline index for this workout (count from end since history is newest-first)
+      if (!workoutSessionIdx[s.workout_name]) workoutSessionIdx[s.workout_name] = (workoutVolTrend[s.workout_name] || []).length;
+      workoutSessionIdx[s.workout_name]--;
+      const sparkIdx = workoutSessionIdx[s.workout_name];
+      const volSparkHTML = historySparkline(s.workout_name, sparkIdx);
+
       const exSummary = Object.entries(byEx).map(([ex, sets]) => {
         const workingSets = sets.filter(st => st.set_type === "working");
         if (workingSets.length === 0) return '';
         const maxWeight = Math.max(...workingSets.map(st => st.weight_lb || 0));
-        const repsRange = workingSets.map(st => parseInt(st.reps) || 0).filter(r => r > 0);
-        const minR = Math.min(...repsRange), maxR = Math.max(...repsRange);
-        const repsStr = repsRange.length === 0 ? '' : minR === maxR ? `${maxR}` : `${minR}-${maxR}`;
-        const weightStr = maxWeight > 0 ? `${maxWeight}lb` : "";
+        const repsList = workingSets.map(st => parseInt(st.reps) || 0).filter(r => r > 0);
+        const weightStr = maxWeight > 0 ? `@ ${maxWeight}lb` : "";
+        const repsDisplay = repsList.join('·');
         return `<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0">
           <span style="font-size:12px;color:#374151">${ex}</span>
-          <span style="font-size:11px;color:#6b7280;font-family:monospace">${workingSets.length}×${repsStr}${weightStr ? ' @ ' + weightStr : ''}</span>
+          <span style="font-size:11px;color:#6b7280;font-family:monospace">${repsDisplay} ${weightStr}</span>
         </div>`;
       }).filter(Boolean).join("");
 
@@ -1438,7 +1634,10 @@ function renderSessionList() {
 
       return `<div style="background:white;border:1px solid #e5e7eb;border-left:4px solid ${color};border-radius:8px;padding:12px 14px;margin-bottom:8px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <span style="font-size:14px;font-weight:600;color:#111827">${s.workout_name}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:14px;font-weight:600;color:#111827">${s.workout_name}</span>
+            ${volSparkHTML}
+          </div>
           <span style="font-size:11px;color:#9ca3af;font-family:monospace">${dur}</span>
         </div>
         <div style="display:flex;gap:12px;margin-bottom:8px">
