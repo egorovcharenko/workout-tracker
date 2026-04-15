@@ -1335,7 +1335,10 @@ function renderWorkout() {
           lines += `<p style="font-size:12px;color:#6b7280;font-family:monospace;margin:2px 0 2px 8px">${label}: ${rp} reps ${wt ? `@ ${wt}lb / ${lbToKg(wt)}kg` : ""}</p>`;
         }
       }
-      return `<div style="margin-bottom:8px"><p style="font-weight:500;color:#374151;margin:0">${ex.name}</p>${lines}</div>`;
+      const nameHTML = ex.supersetExercises
+        ? `<span style="font-weight:500;color:#7c3aed">${ex.name}</span> <span style="font-size:10px;background:#f3e8ff;color:#7c3aed;padding:1px 6px;border-radius:9999px;font-weight:500">Superset</span>`
+        : `<span style="font-weight:500;color:#374151">${ex.name}</span>`;
+      return `<div style="margin-bottom:8px"><p style="margin:0">${nameHTML}</p>${lines}</div>`;
     }).join("");
 
     completionHTML = `
@@ -1617,18 +1620,63 @@ function renderSessionList() {
       const sparkIdx = workoutSessionIdx[s.workout_name];
       const volSparkHTML = historySparkline(s.workout_name, sparkIdx);
 
-      const exSummary = Object.entries(byEx).map(([ex, sets]) => {
-        const workingSets = sets.filter(st => st.set_type === "working");
-        if (workingSets.length === 0) return '';
-        const maxWeight = Math.max(...workingSets.map(st => st.weight_lb || 0));
-        const repsList = workingSets.map(st => parseInt(st.reps) || 0).filter(r => r > 0);
-        const weightStr = maxWeight > 0 ? `@ ${maxWeight}lb` : "";
-        const repsDisplay = repsList.join('·');
-        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0">
-          <span style="font-size:12px;color:#374151">${ex}</span>
-          <span style="font-size:11px;color:#6b7280;font-family:monospace">${repsDisplay} ${weightStr}</span>
-        </div>`;
-      }).filter(Boolean).join("");
+      // Build superset grouping from workout templates
+      const supersetGroups = {};
+      const supersetNames = {};
+      WORKOUTS.forEach(w => {
+        w.exercises.forEach(ex => {
+          if (ex.supersetExercises) {
+            ex.supersetExercises.forEach(sub => {
+              supersetGroups[sub.name] = ex.name;
+              if (!supersetNames[ex.name]) supersetNames[ex.name] = [];
+              if (!supersetNames[ex.name].includes(sub.name)) supersetNames[ex.name].push(sub.name);
+            });
+          }
+        });
+      });
+
+      // Group exercises, merging superset sub-exercises
+      const exEntries = [];
+      const seen = new Set();
+      Object.entries(byEx).forEach(([ex, sets]) => {
+        if (seen.has(ex)) return;
+        const groupName = supersetGroups[ex];
+        if (groupName && !seen.has(groupName)) {
+          // Merge all sub-exercises in this superset
+          seen.add(groupName);
+          const subNames = supersetNames[groupName] || [];
+          subNames.forEach(n => seen.add(n));
+          const allSets = subNames.flatMap(n => (byEx[n] || []).filter(st => st.set_type === "working"));
+          if (allSets.length > 0) {
+            const subSummaries = subNames.map(n => {
+              const ws = (byEx[n] || []).filter(st => st.set_type === "working");
+              const reps = ws.map(st => parseInt(st.reps) || 0).filter(r => r > 0).join('·');
+              const maxW = Math.max(0, ...ws.map(st => st.weight_lb || 0));
+              return `<span style="font-size:10px;color:#6b7280;font-family:monospace">${n.split(' ').pop()}: ${reps}${maxW > 0 ? ` @ ${maxW}lb` : ''}</span>`;
+            }).join('<br>');
+            exEntries.push(`<div style="padding:3px 0">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+                <span style="font-size:12px;color:#7c3aed;font-weight:500">${groupName}</span>
+                <span style="font-size:9px;background:#f3e8ff;color:#7c3aed;padding:1px 5px;border-radius:9999px;font-weight:500">Superset</span>
+              </div>
+              <div style="padding-left:8px">${subSummaries}</div>
+            </div>`);
+          }
+        } else if (!groupName) {
+          seen.add(ex);
+          const workingSets = sets.filter(st => st.set_type === "working");
+          if (workingSets.length === 0) return;
+          const maxWeight = Math.max(...workingSets.map(st => st.weight_lb || 0));
+          const repsList = workingSets.map(st => parseInt(st.reps) || 0).filter(r => r > 0);
+          const weightStr = maxWeight > 0 ? `@ ${maxWeight}lb` : "";
+          const repsDisplay = repsList.join('·');
+          exEntries.push(`<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0">
+            <span style="font-size:12px;color:#374151">${ex}</span>
+            <span style="font-size:11px;color:#6b7280;font-family:monospace">${repsDisplay} ${weightStr}</span>
+          </div>`);
+        }
+      });
+      const exSummary = exEntries.join("");
 
       const volStr = totalVol >= 1000 ? (totalVol / 1000).toFixed(1) + 'k' : totalVol;
 
