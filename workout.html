@@ -9,6 +9,7 @@
   * { -webkit-tap-highlight-color: transparent; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f9fafb; margin: 0; }
   .weight-btn { min-width: 32px; padding: 2px 6px; border-radius: 6px; font-size: 11px; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s; }
+  .reps-btn { width: 36px; height: 36px; border-radius: 50%; font-size: 13px; font-weight: 700; border: none; cursor: pointer; transition: all 0.15s; display:inline-flex; align-items:center; justify-content:center; }
   .set-btn { width: 32px; height: 32px; border-radius: 50%; font-weight: 700; font-size: 12px; border: none; cursor: pointer; transition: all 0.2s; }
   .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; transition: all 0.3s; }
   .card.done { background: #f0fdf4; border-color: #bbf7d0; }
@@ -32,7 +33,7 @@ const WORKOUTS = [
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
       { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo" },
       { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
-      { name: "Seated Overhead Press", sets: 2, reps: "10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
+      { name: "Seated Overhead Press", sets: 2, reps: "8-10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
       { name: "Dumbbell Bicep Curls", sets: 2, reps: "8-12", notes: "Finish strong", superset: false, video: "https://www.youtube.com/shorts/MKWBV29S6c0" },
     ],
     rest: 75,
@@ -48,7 +49,7 @@ const WORKOUTS = [
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
       { name: "Band Row", sets: 3, reps: "12-15", notes: "Stand on band, pull to chest, squeeze back", superset: false, video: "https://www.youtube.com/shorts/BAlsaA1wIhY", equipment: "band" },
       { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
-      { name: "Seated Overhead Press", sets: 2, reps: "10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
+      { name: "Seated Overhead Press", sets: 2, reps: "8-10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
       { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", superset: false, video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
     ],
     rest: 75,
@@ -295,7 +296,7 @@ function getSetCount(exIdx) {
   const base = state.workout.exercises[exIdx].sets;
   return base + (state.extraSets?.[exIdx] || 0);
 }
-function totalSets() { return state.workout.exercises.reduce((s, e, i) => s + getSetCount(i) + 1, 0); }
+function totalSets() { return state.workout.exercises.reduce((s, e, i) => s + getSetCount(i) + (state.warmupOff?.[i] ? 0 : 1), 0); }
 function completedSets() { return Object.values(state.completed).filter(Boolean).length; }
 function allDone() { return completedSets() === totalSets(); }
 
@@ -535,6 +536,7 @@ function startWorkout(w) {
   state.screen = "workout"; state.workout = w; state.completed = {}; state.weights = {}; state.reps = {};
   state.elapsed = 0; state.running = false; state.saved = false; state.showGif = {};
   state.sessionId = null; state.lastSaved = null;
+  history.replaceState(null, '', '#' + w.id);
   render();
   loadSessionData(w.name);
 }
@@ -697,6 +699,7 @@ function renderHome() {
       ${activeSessionHTML ? `<div style="margin-bottom:4px"><p style="font-size:11px;font-weight:600;color:#3b82f6;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">In Progress</p>${activeSessionHTML}</div>` : ""}
       ${WORKOUTS.map((w,i) => renderWorkoutCard(w, i)).join("")}
       ${renderCalendar()}
+      ${renderHistoryStats()}
       <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0 0 12px">Recent Sessions</h3>
       ${renderSessionList()}
       ${renderMuscleMap()}
@@ -704,25 +707,47 @@ function renderHome() {
   `;
 }
 
-function renderRestTimer() {
-  if (!state.resting) return "";
+function toggleWarmup(exIdx) {
+  if (!state.warmupOff) state.warmupOff = {};
+  state.warmupOff[exIdx] = !state.warmupOff[exIdx];
+  // If turning off warmup, mark it as completed so it doesn't block progress
+  if (state.warmupOff[exIdx]) {
+    state.completed[`${exIdx}-warmup`] = true;
+  } else {
+    delete state.completed[`${exIdx}-warmup`];
+  }
+  triggerSave();
+  render();
+}
+
+function getNextSet() {
+  if (!state.workout) return null;
+  const w = state.workout;
+  for (let exIdx = 0; exIdx < w.exercises.length; exIdx++) {
+    const warmupOff = state.warmupOff?.[exIdx];
+    if (!warmupOff && !state.completed[`${exIdx}-warmup`]) return { exIdx, setKey: "warmup" };
+    for (let i = 0; i < getSetCount(exIdx); i++) {
+      if (!state.completed[`${exIdx}-${i}`]) return { exIdx, setKey: i };
+    }
+  }
+  return null;
+}
+
+function renderRestSeparator() {
   const dur = state.workout.rest;
   const pct = ((dur - state.restLeft) / dur) * 100;
   const isLow = state.restLeft <= 10;
-  const barColor = isLow ? "#ef4444" : "#3b82f6";
+  const color = isLow ? "#ef4444" : "#3b82f6";
+  const bg = isLow ? "#fef2f2" : "#eff6ff";
+  const border = isLow ? "#fecaca" : "#bfdbfe";
   return `
-    <div style="position:fixed;top:0;left:0;right:0;z-index:100">
-      <div style="height:3px;background:#e5e7eb">
-        <div style="height:100%;width:${pct}%;background:${barColor};transition:width 1s linear"></div>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:${isLow ? '#fef2f2' : '#f0f9ff'};border-bottom:1px solid ${isLow ? '#fecaca' : '#bfdbfe'}">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:22px;font-weight:700;color:${isLow ? '#ef4444' : '#2563eb'};font-variant-numeric:tabular-nums;min-width:36px">${state.restLeft}s</span>
-          <span style="font-size:12px;color:#6b7280">rest</span>
+    <div style="margin:8px 0;border-radius:8px;overflow:hidden;border:1px solid ${border};background:${bg}">
+      <div style="position:relative;height:50px;background:#e5e7eb;border-radius:8px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${color};transition:width 1s linear;opacity:0.2;border-radius:8px"></div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 14px">
+          <span style="font-size:20px;font-weight:700;color:${color};font-variant-numeric:tabular-nums">rest &middot; ${state.restLeft}s</span>
+          <button onclick="skipRest()" style="font-size:12px;color:#6b7280;background:white;border:1px solid #e5e7eb;border-radius:6px;padding:4px 14px;cursor:pointer">skip →</button>
         </div>
-        <button onclick="skipRest()" style="font-size:12px;color:#6b7280;background:white;border:1px solid #e5e7eb;border-radius:6px;padding:4px 12px;cursor:pointer">
-          Skip →
-        </button>
       </div>
     </div>
   `;
@@ -912,14 +937,20 @@ function getBandSelection(exIdx, setKey) {
 function toggleBand(exIdx, setKey, bandLb) {
   const k = `${exIdx}-${setKey}-bands`;
   if (!state.bands) state.bands = {};
-  if (!state.bands) state.bands = {};
-  state.bands[k] = [bandLb];
-  state.weights[`${exIdx}-${setKey}`] = bandLb;
+  const current = state.bands[k] || [];
+  const idx = current.indexOf(bandLb);
+  if (idx >= 0) {
+    current.splice(idx, 1);
+  } else {
+    current.push(bandLb);
+  }
+  state.bands[k] = current;
+  state.weights[`${exIdx}-${setKey}`] = current.reduce((a, b) => a + b, 0) || null;
   triggerSave();
   render();
 }
 
-function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
+function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext) {
   const ex = state.workout.exercises[exIdx];
   const isBand = ex.equipment === "band";
   const isBW = ex.bodyweight;
@@ -945,7 +976,33 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
     `;
   }
 
-  // Active set — show weight/band + reps pickers
+  // Compact row for future (non-next) pending sets — just label + hint weight
+  if (!isNext) {
+    let hintText = '';
+    if (isBW) {
+      // nothing
+    } else if (isBand) {
+      const total = selectedBands.reduce((a, b) => a + b, 0);
+      if (total > 0) hintText = `<span style="font-size:11px;font-family:monospace;color:#c4b5fd">${total}lb</span>`;
+      else if (wHint) hintText = `<span style="font-size:11px;font-family:monospace;color:#c4b5fd">${wHint}lb</span>`;
+    } else if (w) {
+      hintText = `<span style="font-size:11px;font-family:monospace;color:#93c5fd">${w}lb</span>`;
+    } else if (wHint) {
+      hintText = `<span style="font-size:11px;font-family:monospace;color:#93c5fd">${wHint}lb</span>`;
+    }
+    return `
+      <div style="border-bottom:1px solid #f0f0f0;padding:8px 0;opacity:0.5">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;font-weight:700;color:${labelColor};width:20px;text-align:center">${label}</span>
+          <span style="font-size:11px;color:#9ca3af">${targetReps} reps</span>
+          ${hintText ? `<span style="margin-left:auto">${hintText}</span>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  // Active set (isNext) — show weight/band + reps pickers
+  const nextAccent = 'border-left:4px solid #3b82f6;padding-left:10px;background:#eff6ff;margin:-2px -4px;padding-top:12px;padding-bottom:12px;padding-right:8px;border-radius:0 8px 8px 0;box-shadow:0 1px 4px rgba(59,130,246,0.15);';
   let weightDisplay = '';
   if (isBW) {
     // no weight for bodyweight exercises
@@ -966,7 +1023,7 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
   } else if (isBand) {
     resistanceHTML = `
       <div style="margin-bottom:6px">
-        <div style="font-size:10px;color:#9ca3af;margin-bottom:3px;padding-left:26px">Band</div>
+        <div style="font-size:10px;color:#7c3aed;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Band</div>
         <div style="display:flex;gap:3px;padding-left:26px">
           ${BANDS.map(b => {
             const sel = selectedBands.includes(b.lb);
@@ -982,7 +1039,7 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
   } else {
     resistanceHTML = `
       <div style="margin-bottom:6px">
-        <div style="font-size:10px;color:#9ca3af;margin-bottom:3px;padding-left:26px">Weight (lb)</div>
+        <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb)</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;padding-left:26px">
           ${WEIGHTS_LB.map(lb => `
             <button class="weight-btn" style="${weightBtnStyle(lb, w === lb, wHint === lb)}"
@@ -995,18 +1052,18 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup) {
   }
 
   return `
-    <div style="border-bottom:1px solid #f0f0f0;padding:10px 0">
+    <div style="border-bottom:1px solid #f0f0f0;padding:10px 0;${nextAccent}">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <span style="font-size:11px;font-weight:700;color:${labelColor};width:20px;text-align:center">${label}</span>
+        <span style="font-size:11px;font-weight:700;color:${isNext ? '#1d4ed8' : labelColor};width:20px;text-align:center">${label}</span>
         <span style="font-size:12px;color:#9ca3af">${targetReps} reps</span>
         ${weightDisplay ? `<span style="margin-left:auto">${weightDisplay}</span>` : ''}
       </div>
       ${resistanceHTML}
-      <div>
-        <div style="font-size:10px;color:#9ca3af;margin-bottom:3px;padding-left:26px">Reps done (tap to log set)</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;padding-left:26px">
+      <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e5e7eb">
+        <div style="font-size:10px;color:#16a34a;font-weight:600;margin-bottom:5px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Reps done — tap to log</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;padding-left:26px">
           ${(() => { const lastR = getLastReps(exIdx, setKey); const [lo,hi] = parseRepRange(targetReps); return getRepsOptions(targetReps).map(r => `
-            <button class="weight-btn" style="${repsBtnStyle(r, false, lastR === r, r >= lo && r <= hi)}"
+            <button class="reps-btn" style="${repsBtnStyle(r, false, lastR === r, r >= lo && r <= hi)}"
               onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup})">
               ${r}
             </button>
@@ -1024,33 +1081,71 @@ function renderWorkout() {
   const pct = total ? (done / total) * 100 : 0;
   const isDone = allDone();
 
+  const nextSet = getNextSet();
+
   let exerciseCards = w.exercises.map((ex, exIdx) => {
     const warmupDone = !!state.completed[`${exIdx}-warmup`];
     const setCount = getSetCount(exIdx);
     const exDone = warmupDone && Array.from({length:setCount}).every((_,i) => state.completed[`${exIdx}-${i}`]);
     const gifVisible = state.showGif[exIdx];
 
-    let setsHTML = renderSetRow(exIdx, "warmup", "W", warmupDone, ex.reps, true);
+    const warmupOff = state.warmupOff?.[exIdx];
+    const warmupIsNext = !warmupOff && nextSet && nextSet.exIdx === exIdx && nextSet.setKey === "warmup";
+    let setsHTML = '';
+    if (!warmupOff) {
+      if (warmupIsNext && state.resting) setsHTML += renderRestSeparator();
+      setsHTML += renderSetRow(exIdx, "warmup", "W", warmupDone, ex.reps, true, warmupIsNext);
+    }
     for (let i = 0; i < setCount; i++) {
-      setsHTML += renderSetRow(exIdx, i, `${i+1}`, !!state.completed[`${exIdx}-${i}`], ex.reps, false);
+      const setIsNext = nextSet && nextSet.exIdx === exIdx && nextSet.setKey === i;
+      if (setIsNext && state.resting) setsHTML += renderRestSeparator();
+      setsHTML += renderSetRow(exIdx, i, `${i+1}`, !!state.completed[`${exIdx}-${i}`], ex.reps, false, setIsNext);
     }
     // Can remove last set only if it's not completed and there's more than 1 set
     const canRemove = setCount > 1;
     setsHTML += `<div style="display:flex;gap:8px;padding:6px 0 2px 26px">
       <button onclick="addSet(${exIdx})" style="font-size:11px;color:#6b7280;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:3px 10px;cursor:pointer">+ set</button>
       ${canRemove ? `<button onclick="removeLastSet(${exIdx})" style="font-size:11px;color:#ef4444;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:3px 10px;cursor:pointer">− set</button>` : ''}
+      <button onclick="toggleWarmup(${exIdx})" style="font-size:11px;color:${warmupOff ? '#d97706' : '#9ca3af'};background:${warmupOff ? '#fef3c7' : '#f9fafb'};border:1px solid ${warmupOff ? '#fde68a' : '#e5e7eb'};border-radius:6px;padding:3px 10px;cursor:pointer">${warmupOff ? '+ warmup' : '− warmup'}</button>
     </div>`;
 
+    if (exDone) {
+      // Collapsed summary for completed exercises
+      const workingSets = [];
+      for (let i = 0; i < setCount; i++) {
+        const wt = getEffectiveWeight(exIdx, i);
+        const rp = state.reps[`${exIdx}-${i}`] || 0;
+        workingSets.push({ wt, rp });
+      }
+      const maxW = Math.max(...workingSets.map(s => s.wt || 0));
+      const reps = workingSets.map(s => s.rp).filter(r => r > 0);
+      const minR = Math.min(...reps), maxR = Math.max(...reps);
+      const repsStr = reps.length === 0 ? '' : minR === maxR ? `${maxR}` : `${minR}-${maxR}`;
+      const isBandEx = ex.equipment === 'band';
+      const weightStr = maxW > 0 ? (isBandEx ? `${maxW}lb bands` : `${maxW}lb`) : '';
+      return `
+        <div class="card done" style="padding:12px 16px;cursor:pointer" onclick="state._expanded = state._expanded === ${exIdx} ? null : ${exIdx}; render()">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="color:#15803d;font-size:14px">✓</span>
+              <span style="font-weight:600;color:#15803d;font-size:14px">${ex.name}</span>
+            </div>
+            <span style="font-size:12px;color:#6b7280;font-family:monospace">${setCount}×${repsStr}${weightStr ? ' @ ' + weightStr : ''}</span>
+          </div>
+          ${state._expanded === exIdx ? `<div style="padding-top:8px;border-top:1px solid #dcfce7;margin-top:8px">${setsHTML}</div>` : ''}
+        </div>
+      `;
+    }
+
     return `
-      <div class="card ${exDone ? 'done' : ''}">
+      <div class="card">
         <div style="padding:16px 16px 8px">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
             <div style="flex:1">
-              <h3 style="font-weight:600;color:${exDone ? '#15803d' : '#111827'};margin:0">${ex.name}</h3>
+              <h3 style="font-weight:600;color:#111827;margin:0">${ex.name}</h3>
               <p style="font-size:12px;color:#6b7280;margin:2px 0 0">${ex.sets} × ${ex.reps} reps</p>
             </div>
             <div style="display:flex;gap:6px;align-items:center">
-              ${renderSparkline(ex.name)}
               ${ex.superset ? '<span style="font-size:11px;background:#f3e8ff;color:#7c3aed;padding:2px 8px;border-radius:9999px;font-weight:500">Superset</span>' : ''}
               ${ex.video ? `<a href="${ex.video}" target="_blank" rel="noopener" style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:9999px;font-weight:500;text-decoration:none;display:inline-block">▶ How to</a>` : ''}
               ${isSwappable(ex.name) ? `<div style="position:relative;display:inline-block">
@@ -1062,6 +1157,7 @@ function renderWorkout() {
             </div>
           </div>
           ${ex.notes ? `<p style="font-size:12px;color:#9ca3af;margin:0">${ex.notes}</p>` : ''}
+          ${renderSparkline(ex.name) ? `<div style="margin-top:6px">${renderSparkline(ex.name)}</div>` : ''}
         </div>
         <div style="padding:0 16px 12px">${setsHTML}</div>
       </div>
@@ -1112,7 +1208,7 @@ function renderWorkout() {
   return `
     <div style="position:sticky;top:0;background:white;border-bottom:1px solid #f3f4f6;padding:12px 16px;z-index:10">
       <div style="display:flex;align-items:center;justify-content:space-between">
-        <button onclick="stopTimer();state.screen='home';loadHomeData()" style="color:#2563eb;font-size:14px;font-weight:500;background:none;border:none;cursor:pointer">← Back</button>
+        <button onclick="stopTimer();state.screen='home';history.replaceState(null,'','#');loadHomeData()" style="color:#2563eb;font-size:14px;font-weight:500;background:none;border:none;cursor:pointer">← Back</button>
         <span style="font-size:14px;font-family:monospace;color:#6b7280">${formatTime(state.elapsed)}</span>
       </div>
       <h2 style="font-size:18px;font-weight:700;margin:4px 0 0">${w.name}</h2>
@@ -1121,7 +1217,6 @@ function renderWorkout() {
       </div>
       <p style="font-size:12px;color:#9ca3af;margin:4px 0 0">${done}/${total} sets</p>
     </div>
-    ${renderRestTimer()}
     <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
       ${w.warmup ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px"><p style="font-size:14px;color:#92400e;margin:0">🔥 <strong>Warm-up:</strong> ${w.warmup}</p></div>` : ''}
       ${exerciseCards}
@@ -1198,7 +1293,105 @@ function renderCalendar() {
   `;
 }
 
+function renderHistoryStats() {
+  const history = state.history || [];
+  if (history.length < 2) return '';
+
+  // Per-session stats sorted by date
+  const perSession = history.map(s => {
+    let vol = 0, reps = 0, sets = 0;
+    s.sets.forEach(st => {
+      if (st.set_type === 'working') {
+        sets++;
+        const r = parseInt(st.reps) || 0;
+        const w = st.weight_lb || 0;
+        reps += r;
+        vol += w * r;
+      }
+    });
+    return { date: s.date, vol, reps, sets, dur: s.duration_sec || 0 };
+  }).reverse(); // oldest first for sparklines
+
+  // Totals
+  const totalSessions = history.length;
+  const totalVol = perSession.reduce((a, s) => a + s.vol, 0);
+  const totalReps = perSession.reduce((a, s) => a + s.reps, 0);
+  const totalSets = perSession.reduce((a, s) => a + s.sets, 0);
+  const totalTime = perSession.reduce((a, s) => a + s.dur, 0);
+
+  const volStr = totalVol >= 1000 ? (totalVol / 1000).toFixed(1) + 'k' : totalVol;
+  const timeStr = totalTime >= 3600 ? (totalTime / 3600).toFixed(1) + 'h' : Math.round(totalTime / 60) + 'min';
+
+  // Sparklines
+  const volVals = perSession.map(s => s.vol);
+  const repsVals = perSession.map(s => s.reps);
+  const setsVals = perSession.map(s => s.sets);
+
+  function statSparkline(vals, color) {
+    if (vals.length < 2) return '';
+    const max = Math.max(...vals), min = Math.min(...vals), range = max - min || 1;
+    const w = 60, h = 24, pad = 2;
+    const points = vals.map((v, i) =>
+      `${pad + (i / (vals.length - 1)) * (w - pad * 2)},${pad + (1 - (v - min) / range) * (h - pad * 2)}`
+    ).join(' ');
+    const latest = vals[vals.length - 1];
+    const trend = latest >= vals[vals.length - 2] ? color : '#ef4444';
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block">
+      <polyline points="${points}" fill="none" stroke="${trend}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
+      <circle cx="${pad + ((vals.length - 1) / (vals.length - 1)) * (w - pad * 2)}" cy="${pad + (1 - (latest - min) / range) * (h - pad * 2)}" r="2" fill="${trend}"/>
+    </svg>`;
+  }
+
+  return `
+    <div class="card" style="padding:16px;margin-bottom:16px">
+      <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0 0 12px">Training Overview</h3>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+        <div style="background:#f0f9ff;border-radius:8px;padding:10px 12px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.03em">Total Volume</div>
+              <div style="font-size:18px;font-weight:700;color:#1d4ed8">${volStr}<span style="font-size:11px;font-weight:500;color:#6b7280">lb</span></div>
+            </div>
+            ${statSparkline(volVals, '#3b82f6')}
+          </div>
+        </div>
+        <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.03em">Total Reps</div>
+              <div style="font-size:18px;font-weight:700;color:#15803d">${totalReps}</div>
+            </div>
+            ${statSparkline(repsVals, '#22c55e')}
+          </div>
+        </div>
+        <div style="background:#fef3c7;border-radius:8px;padding:10px 12px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.03em">Sessions</div>
+              <div style="font-size:18px;font-weight:700;color:#92400e">${totalSessions}</div>
+            </div>
+            ${statSparkline(setsVals, '#f59e0b')}
+          </div>
+        </div>
+        <div style="background:#f5f3ff;border-radius:8px;padding:10px 12px">
+          <div>
+            <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.03em">Time</div>
+            <div style="font-size:18px;font-weight:700;color:#7c3aed">${timeStr}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderSessionList() {
+  const WORKOUT_COLORS = {
+    "Arms & Shoulders": "#8b5cf6",
+    "Back": "#f59e0b",
+    "Full Body A": "#3b82f6",
+    "Full Body B": "#10b981",
+  };
+
   const byDate = {};
   (state.history || []).forEach(s => {
     if (!byDate[s.date]) byDate[s.date] = [];
@@ -1211,36 +1404,54 @@ function renderSessionList() {
     const dateLabel = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
     const sessionCards = sessions.map(s => {
       const dur = s.duration_sec ? formatTime(s.duration_sec) : "?";
+      const color = WORKOUT_COLORS[s.workout_name] || "#6b7280";
       const byEx = {};
+      let totalVol = 0;
+      let totalReps = 0;
       s.sets.forEach(st => {
         if (!byEx[st.exercise]) byEx[st.exercise] = [];
         byEx[st.exercise].push(st);
+        if (st.set_type === "working") {
+          const r = parseInt(st.reps) || 0;
+          const w = st.weight_lb || 0;
+          totalReps += r;
+          totalVol += w * r;
+        }
       });
+      const workingSetCount = s.sets.filter(st => st.set_type === "working").length;
+
       const exSummary = Object.entries(byEx).map(([ex, sets]) => {
         const workingSets = sets.filter(st => st.set_type === "working");
+        if (workingSets.length === 0) return '';
         const maxWeight = Math.max(...workingSets.map(st => st.weight_lb || 0));
-        const repsRange = workingSets.map(st => st.reps);
-        const minR = Math.min(...repsRange.map(Number));
-        const maxR = Math.max(...repsRange.map(Number));
-        const repsStr = minR === maxR ? `${maxR}` : `${minR}-${maxR}`;
-        const weightStr = maxWeight > 0 ? ` @ ${maxWeight}lb` : "";
-        return `<div style="display:flex;justify-content:space-between;padding:2px 0">
+        const repsRange = workingSets.map(st => parseInt(st.reps) || 0).filter(r => r > 0);
+        const minR = Math.min(...repsRange), maxR = Math.max(...repsRange);
+        const repsStr = repsRange.length === 0 ? '' : minR === maxR ? `${maxR}` : `${minR}-${maxR}`;
+        const weightStr = maxWeight > 0 ? `${maxWeight}lb` : "";
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0">
           <span style="font-size:12px;color:#374151">${ex}</span>
-          <span style="font-size:12px;color:#6b7280;font-family:monospace">${workingSets.length}×${repsStr}${weightStr}</span>
+          <span style="font-size:11px;color:#6b7280;font-family:monospace">${workingSets.length}×${repsStr}${weightStr ? ' @ ' + weightStr : ''}</span>
         </div>`;
-      }).join("");
+      }).filter(Boolean).join("");
 
-      return `<div style="background:#f9fafb;border-radius:8px;padding:10px 12px;margin-bottom:6px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <span style="font-size:13px;font-weight:600;color:#111827">${s.workout_name}</span>
-          <span style="font-size:11px;color:#9ca3af">${dur}</span>
+      const volStr = totalVol >= 1000 ? (totalVol / 1000).toFixed(1) + 'k' : totalVol;
+
+      return `<div style="background:white;border:1px solid #e5e7eb;border-left:4px solid ${color};border-radius:8px;padding:12px 14px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:14px;font-weight:600;color:#111827">${s.workout_name}</span>
+          <span style="font-size:11px;color:#9ca3af;font-family:monospace">${dur}</span>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:8px">
+          <span style="font-size:11px;color:#6b7280"><strong style="color:#374151">${workingSetCount}</strong> sets</span>
+          <span style="font-size:11px;color:#6b7280"><strong style="color:#374151">${totalReps}</strong> reps</span>
+          ${totalVol > 0 ? `<span style="font-size:11px;color:#6b7280"><strong style="color:#374151">${volStr}</strong>lb vol</span>` : ''}
         </div>
         ${exSummary}
       </div>`;
     }).join("");
 
     return `<div style="margin-bottom:16px">
-      <p style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 6px">${dateLabel}</p>
+      <p style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">${dateLabel}</p>
       ${sessionCards}
     </div>`;
   }).join("");
@@ -1262,9 +1473,15 @@ async function loadHomeData() {
   } catch (e) { console.error("[HOME] Error:", e); }
 }
 
-// Initial render
-render();
-loadHomeData();
+// Initial render — check URL hash for deep link
+const initHash = location.hash.replace('#', '');
+const initWorkout = initHash ? WORKOUTS.find(w => w.id === initHash) : null;
+if (initWorkout) {
+  startWorkout(initWorkout);
+} else {
+  render();
+  loadHomeData();
+}
 </script>
 </body>
 </html>
