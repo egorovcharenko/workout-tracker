@@ -12,6 +12,8 @@
   .reps-btn { width: 36px; height: 36px; border-radius: 50%; font-size: 13px; font-weight: 700; border: none; cursor: pointer; transition: all 0.15s; display:inline-flex; align-items:center; justify-content:center; }
   .set-btn { width: 32px; height: 32px; border-radius: 50%; font-weight: 700; font-size: 12px; border: none; cursor: pointer; transition: all 0.2s; }
   .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; transition: all 0.3s; }
+  .scroll-fade { position: relative; }
+  .scroll-fade::after { content: '›'; position: absolute; right: 0; top: 0; bottom: 4px; width: 20px; background: linear-gradient(90deg, transparent, white 60%); pointer-events: none; display: flex; align-items: center; justify-content: flex-end; color: #d1d5db; font-size: 16px; padding-right: 2px; }
   .card.done { background: #f0fdf4; border-color: #bbf7d0; }
   .timer-circle { transition: stroke-dashoffset 1s linear; }
   .save-pulse { animation: pulse 0.6s ease-out; }
@@ -24,15 +26,15 @@
 <script>
 const WORKOUTS = [
   {
-    id: "full-body-a",
-    name: "Full Body A",
+    id: "full-body",
+    name: "Full Body",
     main: true,
     duration: "~40 min",
     exercises: [
-      { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4" },
+      { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4", extraWeights: [55, 60], rest: 120 },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
       { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo" },
-      { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
+      { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120 },
       { name: "Seated Overhead Press", sets: 2, reps: "8-10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
       { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
         supersetExercises: [
@@ -46,13 +48,13 @@ const WORKOUTS = [
   {
     id: "full-body-b",
     name: "Full Body B",
-    main: true,
+    hidden: true,
     duration: "~40 min",
     exercises: [
       { name: "Band Squat", sets: 3, reps: "12-15", notes: "Stand on band, handles at shoulders", superset: false, video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
       { name: "Band Row", sets: 3, reps: "12-15", notes: "Stand on band, pull to chest, squeeze back", superset: false, video: "https://www.youtube.com/shorts/BAlsaA1wIhY", equipment: "band" },
-      { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
+      { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120 },
       { name: "Seated Overhead Press", sets: 2, reps: "8-10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
       { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", superset: false, video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
       { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
@@ -67,6 +69,7 @@ const WORKOUTS = [
   {
     id: "arms-shoulders",
     name: "Arms & Shoulders",
+    hidden: true,
     duration: "~15 min",
     exercises: [
       { name: "Overhead Dumbbell Press", sets: 3, reps: "6-10", notes: "Seated or standing", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
@@ -79,6 +82,7 @@ const WORKOUTS = [
   {
     id: "back",
     name: "Back",
+    hidden: true,
     duration: "~20 min",
     exercises: [
       { name: "Dumbbell Bent-Over Rows", sets: 3, reps: "8-12", notes: "Keep back flat, pull to hips", superset: false, video: "https://www.youtube.com/shorts/dpYI8K6e-jE" },
@@ -101,6 +105,7 @@ const EXERCISE_MUSCLES = {
   "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
   "Reverse Flyes": { primary: ["rear_delts"], secondary: ["upper_back"] },
   "Goblet Squat": { primary: ["quads", "glutes"], secondary: ["core"] },
+  "Bulgarian Split Squat": { primary: ["quads", "glutes"], secondary: ["hamstrings", "core"] },
   "Dumbbell Flat Bench Press": { primary: ["chest"], secondary: ["triceps", "shoulders"] },
   "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
   "Dumbbell Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"] },
@@ -282,7 +287,12 @@ function getHintWeight(exIdx, setKey) {
     if (prev != null) return prev;
     return getHintWeight(exIdx, setKey - 1);
   }
-  // For working set 0 or warmup: go to last session data (don't use warmup weight for working sets)
+  // For working set 0: check warmup weight from THIS session first
+  if (typeof setKey === "number" && setKey === 0) {
+    const warmupW = getSetWeight(exIdx, "warmup");
+    if (warmupW != null) return warmupW;
+  }
+  // Then go to last session data
   if (state.lastSession && state.workout) {
     const ex = state.workout.exercises[exIdx];
     const setType = setKey === "warmup" ? "warmup" : "working";
@@ -363,7 +373,11 @@ const SWAP_GROUPS = [
   ],
   [
     { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
-    { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "12", notes: "Hinge at hips, slight knee bend", superset: false, video: "https://www.youtube.com/shorts/cGMaBqaExBo" },
+    { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "12", notes: "Hinge at hips, slight knee bend", superset: false, video: "https://www.youtube.com/shorts/cGMaBqaExBo", rest: 120 },
+  ],
+  [
+    { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4", extraWeights: [55, 60], rest: 120 },
+    { name: "Bulgarian Split Squat", sets: 3, reps: "8-10", notes: "Rear foot on bench, DB in each hand", superset: false, video: "https://www.youtube.com/shorts/2C-uNgKwPLE", rest: 120 },
   ],
 ];
 function getSwapOptions(exerciseName) {
@@ -760,7 +774,7 @@ function renderHome() {
     </div>
     <div style="padding:0 16px">
       ${activeSessionHTML ? `<div style="margin-bottom:4px"><p style="font-size:11px;font-weight:600;color:#3b82f6;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">In Progress</p>${activeSessionHTML}</div>` : ""}
-      ${WORKOUTS.map((w,i) => renderWorkoutCard(w, i)).join("")}
+      ${WORKOUTS.filter(w => !w.hidden).map((w,i) => renderWorkoutCard(w, WORKOUTS.indexOf(w))).join("")}
       ${renderCalendar()}
       ${renderHistoryStats()}
       <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0 0 12px">Recent Sessions</h3>
@@ -1098,7 +1112,7 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     resistanceHTML = `
       <div style="margin-bottom:6px">
         <div style="font-size:10px;color:#7c3aed;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Band</div>
-        <div style="display:flex;gap:3px;padding-left:26px">
+        <div style="display:flex;gap:3px;padding-left:26px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px">
           ${BANDS.map(b => {
             const sel = selectedBands.includes(b.lb);
             const style = sel
@@ -1114,13 +1128,15 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     resistanceHTML = `
       <div style="margin-bottom:6px">
         <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb)</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;padding-left:26px">
-          ${WEIGHTS_LB.map(lb => `
-            <button class="weight-btn" style="${weightBtnStyle(lb, w === lb, wHint === lb)}"
+        <div class="scroll-fade">
+        <div style="display:flex;gap:4px;padding-left:26px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px">
+          ${[...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])].sort((a,b) => a-b).map(lb => `
+            <button class="weight-btn" style="${weightBtnStyle(lb, w === lb, wHint === lb)};flex-shrink:0"
               onclick="state.weights['${exIdx}-${setKey}']=${w===lb?'null':lb};triggerSave();render()">
               ${lb}
             </button>
           `).join("")}
+        </div>
         </div>
       </div>`;
   }
@@ -1135,13 +1151,15 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       ${resistanceHTML}
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e5e7eb">
         <div style="font-size:10px;color:#16a34a;font-weight:600;margin-bottom:5px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Reps done — tap to log</div>
-        <div style="display:flex;flex-wrap:wrap;gap:5px;padding-left:26px">
+        <div class="scroll-fade">
+        <div style="display:flex;gap:5px;padding-left:26px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px">
           ${(() => { const lastR = getLastReps(exIdx, setKey); const [lo,hi] = parseRepRange(targetReps); return getRepsOptions(targetReps).map(r => `
-            <button class="reps-btn" style="${repsBtnStyle(r, false, lastR === r, r >= lo && r <= hi)}"
+            <button class="reps-btn" style="${repsBtnStyle(r, false, lastR === r, r >= lo && r <= hi)};flex-shrink:0"
               onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup})">
               ${r}
             </button>
           `).join(""); })()}
+        </div>
         </div>
       </div>
     </div>
@@ -1167,9 +1185,16 @@ function renderWorkout() {
     const warmupOff = state.warmupOff?.[exIdx];
     const warmupIsNext = !warmupOff && nextSet && nextSet.exIdx === exIdx && nextSet.setKey === "warmup";
     let setsHTML = '';
-    if (!warmupOff && !isSuperset) {
-      if (warmupIsNext && state.resting) setsHTML += renderRestSeparator();
-      setsHTML += renderSetRow(exIdx, "warmup", "W", warmupDone, ex.reps, true, warmupIsNext);
+    if (!isSuperset) {
+      if (!warmupOff) {
+        if (warmupIsNext && state.resting) setsHTML += renderRestSeparator();
+        setsHTML += `<div style="display:flex;align-items:center">
+          <div style="flex:1">${renderSetRow(exIdx, "warmup", "W", warmupDone, ex.reps, true, warmupIsNext)}</div>
+          ${!warmupIsNext ? `<button onclick="toggleWarmup(${exIdx})" style="font-size:10px;color:#9ca3af;background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0" title="Remove warmup">✕</button>` : ''}
+        </div>`;
+      } else {
+        setsHTML += `<button onclick="toggleWarmup(${exIdx})" style="font-size:11px;color:#d97706;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:3px 10px;cursor:pointer;margin-bottom:4px">+ warmup</button>`;
+      }
     }
     if (isSuperset) {
       const subs = ex.supersetExercises;
@@ -1204,7 +1229,6 @@ function renderWorkout() {
     setsHTML += `<div style="display:flex;gap:8px;padding:6px 0 2px 26px">
       ${!isSuperset ? `<button onclick="addSet(${exIdx})" style="font-size:11px;color:#6b7280;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:3px 10px;cursor:pointer">+ set</button>` : ''}
       ${!isSuperset && canRemove ? `<button onclick="removeLastSet(${exIdx})" style="font-size:11px;color:#ef4444;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:3px 10px;cursor:pointer">− set</button>` : ''}
-      ${!isSuperset ? `<button onclick="toggleWarmup(${exIdx})" style="font-size:11px;color:${warmupOff ? '#d97706' : '#9ca3af'};background:${warmupOff ? '#fef3c7' : '#f9fafb'};border:1px solid ${warmupOff ? '#fde68a' : '#e5e7eb'};border-radius:6px;padding:3px 10px;cursor:pointer">${warmupOff ? '+ warmup' : '− warmup'}</button>` : ''}
     </div>`;
 
     if (exDone) {
@@ -1401,6 +1425,7 @@ function renderCalendar() {
     "Arms & Shoulders": "#8b5cf6",
     "Back": "#f59e0b",
     "Full Body A": "#3b82f6",
+    "Full Body": "#3b82f6",
     "Full Body B": "#10b981",
   };
   const dateMap = {};
@@ -1547,6 +1572,7 @@ function renderSessionList() {
     "Arms & Shoulders": "#8b5cf6",
     "Back": "#f59e0b",
     "Full Body A": "#3b82f6",
+    "Full Body": "#3b82f6",
     "Full Body B": "#10b981",
   };
 
