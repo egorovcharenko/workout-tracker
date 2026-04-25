@@ -11,13 +11,31 @@
   .weight-btn { min-width: 32px; padding: 2px 6px; border-radius: 6px; font-size: 11px; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s; }
   .reps-btn { width: 36px; height: 36px; border-radius: 50%; font-size: 13px; font-weight: 700; border: none; cursor: pointer; transition: all 0.15s; display:inline-flex; align-items:center; justify-content:center; }
   .set-btn { width: 32px; height: 32px; border-radius: 50%; font-weight: 700; font-size: 12px; border: none; cursor: pointer; transition: all 0.2s; }
-  .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; transition: all 0.3s; }
-  .scroll-fade { position: relative; }
-  .scroll-fade::after { content: '›'; position: absolute; right: 0; top: 0; bottom: 4px; width: 20px; background: linear-gradient(90deg, transparent, white 60%); pointer-events: none; display: flex; align-items: center; justify-content: flex-end; color: #d1d5db; font-size: 16px; padding-right: 2px; }
+  .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; transition: all 0.3s; overflow: hidden; }
+  .scroll-row { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; max-width: 100%; }
+  .scroll-row::-webkit-scrollbar { display: none; }
   .card.done { background: #f0fdf4; border-color: #bbf7d0; }
   .timer-circle { transition: stroke-dashoffset 1s linear; }
   .save-pulse { animation: pulse 0.6s ease-out; }
   @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+  /* ---------- Dark mode (always on) ---------- */
+  /*
+     Strategy: invert luminance globally, preserve hue, mute saturation.
+     NOTE: body background is propagated to the HTML/canvas by CSS, so a
+     filter on body never reaches the page bg. Instead we:
+       1. Set html + body bg explicitly to the dark color we want (no filter).
+       2. Apply the filter to #app (the actual content wrapper).
+       3. Unshift media/emoji inside #app so they render as authored.
+  */
+  :root { color-scheme: dark; }
+  html, body { background: #18191c; }
+  #app {
+    filter: invert(0.92) hue-rotate(180deg) saturate(0.78);
+  }
+  #app img, #app video, #app svg, #app iframe, #app embed, #app object, #app [data-noinvert] {
+    filter: invert(1) hue-rotate(180deg) saturate(1.28);
+  }
 </style>
 </head>
 <body>
@@ -156,11 +174,18 @@ const WEIGHT_COLORS = [
   ["#fecaca","#7f1d1d","#f87171"], ["#fca5a5","#450a0a","#ef4444"],
 ];
 
+const ALL_WEIGHT_COLORS = {
+  5:["#ecfdf5","#047857","#a7f3d0"], 10:["#d1fae5","#065f46","#6ee7b7"],
+  15:["#ecfccb","#3f6212","#bef264"], 20:["#fef9c3","#854d0e","#fde047"],
+  25:["#fef3c7","#92400e","#fcd34d"], 30:["#ffedd5","#9a3412","#fdba74"],
+  35:["#fed7aa","#7c2d12","#fb923c"], 40:["#fee2e2","#991b1b","#fca5a5"],
+  45:["#fecaca","#7f1d1d","#f87171"], 50:["#fca5a5","#450a0a","#ef4444"],
+  55:["#e9d5ff","#6b21a8","#c084fc"], 60:["#d8b4fe","#581c87","#a855f7"],
+};
 function weightBtnStyle(lb, selected, hinted) {
   if (selected) return 'background:#3b82f6;color:white;box-shadow:0 1px 3px rgba(59,130,246,0.4);outline:2px solid #93c5fd;';
   if (hinted) return 'background:white;color:#93c5fd;border:2px dashed #93c5fd;';
-  const i = WEIGHTS_LB.indexOf(lb);
-  const c = WEIGHT_COLORS[i] || WEIGHT_COLORS[0];
+  const c = ALL_WEIGHT_COLORS[lb] || ["#f3f4f6","#374151","#d1d5db"];
   return `background:${c[0]};color:${c[1]};border:1px solid ${c[2]};`;
 }
 
@@ -282,26 +307,37 @@ function getSetWeight(exIdx, setKey) {
 // Only looks within the SAME exercise — previous sets, warmup, or last session
 function getHintWeight(exIdx, setKey) {
   // For working sets: check previous working set in THIS session first
+  // (but NOT warmup — warmup weight is too light to hint working sets)
   if (typeof setKey === "number" && setKey > 0) {
     const prev = getSetWeight(exIdx, setKey - 1);
     if (prev != null) return prev;
     return getHintWeight(exIdx, setKey - 1);
   }
-  // For working set 0: check warmup weight from THIS session first
-  if (typeof setKey === "number" && setKey === 0) {
-    const warmupW = getSetWeight(exIdx, "warmup");
-    if (warmupW != null) return warmupW;
-  }
-  // Then go to last session data
+  // For working set 0 (and all other cases): go straight to last session data
   if (state.lastSession && state.workout) {
     const ex = state.workout.exercises[exIdx];
-    const setType = setKey === "warmup" ? "warmup" : "working";
+    // For superset sub-exercises, use the sub-exercise name for DB lookup
+    const subEx = getSubExercise(exIdx, setKey);
+    const lookupName = subEx ? subEx.name : ex.name;
+    // DB stores set_number = interleaved index + 1 (matches autoSave loop).
     const setNum = setKey === "warmup" ? 0 : setKey + 1;
-    // For working sets: try working sets first, warmup last
-    // For warmup: try warmup first, then working set 1
-    const tryKeys = setKey === "warmup"
-      ? [`${ex.name}|warmup|0`, `${ex.name}|working|1`]
-      : [`${ex.name}|${setType}|${setNum}`, `${ex.name}|working|1`, `${ex.name}|working|2`, `${ex.name}|working|3`];
+    const setType = setKey === "warmup" ? "warmup" : "working";
+    // For supersets, fall back across other rounds of the same sub-exercise
+    // (interleaved set_numbers for Pushdowns in a 2-sub superset are 1, 3, 5).
+    let tryKeys;
+    if (setKey === "warmup") {
+      tryKeys = [`${lookupName}|warmup|0`, `${lookupName}|working|1`];
+    } else if (subEx) {
+      const subs = ex.supersetExercises;
+      const subIdx = setKey % subs.length;
+      tryKeys = [`${lookupName}|working|${setNum}`];
+      for (let round = 0; round < 10; round++) {
+        const n = round * subs.length + subIdx + 1;
+        if (n !== setNum) tryKeys.push(`${lookupName}|working|${n}`);
+      }
+    } else {
+      tryKeys = [`${lookupName}|${setType}|${setNum}`, `${lookupName}|working|1`, `${lookupName}|working|2`, `${lookupName}|working|3`];
+    }
     for (const k of tryKeys) {
       const data = state.lastSession[k];
       if (data?.weight_lb) return data.weight_lb;
@@ -430,14 +466,16 @@ async function autoSave() {
   const sets = [];
   w.exercises.forEach((ex, exIdx) => {
     if (state.completed[`${exIdx}-warmup`]) {
-      sets.push({ exercise: ex.name, set_type: "warmup", set_number: 0, reps: String(state.reps[`${exIdx}-warmup`] || ex.reps), weight_lb: getEffectiveWeight(exIdx, "warmup") });
+      const bands = getBandSelection(exIdx, "warmup");
+      sets.push({ exercise: ex.name, set_type: "warmup", set_number: 0, reps: String(state.reps[`${exIdx}-warmup`] || ex.reps), weight_lb: getEffectiveWeight(exIdx, "warmup"), bands_json: bands.length ? JSON.stringify(bands) : null });
     }
     for (let i = 0; i < getSetCount(exIdx); i++) {
       if (state.completed[`${exIdx}-${i}`]) {
         const subEx = getSubExercise(exIdx, i);
         const exName = subEx ? subEx.name : ex.name;
         const exReps = subEx ? subEx.reps : ex.reps;
-        sets.push({ exercise: exName, set_type: "working", set_number: i + 1, reps: String(state.reps[`${exIdx}-${i}`] || exReps), weight_lb: getEffectiveWeight(exIdx, i) });
+        const bands = getBandSelection(exIdx, i);
+        sets.push({ exercise: exName, set_type: "working", set_number: i + 1, reps: String(state.reps[`${exIdx}-${i}`] || exReps), weight_lb: getEffectiveWeight(exIdx, i), bands_json: bands.length ? JSON.stringify(bands) : null });
       }
     }
   });
@@ -527,6 +565,15 @@ async function loadSessionData(workoutName) {
         state.completed[key] = true;
         if (s.weight_lb) state.weights[key] = s.weight_lb;
         if (s.reps) state.reps[key] = parseInt(s.reps) || 0;
+        if (s.bands_json) {
+          try {
+            const bands = JSON.parse(s.bands_json);
+            if (Array.isArray(bands) && bands.length > 0) {
+              if (!state.bands) state.bands = {};
+              state.bands[`${key}-bands`] = bands;
+            }
+          } catch(e) {}
+        }
         if (s.set_type === "working") {
           maxSetNum[exIdx] = Math.max(maxSetNum[exIdx] || 0, setNum);
         }
@@ -536,22 +583,35 @@ async function loadSessionData(workoutName) {
       Object.entries(maxSetNum).forEach(([exIdx, maxNum]) => {
         const ex = state.workout.exercises[exIdx];
         const base = ex.supersetExercises ? ex.sets * ex.supersetExercises.length : ex.sets;
-        if (maxNum !== base) {
+        // Only record EXTRA sets (added via + button). Never shrink the
+        // template based on how many sets you've finished so far — that
+        // would hide unfinished sets on resume.
+        if (maxNum > base) {
           state.extraSets[exIdx] = maxNum - base;
         }
       });
       console.log(`[RESUME] Restored session #${todayData.id} with ${todayData.sets.length} sets`);
     }
 
-    // Load hints + 1RM history
-    const [lastRes, hintsRes, ormRes] = await Promise.all([
-      fetch(`/api/last-session?workout=${encodeURIComponent(workoutName)}`),
-      fetch("/api/exercise-hints"),
-      fetch("/api/1rm-history"),
+    // Load hints + 1RM history — resilient: one failing endpoint must not
+    // block the others or the final render() call.
+    async function safeFetchJSON(url, fallback) {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`${url} → ${r.status}`);
+        return await r.json();
+      } catch (e) {
+        console.warn(`[LOAD] ${url} failed:`, e);
+        return fallback;
+      }
+    }
+    const [lastJson, hintsJson, ormData] = await Promise.all([
+      safeFetchJSON(`/api/last-session?workout=${encodeURIComponent(workoutName)}`, {}),
+      safeFetchJSON("/api/exercise-hints", {}),
+      safeFetchJSON("/api/1rm-history", { orm: {}, reps: {}, vol: {} }),
     ]);
-    state.lastSession = await lastRes.json();
-    state.exerciseHints = await hintsRes.json();
-    const ormData = await ormRes.json();
+    state.lastSession = lastJson || {};
+    state.exerciseHints = hintsJson || {};
     state.ormHistory = ormData.orm || {};
     state.repsHistory = ormData.reps || {};
     state.volHistory = ormData.vol || {};
@@ -560,18 +620,8 @@ async function loadSessionData(workoutName) {
     const merged = { ...state.exerciseHints, ...state.lastSession };
     state.lastSession = merged;
 
-    // Pre-fill weights from hints (only for sets not already restored)
-    Object.entries(merged).forEach(([key, data]) => {
-      const [exercise, setType, setNum] = key.split("|");
-      const exIdx = state.workout.exercises.findIndex(e => e.name === exercise);
-      if (exIdx >= 0) {
-        const sk = setType === "warmup" ? "warmup" : parseInt(setNum) - 1;
-        const stateKey = `${exIdx}-${sk}`;
-        if (state.weights[stateKey] == null && data.weight_lb) {
-          state.weights[stateKey] = data.weight_lb;
-        }
-      }
-    });
+    // Weight hints are handled by getHintWeight() — no pre-fill into state.weights
+    // so they show as dotted suggestions, not pre-selected
 
     render();
   } catch (e) { console.error("[LOAD] Error:", e); }
@@ -590,6 +640,7 @@ function startTimer() {
 }
 function stopTimer() { state.running = false; clearInterval(timerInterval); timerInterval = null; }
 function startRest(duration) {
+  if (restInterval) { clearInterval(restInterval); restInterval = null; }
   state.resting = true; state.restLeft = duration;
   restInterval = setInterval(() => {
     state.restLeft--;
@@ -600,6 +651,78 @@ function startRest(duration) {
 function skipRest() { clearInterval(restInterval); restInterval = null; state.resting = false; state.restLeft = 0; render(); }
 
 // Sets are now logged via logReps() in renderSetRow
+
+// ----- AI motivation -----
+// Once per (sessionId, exercise), call /api/motivate and stash the message
+// in state.motivations so the exercise summary can render it.
+async function requestMotivation(exIdx) {
+  const ex = state.workout.exercises[exIdx];
+  const sid = state.sessionId || 'tmp';
+  const cacheKey = `${sid}-${exIdx}`;
+  if (!state.motivations) state.motivations = {};
+  if (!state.motivationsLoading) state.motivationsLoading = {};
+  if (state.motivations[cacheKey] !== undefined) return;     // already done (or null = no API key)
+  if (state.motivationsLoading[cacheKey]) return;            // in flight
+  state.motivationsLoading[cacheKey] = true;
+
+  // Build current-session payload for this exercise (incl. any sub-exercises)
+  const subs = ex.supersetExercises || [{ name: ex.name, ...ex }];
+  const subNames = subs.map(s => s.name);
+  const current = [];
+  if (state.completed[`${exIdx}-warmup`]) {
+    current.push({
+      sub: ex.name,
+      type: 'warmup',
+      reps: state.reps[`${exIdx}-warmup`],
+      weight_lb: state.weights[`${exIdx}-warmup`],
+    });
+  }
+  for (let i = 0; i < getSetCount(exIdx); i++) {
+    if (!state.completed[`${exIdx}-${i}`]) continue;
+    const subEx = getSubExercise(exIdx, i);
+    current.push({
+      sub: subEx ? subEx.name : ex.name,
+      type: 'working',
+      set_number: i + 1,
+      reps: state.reps[`${exIdx}-${i}`],
+      weight_lb: state.weights[`${exIdx}-${i}`],
+    });
+  }
+
+  // Pull last 1-2 sessions of these sub-exercises out of state.history
+  const previous = [];
+  for (const sess of (state.history || []).slice(0, 4)) {
+    const sets = sess.sets.filter(s => subNames.includes(s.exercise));
+    if (sets.length) previous.push({
+      date: sess.date,
+      sets: sets.map(s => ({ sub: s.exercise, type: s.set_type, reps: s.reps, weight_lb: s.weight_lb })),
+    });
+    if (previous.length >= 2) break;
+  }
+
+  // Look up muscles for primary sub-exercise (first sub for supersets)
+  const muscles = [];
+  for (const name of subNames) {
+    const m = (typeof MUSCLE_MAPPING === 'object' && MUSCLE_MAPPING[name]) || null;
+    if (m) muscles.push(...(m.primary || []), ...(m.secondary || []));
+  }
+
+  try {
+    const res = await fetch('/api/motivate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exercise: ex.name, muscles: [...new Set(muscles)], current, previous }),
+    });
+    const data = await res.json();
+    state.motivations[cacheKey] = data.message || null;
+  } catch (e) {
+    console.warn('[MOTIVATE]', e);
+    state.motivations[cacheKey] = null;
+  } finally {
+    state.motivationsLoading[cacheKey] = false;
+    render();
+  }
+}
 
 function startWorkout(w) {
   state.screen = "workout"; state.workout = w; state.completed = {}; state.weights = {}; state.reps = {};
@@ -616,6 +739,19 @@ function render() {
   if (state.screen === "home") app.innerHTML = renderHome();
   else if (state.screen === "workout") app.innerHTML = renderWorkout();
   // history merged into home
+  requestAnimationFrame(scrollToSelected);
+}
+
+function scrollToSelected() {
+  document.querySelectorAll('.scroll-row').forEach(row => {
+    const target = row.querySelector('[data-scroll-target]');
+    if (!target || row.scrollWidth <= row.clientWidth) return;
+    // Use getBoundingClientRect for accurate positioning regardless of offset parents
+    const rowRect = row.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const targetCenterInRow = (targetRect.left - rowRect.left) + row.scrollLeft + targetRect.width / 2;
+    row.scrollLeft = Math.max(0, targetCenterInRow - rowRect.width / 2);
+  });
 }
 
 function renderMuscleMap() {
@@ -860,10 +996,25 @@ function getLastReps(exIdx, setKey) {
   // Check last session data for this exercise/set
   if (!state.lastSession) return null;
   const ex = state.workout.exercises[exIdx];
+  // For superset sub-exercises, use the sub-exercise name
+  const subEx = getSubExercise(exIdx, setKey);
+  const lookupName = subEx ? subEx.name : ex.name;
   const setType = setKey === "warmup" ? "warmup" : "working";
+  // DB stores set_number = interleaved index + 1 for supersets (matches
+  // autoSave's loop), so the lookup uses the same formula for all exercises.
   const setNum = setKey === "warmup" ? 0 : setKey + 1;
-  const key = `${ex.name}|${setType}|${setNum}`;
-  const data = state.lastSession[key];
+  const primary = `${lookupName}|${setType}|${setNum}`;
+  let data = state.lastSession[primary];
+  if (!data && subEx && typeof setKey === "number") {
+    // Fallback: find any round of this sub-exercise (same sub-index in round)
+    const subs = ex.supersetExercises;
+    const subIdx = setKey % subs.length;
+    for (let round = 0; round < 10; round++) {
+      const candNum = round * subs.length + subIdx + 1;
+      const cand = state.lastSession[`${lookupName}|working|${candNum}`];
+      if (cand && cand.reps) { data = cand; break; }
+    }
+  }
   if (data && data.reps) {
     const n = parseInt(data.reps);
     return isNaN(n) ? null : n;
@@ -941,15 +1092,29 @@ function renderBWSparkline(exerciseName) {
 }
 
 function currentSessionVolume(exerciseName) {
-  const exIdx = state.workout ? state.workout.exercises.findIndex(e => e.name === exerciseName) : -1;
-  if (exIdx < 0) return 0;
+  if (!state.workout) return 0;
   let vol = 0;
-  for (let i = 0; i < getSetCount(exIdx); i++) {
-    if (!state.completed[`${exIdx}-${i}`]) continue;
-    const w = state.weights[`${exIdx}-${i}`] || 0;
-    const r = parseInt(state.reps[`${exIdx}-${i}`]) || 0;
-    if (w > 0 && r > 0) vol += w * r;
-  }
+  state.workout.exercises.forEach((ex, exIdx) => {
+    if (ex.supersetExercises) {
+      ex.supersetExercises.forEach((sub, s) => {
+        if (sub.name !== exerciseName) return;
+        for (let round = 0; round < ex.sets; round++) {
+          const idx = round * ex.supersetExercises.length + s;
+          if (!state.completed[`${exIdx}-${idx}`]) continue;
+          const w = state.weights[`${exIdx}-${idx}`] || 0;
+          const r = parseInt(state.reps[`${exIdx}-${idx}`]) || 0;
+          if (w > 0 && r > 0) vol += w * r;
+        }
+      });
+    } else if (ex.name === exerciseName) {
+      for (let i = 0; i < getSetCount(exIdx); i++) {
+        if (!state.completed[`${exIdx}-${i}`]) continue;
+        const w = state.weights[`${exIdx}-${i}`] || 0;
+        const r = parseInt(state.reps[`${exIdx}-${i}`]) || 0;
+        if (w > 0 && r > 0) vol += w * r;
+      }
+    }
+  });
   return Math.round(vol);
 }
 
@@ -968,6 +1133,8 @@ function miniSparkline(vals, label, unit, color) {
   const arrow = latest >= prev ? "↑" : "↓";
   const diff = Math.abs(latest - prev);
   const dispVal = latest >= 1000 ? (latest / 1000).toFixed(1) + "k" : Math.round(latest);
+  const diffDisp = diff >= 1000 ? (diff / 1000).toFixed(1) + "k" : Math.round(diff);
+  const diffStr = diff > 0 ? `${latest >= prev ? '+' : '−'}${diffDisp}` : '';
   return `<div style="display:flex;align-items:center;gap:2px">
     <div style="text-align:right">
       <div style="font-size:7px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.03em">${label}</div>
@@ -977,6 +1144,7 @@ function miniSparkline(vals, label, unit, color) {
       <polyline points="${points}" fill="none" stroke="${trend}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="${pad + ((vals.length - 1) / (vals.length - 1)) * (w - pad * 2)}" cy="${pad + (1 - (latest - min) / range) * (h - pad * 2)}" r="2" fill="${trend}"/>
     </svg>
+    ${diffStr ? `<div style="font-size:8px;color:${trend};font-weight:600;white-space:nowrap">${diffStr}</div>` : ''}
   </div>`;
 }
 
@@ -992,6 +1160,101 @@ function mergeWithLive(serverData, liveVal, key) {
     }
   }
   return data;
+}
+
+function dualSparkline(series) {
+  // series: [{vals, label, color}] — two lines on one chart
+  const valid = series.filter(s => s.vals.length >= 2);
+  if (valid.length === 0) return "";
+  const allVals = valid.flatMap(s => s.vals);
+  const globalMin = Math.min(...allVals);
+  const globalMax = Math.max(...allVals);
+  const range = globalMax - globalMin || 1;
+  const w = 64, h = 24, pad = 2;
+  const maxLen = Math.max(...valid.map(s => s.vals.length));
+
+  const lines = valid.map(s => {
+    const latest = s.vals[s.vals.length - 1];
+    const prev = s.vals[s.vals.length - 2];
+    const trend = latest >= prev ? "#16a34a" : "#ef4444";
+    const diff = Math.abs(latest - prev);
+    const points = s.vals.map((v, i) =>
+      `${pad + (i / (maxLen - 1)) * (w - pad * 2)},${pad + (1 - (v - globalMin) / range) * (h - pad * 2)}`
+    ).join(" ");
+    const cy = pad + (1 - (latest - globalMin) / range) * (h - pad * 2);
+    const cx = pad + ((s.vals.length - 1) / (maxLen - 1)) * (w - pad * 2);
+    return { points, cx, cy, color: s.color, trend, latest, diff, label: s.label, up: latest >= prev };
+  });
+
+  const svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    ${lines.map(l => `
+      <polyline points="${l.points}" fill="none" stroke="${l.color}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+      <circle cx="${l.cx}" cy="${l.cy}" r="2" fill="${l.color}"/>
+    `).join('')}
+  </svg>`;
+
+  const labels = lines.map(l => {
+    const dispVal = l.latest >= 1000 ? (l.latest / 1000).toFixed(1) + 'k' : Math.round(l.latest);
+    const diffDisp = l.diff >= 1000 ? (l.diff / 1000).toFixed(1) + 'k' : Math.round(l.diff);
+    const diffStr = l.diff > 0 ? `${l.up ? '+' : '−'}${diffDisp}` : '';
+    return `<div style="display:flex;align-items:center;gap:2px">
+      <span style="font-size:7px;color:${l.color};font-weight:600">${l.label}</span>
+      <span style="font-size:8px;color:${l.trend};font-weight:600">${diffStr}</span>
+    </div>`;
+  }).join('');
+
+  return `<div style="display:flex;align-items:center;gap:3px">
+    ${svg}
+    <div>${labels}</div>
+  </div>`;
+}
+
+function renderSupersetSparkline(ex) {
+  if (!ex.supersetExercises) return "";
+  const subs = ex.supersetExercises;
+  const colors = ["#7c3aed", "#2563eb"];
+
+  // Volume sparkline — both sub-exercises on one chart
+  const volSeries = subs.map((sub, s) => {
+    const volData = mergeWithLive((state.volHistory || {})[sub.name] || [], currentSessionVolume(sub.name), "vol");
+    const shortName = sub.name.split(' ').pop();
+    return { vals: volData.map(d => d.vol), label: shortName, color: colors[s % colors.length] };
+  });
+
+  // Reps sparkline — total reps per session for each sub
+  const repsSeries = subs.map((sub, s) => {
+    const repsData = mergeWithLive((state.repsHistory || {})[sub.name] || [], currentSessionTotalReps(sub.name), "reps");
+    const shortName = sub.name.split(' ').pop();
+    return { vals: repsData.map(d => d.reps), label: shortName, color: colors[s % colors.length] };
+  });
+
+  const volHTML = dualSparkline(volSeries);
+  const repsHTML = dualSparkline(repsSeries);
+  if (!volHTML && !repsHTML) return "";
+  return `<div style="display:flex;gap:8px;align-items:center">${volHTML}${repsHTML}</div>`;
+}
+
+function currentSessionTotalReps(exerciseName) {
+  if (!state.workout) return 0;
+  let total = 0;
+  state.workout.exercises.forEach((ex, exIdx) => {
+    if (ex.supersetExercises) {
+      ex.supersetExercises.forEach((sub, s) => {
+        if (sub.name !== exerciseName) return;
+        for (let round = 0; round < ex.sets; round++) {
+          const idx = round * ex.supersetExercises.length + s;
+          const r = state.reps[`${exIdx}-${idx}`];
+          if (r) total += r;
+        }
+      });
+    } else if (ex.name === exerciseName) {
+      for (let i = 0; i < getSetCount(exIdx); i++) {
+        const r = state.reps[`${exIdx}-${i}`];
+        if (r) total += r;
+      }
+    }
+  });
+  return total;
 }
 
 function renderSparkline(exerciseName) {
@@ -1015,7 +1278,33 @@ function renderSparkline(exerciseName) {
 
 function getBandSelection(exIdx, setKey) {
   const k = `${exIdx}-${setKey}-bands`;
-  return state.bands?.[k] || [];
+  if (state.bands?.[k]?.length) return state.bands[k];
+  // Auto-fill from last session's bands_json
+  const ex = state.workout.exercises[exIdx];
+  const subEx = getSubExercise(exIdx, setKey);
+  const effectiveEx = subEx ? { ...ex, ...subEx } : ex;
+  if (effectiveEx.equipment !== 'band') return [];
+  if (!state.lastSession) return [];
+  const exName = subEx ? subEx.name : ex.name;
+  const setType = setKey === "warmup" ? "warmup" : "working";
+  const setNum = setKey === "warmup" ? 0 : setKey + 1;
+  // Try exact match, then fall back to other sets of same exercise
+  const tryKeys = setKey === "warmup"
+    ? [`${exName}|warmup|0`, `${exName}|working|1`]
+    : [`${exName}|${setType}|${setNum}`, `${exName}|working|1`, `${exName}|working|2`, `${exName}|working|3`];
+  // PURE read — never mutate state here. Suggestions return without being
+  // stored in state.bands, so renderers can distinguish an explicit pick
+  // (state.bands[k] set) from a displayed-only suggestion.
+  for (const key of tryKeys) {
+    const data = state.lastSession[key];
+    if (data?.bands_json) {
+      try {
+        const bands = JSON.parse(data.bands_json);
+        if (Array.isArray(bands) && bands.length > 0) return bands;
+      } catch(e) {}
+    }
+  }
+  return [];
 }
 
 function toggleBand(exIdx, setKey, bandLb) {
@@ -1064,40 +1353,47 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     `;
   }
 
-  // Compact row for future (non-next) pending sets — just label + hint weight
+  // Compact row for future (non-next) pending sets — just label + hint weight + last reps
   if (!isNext) {
+    const lastR = getLastReps(exIdx, setKey);
+    const hintStyle = 'font-size:11px;font-family:monospace;color:#9ca3af;border-bottom:1px dashed #d1d5db';
     let hintText = '';
     if (isBW) {
       // nothing
     } else if (isBand) {
       const total = selectedBands.reduce((a, b) => a + b, 0);
-      if (total > 0) hintText = `<span style="font-size:11px;font-family:monospace;color:#c4b5fd">${total}lb</span>`;
-      else if (wHint) hintText = `<span style="font-size:11px;font-family:monospace;color:#c4b5fd">${wHint}lb</span>`;
+      if (total > 0) hintText = `<span style="${hintStyle}">${total}lb</span>`;
+      else if (wHint) hintText = `<span style="${hintStyle}">${wHint}lb</span>`;
     } else if (w) {
-      hintText = `<span style="font-size:11px;font-family:monospace;color:#93c5fd">${w}lb</span>`;
+      hintText = `<span style="${hintStyle}">${w}lb</span>`;
     } else if (wHint) {
-      hintText = `<span style="font-size:11px;font-family:monospace;color:#93c5fd">${wHint}lb</span>`;
+      hintText = `<span style="${hintStyle}">${wHint}lb</span>`;
     }
+    const lastRepsHint = lastR ? `<span style="${hintStyle}">×${lastR}</span>` : '';
     return `
       <div style="border-bottom:1px solid #f0f0f0;padding:8px 0;opacity:0.5">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;font-weight:700;color:${labelColor};width:20px;text-align:center">${label}</span>
           <span style="font-size:11px;color:#9ca3af">${targetReps} reps</span>
-          ${hintText ? `<span style="margin-left:auto">${hintText}</span>` : ''}
+          <span style="margin-left:auto;display:flex;gap:4px;align-items:center">${hintText}${lastRepsHint}</span>
         </div>
       </div>
     `;
   }
 
   // Active set (isNext) — show weight/band + reps pickers
-  const nextAccent = 'border-left:4px solid #3b82f6;padding-left:10px;background:#eff6ff;margin:-2px -4px;padding-top:12px;padding-bottom:12px;padding-right:8px;border-radius:0 8px 8px 0;box-shadow:0 1px 4px rgba(59,130,246,0.15);';
+  const nextAccent = 'border-left:4px solid #3b82f6;padding-left:10px;background:#eff6ff;margin:-2px -4px;padding-top:12px;padding-bottom:12px;padding-right:8px;border-radius:0 8px 8px 0;box-shadow:0 1px 4px rgba(59,130,246,0.15);overflow:hidden;';
   let weightDisplay = '';
   if (isBW) {
     // no weight for bodyweight exercises
   } else if (isBand) {
     const total = selectedBands.reduce((a, b) => a + b, 0);
     if (total > 0) {
-      weightDisplay = `<span style="font-size:12px;font-family:monospace;color:#7c3aed">${total}lb bands</span>`;
+      const bandsKey = `${exIdx}-${setKey}-bands`;
+      const isExplicit = !!(state.bands && state.bands[bandsKey] && state.bands[bandsKey].length);
+      weightDisplay = isExplicit
+        ? `<span style="font-size:12px;font-family:monospace;color:#7c3aed">${total}lb bands</span>`
+        : `<span style="font-size:11px;font-family:monospace;color:#c084fc;border-bottom:1px dashed #c084fc">${total}lb bands?</span>`;
     }
   } else if (w) {
     weightDisplay = `<span style="font-size:12px;font-family:monospace;color:#2563eb">${w}lb / ${lbToKg(w)}kg</span>`;
@@ -1109,15 +1405,34 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
   if (isBW) {
     resistanceHTML = '';
   } else if (isBand) {
+    // Is the current band selection a live user pick, or an auto-suggestion
+    // pulled from the last session's bands_json? Suggestions render dashed
+    // to match the weight-hint style, so it's clear nothing is locked in yet.
+    const bandsKey = `${exIdx}-${setKey}-bands`;
+    const isExplicit = !!(state.bands && state.bands[bandsKey] && state.bands[bandsKey].length);
     resistanceHTML = `
       <div style="margin-bottom:6px">
         <div style="font-size:10px;color:#7c3aed;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Band</div>
-        <div style="display:flex;gap:3px;padding-left:26px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px">
+        <div class="scroll-row" style="display:flex;gap:3px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
           ${BANDS.map(b => {
             const sel = selectedBands.includes(b.lb);
-            const style = sel
-              ? `background:${b.color};color:${b.text};outline:2px solid ${b.color};box-shadow:0 1px 3px rgba(0,0,0,0.2);`
-              : `background:white;color:${b.color};border:2px solid ${b.color};opacity:0.7;`;
+            if (sel && !isExplicit) {
+              // auto-suggested from last session — prominent "LAST" chip above,
+              // bigger dashed button. Matches the weight/reps suggestion style.
+              return `
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
+                  <span style="font-size:8px;color:${b.color};letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">last</span>
+                  <button class="weight-btn" style="background:white;color:${b.color};border:2px dashed ${b.color};font-size:13px;font-weight:700;padding:6px 10px;min-width:44px;border-radius:8px;box-shadow:0 2px 8px ${b.color}33" onclick="toggleBand(${exIdx},'${setKey}',${b.lb})">
+                    ${b.lb}lb
+                  </button>
+                </div>`;
+            }
+            let style;
+            if (sel) {
+              style = `background:${b.color};color:${b.text};outline:2px solid ${b.color};box-shadow:0 1px 3px rgba(0,0,0,0.2);`;
+            } else {
+              style = `background:white;color:${b.color};border:2px solid ${b.color};opacity:0.7;`;
+            }
             return `<button class="weight-btn" style="${style};font-size:11px;padding:4px 6px;min-width:0" onclick="toggleBand(${exIdx},'${setKey}',${b.lb})">
               ${b.lb}lb
             </button>`;
@@ -1128,15 +1443,31 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     resistanceHTML = `
       <div style="margin-bottom:6px">
         <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb)</div>
-        <div class="scroll-fade">
-        <div style="display:flex;gap:4px;padding-left:26px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px">
-          ${[...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])].sort((a,b) => a-b).map(lb => `
-            <button class="weight-btn" style="${weightBtnStyle(lb, w === lb, wHint === lb)};flex-shrink:0"
-              onclick="state.weights['${exIdx}-${setKey}']=${w===lb?'null':lb};triggerSave();render()">
-              ${lb}
-            </button>
-          `).join("")}
-        </div>
+        <div class="scroll-row" style="display:flex;gap:4px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
+          ${[...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])].sort((a,b) => a-b).map(lb => {
+            const isSelected = w === lb;
+            const isHinted = w == null && wHint === lb;
+            if (isHinted) {
+              // Prominent "last time" chip — bigger, with caption ABOVE so
+              // chip bottoms stay aligned with neighbors (parent row uses
+              // align-items:flex-end).
+              return `
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
+                  <span style="font-size:8px;color:#3b82f6;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">last</span>
+                  <button class="weight-btn" style="background:white;color:#3b82f6;border:2px dashed #3b82f6;min-width:44px;padding:6px 12px;font-size:14px;font-weight:700;border-radius:8px;box-shadow:0 2px 8px rgba(59,130,246,0.2)"
+                    data-scroll-target
+                    onclick="state.weights['${exIdx}-${setKey}']=${lb};triggerSave();render()">
+                    ${lb}
+                  </button>
+                </div>`;
+            }
+            return `
+              <button class="weight-btn" style="${weightBtnStyle(lb, isSelected, false)};flex-shrink:0"
+                ${isSelected ? 'data-scroll-target' : ''}
+                onclick="state.weights['${exIdx}-${setKey}']=${isSelected?'null':lb};triggerSave();render()">
+                ${lb}
+              </button>`;
+          }).join("")}
         </div>
       </div>`;
   }
@@ -1151,15 +1482,27 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       ${resistanceHTML}
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e5e7eb">
         <div style="font-size:10px;color:#16a34a;font-weight:600;margin-bottom:5px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Reps done — tap to log</div>
-        <div class="scroll-fade">
-        <div style="display:flex;gap:5px;padding-left:26px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px">
-          ${(() => { const lastR = getLastReps(exIdx, setKey); const [lo,hi] = parseRepRange(targetReps); return getRepsOptions(targetReps).map(r => `
-            <button class="reps-btn" style="${repsBtnStyle(r, false, lastR === r, r >= lo && r <= hi)};flex-shrink:0"
-              onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup})">
-              ${r}
-            </button>
-          `).join(""); })()}
-        </div>
+        <div class="scroll-row" style="display:flex;gap:5px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
+          ${(() => { const lastR = getLastReps(exIdx, setKey); const [lo,hi] = parseRepRange(targetReps); return getRepsOptions(targetReps).map(r => {
+            const isLast = lastR === r;
+            if (isLast) {
+              // Prominent "last time" reps chip — bigger with caption above
+              return `
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
+                  <span style="font-size:8px;color:#16a34a;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">last</span>
+                  <button class="reps-btn" style="background:white;color:#16a34a;border:2px dashed #16a34a;width:44px;height:44px;font-size:15px;font-weight:700;box-shadow:0 2px 8px rgba(22,163,74,0.22)"
+                    data-scroll-target
+                    onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup})">
+                    ${r}
+                  </button>
+                </div>`;
+            }
+            return `
+              <button class="reps-btn" style="${repsBtnStyle(r, false, false, r >= lo && r <= hi)};flex-shrink:0"
+                onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup})">
+                ${r}
+              </button>`;
+          }).join(""); })()}
         </div>
       </div>
     </div>
@@ -1180,6 +1523,16 @@ function renderWorkout() {
     const warmupDone = !!state.completed[`${exIdx}-warmup`];
     const setCount = getSetCount(exIdx);
     const exDone = (isSuperset || warmupDone) && Array.from({length:setCount}).every((_,i) => state.completed[`${exIdx}-${i}`]);
+    // Fire motivation request once per exercise per session
+    if (exDone) requestMotivation(exIdx);
+    const motivKey = `${state.sessionId || 'tmp'}-${exIdx}`;
+    const motivMsg = state.motivations?.[motivKey];
+    const motivLoading = state.motivationsLoading?.[motivKey];
+    const motivHTML = exDone && (motivMsg || motivLoading) ? `
+      <div style="margin-top:10px;padding:10px 12px;background:linear-gradient(135deg,#ede9fe,#dbeafe);border-radius:8px;display:flex;align-items:flex-start;gap:8px">
+        <span style="font-size:14px;flex-shrink:0">✨</span>
+        <span style="font-size:12px;color:#4c1d95;line-height:1.45;font-weight:500">${motivLoading && !motivMsg ? '<span style="opacity:0.6">thinking…</span>' : motivMsg}</span>
+      </div>` : '';
     const gifVisible = state.showGif[exIdx];
 
     const warmupOff = state.warmupOff?.[exIdx];
@@ -1188,10 +1541,16 @@ function renderWorkout() {
     if (!isSuperset) {
       if (!warmupOff) {
         if (warmupIsNext && state.resting) setsHTML += renderRestSeparator();
-        setsHTML += `<div style="display:flex;align-items:center">
-          <div style="flex:1">${renderSetRow(exIdx, "warmup", "W", warmupDone, ex.reps, true, warmupIsNext)}</div>
-          ${!warmupIsNext ? `<button onclick="toggleWarmup(${exIdx})" style="font-size:10px;color:#9ca3af;background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0" title="Remove warmup">✕</button>` : ''}
-        </div>`;
+        setsHTML += renderSetRow(exIdx, "warmup", "W", warmupDone, ex.reps, true, warmupIsNext);
+        if (warmupIsNext) {
+          setsHTML += `<div style="text-align:right;margin-top:-6px;margin-bottom:4px">
+            <button onclick="toggleWarmup(${exIdx})" style="font-size:12px;color:#d97706;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:4px 14px;cursor:pointer;font-weight:500">Skip warmup →</button>
+          </div>`;
+        } else if (!warmupDone) {
+          setsHTML += `<div style="text-align:right;margin-top:-4px;margin-bottom:2px">
+            <button onclick="toggleWarmup(${exIdx})" style="font-size:10px;color:#9ca3af;background:none;border:none;cursor:pointer;padding:2px 4px">✕ remove warmup</button>
+          </div>`;
+        }
       } else {
         setsHTML += `<button onclick="toggleWarmup(${exIdx})" style="font-size:11px;color:#d97706;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:3px 10px;cursor:pointer;margin-bottom:4px">+ warmup</button>`;
       }
@@ -1251,16 +1610,31 @@ function renderWorkout() {
           const repsStr = reps.filter(r => r > 0).join('·');
           const isBandSub = sub.equipment === 'band';
           const wStr = maxW > 0 ? (isBandSub ? `${maxW}lb` : `@ ${maxW}lb`) : '';
-          return `<span style="font-size:11px;color:#6b7280;font-family:monospace">${sub.name.split(' ').map(w => w[0]).join('')}: ${repsStr} ${wStr}</span>`;
+          return `<div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:11px;color:#6b7280">${sub.name}</span>
+            <span style="font-size:11px;color:#9ca3af;font-family:monospace">${repsStr}</span>
+            ${wStr ? `<span style="font-size:10px;background:${isBandSub ? '#ede9fe' : '#dbeafe'};color:${isBandSub ? '#7c3aed' : '#2563eb'};padding:1px 5px;border-radius:3px;font-weight:600">${wStr}</span>` : ''}
+          </div>`;
         });
         return `
-          <div class="card done" style="padding:12px 16px;cursor:pointer;border-left:3px solid #7c3aed" onclick="state._expanded = state._expanded === ${exIdx} ? null : ${exIdx}; render()">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-              <span style="color:#15803d;font-size:14px">✓</span>
-              <span style="font-weight:600;color:#15803d;font-size:14px">${ex.name}</span>
+          <div class="card done" style="padding:14px 16px;cursor:pointer;border-left:3px solid #7c3aed" onclick="state._expanded = state._expanded === ${exIdx} ? null : ${exIdx}; render()">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:28px;height:28px;border-radius:50%;background:#f3e8ff;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <span style="color:#7c3aed;font-size:13px;font-weight:700">✓</span>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-weight:600;color:#15803d;font-size:14px">${ex.name}</span>
+                  <span style="font-size:9px;background:#f3e8ff;color:#7c3aed;padding:1px 6px;border-radius:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px">superset</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:1px;margin-top:3px">
+                  ${subSummaries.join('')}
+                </div>
+              </div>
+              <span style="font-size:10px;color:#d1d5db;transform:rotate(${state._expanded === exIdx ? '180' : '0'}deg);transition:transform 0.2s">▼</span>
             </div>
-            <div style="display:flex;flex-direction:column;gap:2px;padding-left:22px">${subSummaries.join('')}</div>
-            ${state._expanded === exIdx ? `<div style="padding-top:8px;border-top:1px solid #dcfce7;margin-top:8px">${setsHTML}</div>` : ''}
+            ${motivHTML}
+            ${state._expanded === exIdx ? `<div style="padding-top:10px;border-top:1px solid #dcfce7;margin-top:10px">${setsHTML}</div>` : ''}
           </div>
         `;
       }
@@ -1273,18 +1647,25 @@ function renderWorkout() {
       const maxW = Math.max(...workingSets.map(s => s.wt || 0));
       const repsList = workingSets.map(s => s.rp).filter(r => r > 0);
       const isBandEx = ex.equipment === 'band';
-      const weightStr = maxW > 0 ? (isBandEx ? `${maxW}lb bands` : `@ ${maxW}lb`) : '';
-      const repsDisplay = repsList.length > 0 ? repsList.join('·') : '';
+      const weightStr = maxW > 0 ? (isBandEx ? `${maxW}lb` : `${maxW}lb`) : '';
+      const repsDisplay = repsList.length > 0 ? repsList.join(' · ') : '';
       return `
-        <div class="card done" style="padding:12px 16px;cursor:pointer" onclick="state._expanded = state._expanded === ${exIdx} ? null : ${exIdx}; render()">
-          <div style="display:flex;align-items:center;justify-content:space-between">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="color:#15803d;font-size:14px">✓</span>
-              <span style="font-weight:600;color:#15803d;font-size:14px">${ex.name}</span>
+        <div class="card done" style="padding:14px 16px;cursor:pointer;border-left:3px solid #22c55e" onclick="state._expanded = state._expanded === ${exIdx} ? null : ${exIdx}; render()">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:28px;height:28px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <span style="color:#16a34a;font-size:13px;font-weight:700">✓</span>
             </div>
-            <span style="font-size:12px;color:#6b7280;font-family:monospace">${repsDisplay} ${weightStr}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;color:#15803d;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ex.name}</div>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:2px">
+                <span style="font-size:12px;color:#6b7280;font-family:monospace;letter-spacing:-0.3px">${repsDisplay}</span>
+                ${weightStr ? `<span style="font-size:10px;background:#dbeafe;color:#2563eb;padding:1px 6px;border-radius:4px;font-weight:600">${weightStr}</span>` : ''}
+              </div>
+            </div>
+            <span style="font-size:10px;color:#d1d5db;transform:rotate(${state._expanded === exIdx ? '180' : '0'}deg);transition:transform 0.2s">▼</span>
           </div>
-          ${state._expanded === exIdx ? `<div style="padding-top:8px;border-top:1px solid #dcfce7;margin-top:8px">${setsHTML}</div>` : ''}
+          ${motivHTML}
+          ${state._expanded === exIdx ? `<div style="padding-top:10px;border-top:1px solid #dcfce7;margin-top:10px">${setsHTML}</div>` : ''}
         </div>
       `;
     }
@@ -1309,6 +1690,7 @@ function renderWorkout() {
               `).join('')}
             </div>
             ${ex.notes ? `<p style="font-size:12px;color:#9ca3af;margin:0">${ex.notes}</p>` : ''}
+            ${renderSupersetSparkline(ex) ? `<div style="margin-top:6px">${renderSupersetSparkline(ex)}</div>` : ''}
           </div>
           <div style="padding:0 16px 12px">${setsHTML}</div>
         </div>
@@ -1365,6 +1747,41 @@ function renderWorkout() {
       return `<div style="margin-bottom:8px"><p style="margin:0">${nameHTML}</p>${lines}</div>`;
     }).join("");
 
+    // Build highlights — compare to last session
+    const highlights = [];
+    w.exercises.forEach((ex, exIdx) => {
+      const names = ex.supersetExercises ? ex.supersetExercises.map(s => s.name) : [ex.name];
+      names.forEach(name => {
+        const lastVol = ((state.volHistory || {})[name] || []).filter(d => d.date !== localDate());
+        const lastVolVal = lastVol.length > 0 ? lastVol[lastVol.length - 1].vol : 0;
+        const curVol = currentSessionVolume(name);
+
+        const lastReps = ((state.repsHistory || {})[name] || []).filter(d => d.date !== localDate());
+        const lastRepsVal = lastReps.length > 0 ? lastReps[lastReps.length - 1].reps : 0;
+        const curReps = currentSessionTotalReps(name);
+
+        const lastOrm = ((state.ormHistory || {})[name] || []).filter(d => d.date !== localDate());
+        const lastOrmVal = lastOrm.length > 0 ? lastOrm[lastOrm.length - 1].orm : 0;
+        const curOrm = currentSessionOrm(name);
+
+        if (curOrm > lastOrmVal && lastOrmVal > 0) {
+          highlights.push({ name, type: '1RM', icon: '🏆', text: `${name}: new 1RM ${Math.round(curOrm)}lb (was ${Math.round(lastOrmVal)}lb)`, color: '#ca8a04' });
+        } else if (curVol > lastVolVal && lastVolVal > 0) {
+          const pct = Math.round((curVol - lastVolVal) / lastVolVal * 100);
+          highlights.push({ name, type: 'vol', icon: '📈', text: `${name}: +${pct}% volume`, color: '#16a34a' });
+        } else if (curReps > lastRepsVal && lastRepsVal > 0) {
+          highlights.push({ name, type: 'reps', icon: '🔥', text: `${name}: +${curReps - lastRepsVal} more reps`, color: '#2563eb' });
+        }
+      });
+    });
+
+    const highlightsHTML = highlights.length > 0 ? `
+      <div style="background:linear-gradient(135deg,#fefce8,#f0fdf4);border:1px solid #d9f99d;border-radius:12px;padding:12px 14px;margin-bottom:12px">
+        <p style="font-size:11px;font-weight:600;color:#65a30d;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 6px">Highlights</p>
+        ${highlights.map(h => `<p style="font-size:13px;color:${h.color};margin:3px 0;font-weight:500">${h.icon} ${h.text}</p>`).join('')}
+      </div>
+    ` : '';
+
     completionHTML = `
       <div style="padding:24px 0">
         <div style="text-align:center;margin-bottom:16px">
@@ -1372,6 +1789,7 @@ function renderWorkout() {
           <h3 style="font-size:20px;font-weight:700;color:#15803d;margin:0">Workout Complete!</h3>
           <p style="font-size:14px;color:#6b7280;margin:4px 0 0">Time: ${formatTime(state.elapsed)}</p>
         </div>
+        ${highlightsHTML}
         <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
           <p style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">Session Summary</p>
           ${summaryLines}
@@ -1706,6 +2124,55 @@ function renderSessionList() {
 
       const volStr = totalVol >= 1000 ? (totalVol / 1000).toFixed(1) + 'k' : totalVol;
 
+      // Compare to previous session of same workout for highlights
+      const prevSession = history.find((ps, pi) => pi > history.indexOf(s) && ps.workout_name === s.workout_name);
+      let highlightHTML = '';
+      if (prevSession) {
+        function calcE1RM(w, r) { return r > 1 ? w * (1 + r / 30.0) : w; }
+        function exStats(sets) {
+          const m = {};
+          sets.forEach(st => {
+            if (st.set_type !== 'working') return;
+            if (!m[st.exercise]) m[st.exercise] = { vol: 0, reps: 0, maxW: 0, best1RM: 0 };
+            const r = parseInt(st.reps) || 0;
+            const w = st.weight_lb || 0;
+            m[st.exercise].vol += w * r;
+            m[st.exercise].reps += r;
+            m[st.exercise].maxW = Math.max(m[st.exercise].maxW, w);
+            if (w > 0 && r > 0) m[st.exercise].best1RM = Math.max(m[st.exercise].best1RM, calcE1RM(w, r));
+          });
+          return m;
+        }
+        const prevByEx = exStats(prevSession.sets);
+        const curByEx = exStats(s.sets);
+        const prs = [];
+        Object.entries(curByEx).forEach(([ex, cur]) => {
+          const prev = prevByEx[ex];
+          if (!prev) return;
+          const shortName = ex.split(' ').pop();
+          // Priority: 1RM PR > weight PR > volume > reps
+          if (cur.best1RM > prev.best1RM && prev.best1RM > 0) {
+            const diff = Math.round(cur.best1RM - prev.best1RM);
+            if (diff > 0) { prs.push(`💪 ${shortName}: +${diff}lb e1RM`); return; }
+          }
+          if (cur.maxW > prev.maxW) {
+            prs.push(`🏆 ${shortName}: +${cur.maxW - prev.maxW}lb weight`);
+          } else if (cur.vol > prev.vol && prev.vol > 0) {
+            const pct = Math.round((cur.vol - prev.vol) / prev.vol * 100);
+            if (pct >= 5) prs.push(`📈 ${shortName}: +${pct}% vol`);
+          } else if (cur.reps > prev.reps) {
+            prs.push(`🔥 ${shortName}: +${cur.reps - prev.reps} reps`);
+          }
+        });
+        if (prs.length > 0) {
+          highlightHTML = `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #d9f99d">
+            <div style="display:flex;flex-wrap:wrap;gap:4px 10px">
+              ${prs.map(p => `<span style="font-size:10px;color:#65a30d;font-weight:500">${p}</span>`).join('')}
+            </div>
+          </div>`;
+        }
+      }
+
       return `<div style="background:white;border:1px solid #e5e7eb;border-left:4px solid ${color};border-radius:8px;padding:12px 14px;margin-bottom:8px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:8px">
@@ -1720,6 +2187,7 @@ function renderSessionList() {
           ${totalVol > 0 ? `<span style="font-size:11px;color:#6b7280"><strong style="color:#374151">${volStr}</strong>lb vol</span>` : ''}
         </div>
         ${exSummary}
+        ${highlightHTML}
       </div>`;
     }).join("");
 

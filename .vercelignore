@@ -1,0 +1,7 @@
+workouts.db
+workouts.db-*
+*.db-journal
+__pycache__/
+*.pyc
+.claude/
+.DS_Store
