@@ -3,3 +3,5 @@ workouts.db.bak
 .fuse_hidden*
 __pycache__/
 *.pyc
+.vercel
+.env*.local

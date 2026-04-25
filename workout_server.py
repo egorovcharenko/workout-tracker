@@ -385,7 +385,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(json.dumps(data).encode())
+            self.wfile.write(json.dumps(data, default=str).encode())
         elif parsed.path == "/api/last-session":
             params = urllib.parse.parse_qs(parsed.query)
             workout = params.get("workout", [""])[0]
@@ -395,7 +395,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(json.dumps(data).encode())
+            self.wfile.write(json.dumps(data, default=str).encode())
         elif parsed.path == "/api/exercise-hints":
             data = get_exercise_hints()
             print(f"  [HINTS] {len(data)} exercise hints")
@@ -403,7 +403,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(json.dumps(data).encode())
+            self.wfile.write(json.dumps(data, default=str).encode())
         elif parsed.path == "/api/1rm-history":
             data = get_exercise_1rm_history()
             print(f"  [1RM] {len(data)} exercises with history")
@@ -411,7 +411,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(json.dumps(data).encode())
+            self.wfile.write(json.dumps(data, default=str).encode())
         elif parsed.path == "/api/active-sessions":
             data = get_active_sessions()
             print(f"  [ACTIVE] {len(data)} active sessions")
@@ -419,7 +419,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(json.dumps(data).encode())
+            self.wfile.write(json.dumps(data, default=str).encode())
         elif parsed.path == "/api/today-session":
             params = urllib.parse.parse_qs(parsed.query)
             workout = params.get("workout", [""])[0]
@@ -429,7 +429,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(json.dumps(data).encode())
+            self.wfile.write(json.dumps(data, default=str).encode())
         else:
             self.send_response(404)
             self.end_headers()
