@@ -755,14 +755,31 @@ function startTimer() {
 function stopTimer() { state.running = false; clearInterval(timerInterval); timerInterval = null; }
 function startRest(duration) {
   if (restInterval) { clearInterval(restInterval); restInterval = null; }
-  state.resting = true; state.restLeft = duration;
-  restInterval = setInterval(() => {
-    state.restLeft--;
-    if (state.restLeft <= 0) { clearInterval(restInterval); restInterval = null; state.resting = false; }
-    render();
-  }, 1000);
+  if (!duration || duration <= 0) return;
+  state.resting = true;
+  state.restDur = duration;
+  state.restEndAt = Date.now() + duration * 1000;
+  state.restLeft = duration;
+  restInterval = setInterval(tickRest, 1000);
 }
-function skipRest() { clearInterval(restInterval); restInterval = null; state.resting = false; state.restLeft = 0; render(); }
+function tickRest() {
+  if (!state.resting || !state.restEndAt) return;
+  const left = Math.max(0, Math.ceil((state.restEndAt - Date.now()) / 1000));
+  state.restLeft = left;
+  if (left <= 0) {
+    clearInterval(restInterval); restInterval = null;
+    state.resting = false; state.restEndAt = 0;
+  }
+  render();
+}
+function skipRest() {
+  clearInterval(restInterval); restInterval = null;
+  state.resting = false; state.restLeft = 0; state.restEndAt = 0;
+  render();
+}
+// Re-sync immediately when tab regains focus (mobile bg throttling).
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state.resting) tickRest(); });
+window.addEventListener('focus', () => { if (state.resting) tickRest(); });
 
 // Sets are now logged via logReps() in renderSetRow
 
@@ -1417,14 +1434,35 @@ function renderHome() {
   `;
 }
 
+function isExerciseFullyDone(exIdx) {
+  if (!state.workout) return false;
+  const ex = state.workout.exercises[exIdx];
+  if (!ex) return false;
+  const isSuperset = !!ex.supersetExercises;
+  const warmupDone = !!state.completed[`${exIdx}-warmup`];
+  const setCount = getSetCount(exIdx);
+  if (!(isSuperset || warmupDone)) return false;
+  for (let i = 0; i < setCount; i++) {
+    if (!state.completed[`${exIdx}-${i}`]) return false;
+  }
+  return true;
+}
+
 function toggleWarmup(exIdx) {
   if (!state.warmupOff) state.warmupOff = {};
+  const wasDoneBefore = isExerciseFullyDone(exIdx);
   state.warmupOff[exIdx] = !state.warmupOff[exIdx];
   // If turning off warmup, mark it as completed so it doesn't block progress
   if (state.warmupOff[exIdx]) {
     state.completed[`${exIdx}-warmup`] = true;
   } else {
     delete state.completed[`${exIdx}-warmup`];
+  }
+  // Skipping warmup can complete the exercise (working sets done first,
+  // then "Skip warmup" tapped) — fire celebration on that transition.
+  if (!wasDoneBefore && isExerciseFullyDone(exIdx)) {
+    runCelebration(exIdx);
+    requestMotivation(exIdx);
   }
   triggerSave();
   render();
@@ -1445,8 +1483,10 @@ function getNextSet() {
 }
 
 function renderRestSeparator() {
-  const dur = state.workout.rest;
-  const pct = ((dur - state.restLeft) / dur) * 100;
+  // Use the actual rest duration that was started (per-exercise override
+  // takes precedence). Fallback to workout default for legacy state.
+  const dur = state.restDur || state.workout.rest || 60;
+  const pct = Math.max(0, Math.min(100, ((dur - state.restLeft) / dur) * 100));
   const isLow = state.restLeft <= 10;
   const color = isLow ? "#ef4444" : "#3b82f6";
   const bg = isLow ? "#fef2f2" : "#eff6ff";
@@ -1529,9 +1569,17 @@ function logReps(exIdx, setKey, reps, isWarmup, ev) {
     const tgt = ev && (ev.currentTarget || ev.target);
     if (tgt && tgt.getBoundingClientRect) _setRect = tgt.getBoundingClientRect();
   } catch (_) {}
+  const wasDoneBefore = isExerciseFullyDone(exIdx);
   state.reps[`${exIdx}-${sk}`] = reps;
   state.completed[`${exIdx}-${sk}`] = true;
   if (_setRect) runSetCelebration(_setRect, reps);
+  // If this set is the one that just finished the exercise, fire the big
+  // celebration and request motivation. Only on actual user action — never
+  // on page reload, since we no longer trigger from render.
+  if (!wasDoneBefore && isExerciseFullyDone(exIdx)) {
+    runCelebration(exIdx);
+    requestMotivation(exIdx);
+  }
   if (!state.running) startTimer();
   // Rest timer after every working set
   // Skip rest only between superset partners (e.g. curls→extensions with no break)
@@ -2064,8 +2112,9 @@ function renderWorkout() {
     const warmupDone = !!state.completed[`${exIdx}-warmup`];
     const setCount = getSetCount(exIdx);
     const exDone = (isSuperset || warmupDone) && Array.from({length:setCount}).every((_,i) => state.completed[`${exIdx}-${i}`]);
-    // Fire motivation request + celebration animation once per exercise per session
-    if (exDone) { requestMotivation(exIdx); runCelebration(exIdx); }
+    // Triggers fire from logReps()/toggleWarmup() on user action — never on
+    // page reload. requestMotivation is still called from those entrypoints
+    // when an exercise transitions to fully-done.
     const motivKey = `${state.sessionId || 'tmp'}-${exIdx}`;
     const motivMsg = state.motivations?.[motivKey];
     const motivLoading = state.motivationsLoading?.[motivKey];
