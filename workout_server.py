@@ -213,7 +213,7 @@ def get_exercise_hints():
 
 
 def get_exercise_1rm_history():
-    """Get per-exercise best estimated 1RM and best reps per session."""
+    """Get per-exercise best estimated 1RM, best reps, max weight, and volume per session."""
     conn = get_db()
     c = conn.cursor()
     c.execute('''
@@ -226,6 +226,7 @@ def get_exercise_1rm_history():
     from collections import defaultdict
     orm_raw = defaultdict(list)
     reps_raw = defaultdict(list)
+    wt_raw = defaultdict(list)
     for r in c.fetchall():
         reps = int(r["reps"]) if str(r["reps"]).isdigit() else 0
         if reps <= 0:
@@ -233,6 +234,7 @@ def get_exercise_1rm_history():
         reps_raw[(r["exercise"], r["date"])].append(reps)
         if r["weight_lb"] and float(r["weight_lb"]) > 0:
             w = float(r["weight_lb"])
+            wt_raw[(r["exercise"], r["date"])].append(w)
             orm = w * (1 + reps / 30.0) if reps > 1 else w
             orm_raw[(r["exercise"], r["date"])].append(round(orm, 1))
     result = defaultdict(list)
@@ -261,8 +263,14 @@ def get_exercise_1rm_history():
     reps_result = defaultdict(list)
     for (ex, date), reps_list in reps_raw.items():
         reps_result[ex].append({"date": date, "reps": max(reps_list)})
+    # Max weight per exercise per date
+    wt_result = defaultdict(list)
+    for (ex, date), wts in wt_raw.items():
+        wt_result[ex].append({"date": date, "wt": max(wts)})
+    for ex in wt_result:
+        wt_result[ex].sort(key=lambda x: x["date"])
     conn.close()
-    return {"orm": dict(result), "reps": dict(reps_result), "vol": dict(vol_result)}
+    return {"orm": dict(result), "reps": dict(reps_result), "vol": dict(vol_result), "wt": dict(wt_result)}
 
 
 def get_active_sessions(today=None):

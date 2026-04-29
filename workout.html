@@ -728,6 +728,7 @@ async function loadSessionData(workoutName) {
     state.ormHistory = ormData.orm || {};
     state.repsHistory = ormData.reps || {};
     state.volHistory = ormData.vol || {};
+    state.wtHistory = ormData.wt || {};
 
     // Merge: same-workout session takes priority, cross-workout fills gaps
     const merged = { ...state.exerciseHints, ...state.lastSession };
@@ -781,6 +782,22 @@ const CELEBRATION_VARIANTS = [
   'Confetti', 'Emoji rain', 'Screen shake', 'Big text', 'Speech bubble',
   'Fireworks', 'Dumbbell drop', 'Side cannons', 'Flame ring', 'Slot reel',
 ];
+// Common ↔ rare/cool. Higher weight = more frequent.
+// Tuned so screen-shake/emoji-rain/confetti are normal (~15% each) and
+// slot-reel/flame-ring are the rarest "wow" payoffs (~4-5%).
+const CELEBRATION_WEIGHTS = [15, 15, 16, 9, 9, 7, 13, 7, 5, 4]; // sum ~100
+
+function weightedPick(weights, exclude) {
+  let total = 0;
+  for (let i = 0; i < weights.length; i++) if (i !== exclude) total += weights[i];
+  let r = Math.random() * total;
+  for (let i = 0; i < weights.length; i++) {
+    if (i === exclude) continue;
+    r -= weights[i];
+    if (r <= 0) return i;
+  }
+  return weights.length - 1;
+}
 
 function runCelebration(exIdx) {
   const sid = state.sessionId || 'tmp';
@@ -797,8 +814,14 @@ function playCelebration(idx) {
     ceConfetti, ceEmojiRain, ceShake, ceBigText, ceSpeechBubble,
     ceFireworks, ceDumbbellDrop, ceCannons, ceFlameRing, ceSlotReel,
   ];
-  const fn = (idx == null) ? variants[Math.floor(Math.random() * variants.length)] : variants[idx % variants.length];
-  try { fn(layer); } catch (e) { console.warn('[celebration]', e); }
+  let pick;
+  if (idx == null) {
+    pick = weightedPick(CELEBRATION_WEIGHTS, state._lastBigCe);
+    state._lastBigCe = pick;
+  } else {
+    pick = idx % variants.length;
+  }
+  try { variants[pick](layer); } catch (e) { console.warn('[celebration]', e); }
 }
 // Expose for console testing
 window.playCelebration = playCelebration;
@@ -972,6 +995,8 @@ const SET_VARIANTS = [
   'Pulse ring','Mini burst','+reps popup','Check pop','Ripple wave',
   'Sparkle trio','Pop & shrink','Up arrow','Star burst','Color flash',
 ];
+// Common (satisfying every-set) → rare (gold star moment).
+const SET_WEIGHTS = [18, 17, 15, 13, 8, 7, 4, 5, 3, 10]; // sum ~100
 
 function runSetCelebration(rect, reps) {
   if (!rect) return;
@@ -980,9 +1005,7 @@ function runSetCelebration(rect, reps) {
   const y = rect.top + rect.height / 2;
   const variants = [setPulseRing, setMiniBurst, setRepsPopup, setCheckPop, setRipple,
                     setSparkleTrio, setPopShrink, setUpArrow, setStarBurst, setFlash];
-  // Random with no-immediate-repeat
-  let pick = Math.floor(Math.random() * variants.length);
-  if (state._lastSetAnim === pick) pick = (pick + 1) % variants.length;
+  const pick = weightedPick(SET_WEIGHTS, state._lastSetAnim);
   state._lastSetAnim = pick;
   try { variants[pick](layer, x, y, reps); } catch (e) { console.warn('[setCe]', e); }
 }
@@ -990,12 +1013,11 @@ function runSetCelebration(rect, reps) {
 function playSetCelebration(idx) {
   // Fake center-screen rect for the preview panel
   const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-  const fakeRect = { left: cx - 18, top: cy - 18, width: 36, height: 36 };
   const layer = ensureCelebrationLayer();
   const variants = [setPulseRing, setMiniBurst, setRepsPopup, setCheckPop, setRipple,
                     setSparkleTrio, setPopShrink, setUpArrow, setStarBurst, setFlash];
-  const fn = (idx == null) ? variants[Math.floor(Math.random() * variants.length)] : variants[idx % variants.length];
-  try { fn(layer, cx, cy, 10); } catch (e) { console.warn('[setCe]', e); }
+  const pick = (idx == null) ? weightedPick(SET_WEIGHTS) : (idx % variants.length);
+  try { variants[pick](layer, cx, cy, 10); } catch (e) { console.warn('[setCe]', e); }
 }
 window.playSetCelebration = playSetCelebration;
 
@@ -1568,6 +1590,19 @@ function currentSessionBestReps(exerciseName) {
   return best;
 }
 
+function currentSessionMaxWeight(exerciseName) {
+  const exIdx = state.workout ? state.workout.exercises.findIndex(e => e.name === exerciseName) : -1;
+  if (exIdx < 0) return 0;
+  let best = 0;
+  for (let i = 0; i < getSetCount(exIdx); i++) {
+    if (!state.completed[`${exIdx}-${i}`]) continue;
+    const w = state.weights[`${exIdx}-${i}`] || 0;
+    const r = parseInt(state.reps[`${exIdx}-${i}`]) || 0;
+    if (w > 0 && r > 0 && w > best) best = w;
+  }
+  return best;
+}
+
 function renderBWSparkline(exerciseName) {
   const data = mergeWithLive((state.repsHistory || {})[exerciseName] || [], currentSessionBestReps(exerciseName), "reps");
   const vals = data.map(d => d.reps);
@@ -1745,6 +1780,16 @@ function renderSparkline(exerciseName) {
   const isBW = exInWorkout?.bodyweight;
   if (isBW) return renderBWSparkline(exerciseName);
 
+  // Max weight sparkline
+  const wtData = mergeWithLive((state.wtHistory || {})[exerciseName] || [], currentSessionMaxWeight(exerciseName), "wt");
+  const wtVals = wtData.map(d => d.wt);
+  const wtHTML = miniSparkline(wtVals, "Max Wt", "lb", "#0d9488");
+
+  // Max reps sparkline
+  const repsData = mergeWithLive((state.repsHistory || {})[exerciseName] || [], currentSessionBestReps(exerciseName), "reps");
+  const repsVals = repsData.map(d => d.reps);
+  const repsHTML = miniSparkline(repsVals, "Max Reps", "", "#ea580c");
+
   // 1RM sparkline
   const ormData = mergeWithLive((state.ormHistory || {})[exerciseName] || [], currentSessionOrm(exerciseName), "orm");
   const ormVals = ormData.map(d => d.orm);
@@ -1755,8 +1800,8 @@ function renderSparkline(exerciseName) {
   const volVals = volData.map(d => d.vol);
   const volHTML = miniSparkline(volVals, "Vol", "lb", "#8b5cf6");
 
-  if (!ormHTML && !volHTML) return "";
-  return `<div style="display:flex;gap:8px;align-items:center">${ormHTML}${volHTML}</div>`;
+  if (!wtHTML && !repsHTML && !ormHTML && !volHTML) return "";
+  return `<div style="display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;row-gap:6px">${wtHTML}${repsHTML}${ormHTML}${volHTML}</div>`;
 }
 
 function getBandSelection(exIdx, setKey) {
@@ -2817,19 +2862,25 @@ function renderStats() {
       <details style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:8px 12px;margin-bottom:8px">
         <summary style="font-size:12px;font-weight:600;color:#92400e;cursor:pointer;list-style:none">🎊 Preview exercise-finish animations <span style="font-weight:400;color:#a16207">(big · tap to expand)</span></summary>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
-          ${CELEBRATION_VARIANTS.map((label, i) => `
-            <button onclick="playCelebration(${i})" style="background:white;border:1px solid #fde68a;color:#92400e;font-size:11px;font-weight:500;padding:6px 10px;border-radius:6px;cursor:pointer">${i + 1}. ${label}</button>
-          `).join('')}
-          <button onclick="playCelebration()" style="background:#f97316;border:1px solid #ea580c;color:white;font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer">🎲 Random</button>
+          ${CELEBRATION_VARIANTS.map((label, i) => {
+            const w = CELEBRATION_WEIGHTS[i];
+            const tier = w >= 13 ? '#a16207' : w >= 8 ? '#7c2d12' : '#a21caf';
+            const tierBg = w >= 13 ? '#fef3c7' : w >= 8 ? '#fed7aa' : '#fae8ff';
+            return `<button onclick="playCelebration(${i})" style="background:white;border:1px solid #fde68a;color:#92400e;font-size:11px;font-weight:500;padding:6px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">${i + 1}. ${label}<span style="background:${tierBg};color:${tier};font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px">${w}%</span></button>`;
+          }).join('')}
+          <button onclick="playCelebration()" style="background:#f97316;border:1px solid #ea580c;color:white;font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer">🎲 Weighted random</button>
         </div>
       </details>
       <details style="background:#dcfce7;border:1px solid #86efac;border-radius:10px;padding:8px 12px;margin-bottom:12px">
         <summary style="font-size:12px;font-weight:600;color:#166534;cursor:pointer;list-style:none">✨ Preview per-set animations <span style="font-weight:400;color:#15803d">(subtle · tap to expand)</span></summary>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
-          ${SET_VARIANTS.map((label, i) => `
-            <button onclick="playSetCelebration(${i})" style="background:white;border:1px solid #86efac;color:#166534;font-size:11px;font-weight:500;padding:6px 10px;border-radius:6px;cursor:pointer">${i + 1}. ${label}</button>
-          `).join('')}
-          <button onclick="playSetCelebration()" style="background:#22c55e;border:1px solid #16a34a;color:white;font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer">🎲 Random</button>
+          ${SET_VARIANTS.map((label, i) => {
+            const w = SET_WEIGHTS[i];
+            const tier = w >= 13 ? '#15803d' : w >= 7 ? '#854d0e' : '#a21caf';
+            const tierBg = w >= 13 ? '#dcfce7' : w >= 7 ? '#fef9c3' : '#fae8ff';
+            return `<button onclick="playSetCelebration(${i})" style="background:white;border:1px solid #86efac;color:#166534;font-size:11px;font-weight:500;padding:6px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">${i + 1}. ${label}<span style="background:${tierBg};color:${tier};font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px">${w}%</span></button>`;
+          }).join('')}
+          <button onclick="playSetCelebration()" style="background:#22c55e;border:1px solid #16a34a;color:white;font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer">🎲 Weighted random</button>
         </div>
       </details>
     </div>
