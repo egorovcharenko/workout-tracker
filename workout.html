@@ -149,6 +149,17 @@
     25% { transform: translate(-50%,-50%) scale(1.2); opacity: 0.8; }
     100% { transform: translate(-50%,-50%) scale(2); opacity: 0; }
   }
+  @keyframes rest-done-flash {
+    0% { opacity: 0; }
+    18% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  @keyframes rest-done-go {
+    0% { transform: translate(-50%,-50%) scale(0.4); opacity: 0; }
+    25% { transform: translate(-50%,-50%) scale(1.15); opacity: 1; }
+    70% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%,-55%) scale(1.2); opacity: 0; }
+  }
 </style>
 </head>
 <body>
@@ -164,7 +175,7 @@ const WORKOUTS = [
     exercises: [
       { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4", extraWeights: [55, 60], rest: 120 },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag" },
-      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo" },
+      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 90 },
       { name: "Band Romanian Deadlift", sets: 3, reps: "12-15", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120 },
       { name: "Seated Overhead Press", sets: 2, reps: "8-10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
       { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
@@ -217,7 +228,7 @@ const WORKOUTS = [
     duration: "~20 min",
     exercises: [
       { name: "Dumbbell Bent-Over Rows", sets: 3, reps: "8-12", notes: "Keep back flat, pull to hips", superset: false, video: "https://www.youtube.com/shorts/dpYI8K6e-jE" },
-      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", notes: "Each side, knee on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo" },
+      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", notes: "Each side, knee on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 75 },
       { name: "Reverse Flyes", sets: 3, reps: "15-20", notes: "Rear delts & upper back, light weight", superset: false, video: "https://www.youtube.com/shorts/LsT-bR_zxLo" },
     ],
     rest: 60,
@@ -750,9 +761,22 @@ async function loadHistory() {
 function startTimer() {
   if (timerInterval) return;
   state.running = true;
-  timerInterval = setInterval(() => { state.elapsed++; render(); }, 1000);
+  // Anchor to wall-clock so background-tab throttling can't make us
+  // undercount. state.elapsed may already be non-zero on resume; we
+  // compute "started at" so that (now - startedAt)/1000 == elapsed.
+  state.timerStartedAt = Date.now() - (state.elapsed || 0) * 1000;
+  timerInterval = setInterval(tickTimer, 1000);
 }
-function stopTimer() { state.running = false; clearInterval(timerInterval); timerInterval = null; }
+function tickTimer() {
+  if (!state.running || !state.timerStartedAt) return;
+  state.elapsed = Math.floor((Date.now() - state.timerStartedAt) / 1000);
+  render();
+}
+function stopTimer() {
+  state.running = false;
+  clearInterval(timerInterval); timerInterval = null;
+  state.timerStartedAt = 0;
+}
 function startRest(duration) {
   if (restInterval) { clearInterval(restInterval); restInterval = null; }
   if (!duration || duration <= 0) return;
@@ -765,12 +789,41 @@ function startRest(duration) {
 function tickRest() {
   if (!state.resting || !state.restEndAt) return;
   const left = Math.max(0, Math.ceil((state.restEndAt - Date.now()) / 1000));
+  const wasResting = state.resting;
   state.restLeft = left;
   if (left <= 0) {
     clearInterval(restInterval); restInterval = null;
     state.resting = false; state.restEndAt = 0;
+    // Natural completion → flash the screen + brief "GO!" cue.
+    if (wasResting) flashRestDone();
   }
   render();
+}
+function flashRestDone() {
+  const layer = ensureCelebrationLayer();
+  // Full-screen green flash
+  const flash = document.createElement('div');
+  flash.style.cssText = `
+    position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(circle, rgba(34,197,94,0.45) 0%, rgba(34,197,94,0) 70%);
+    animation: rest-done-flash 700ms ease-out forwards;
+  `;
+  layer.appendChild(flash);
+  setTimeout(() => flash.remove(), 720);
+  // Brief "GO!" centered
+  const go = document.createElement('div');
+  go.style.cssText = `
+    position:absolute;left:50%;top:50%;
+    font-size:64px;font-weight:900;font-family:'Impact','Helvetica Neue',sans-serif;
+    color:#16a34a;letter-spacing:0.02em;
+    text-shadow:3px 3px 0 #000, 0 0 18px rgba(22,163,74,0.5);
+    animation: rest-done-go 900ms cubic-bezier(.2,.8,.3,1) forwards;
+  `;
+  go.textContent = 'GO!';
+  layer.appendChild(go);
+  setTimeout(() => go.remove(), 1000);
+  // Mobile haptic if available
+  try { navigator.vibrate && navigator.vibrate(120); } catch (_) {}
 }
 function skipRest() {
   clearInterval(restInterval); restInterval = null;
@@ -778,8 +831,12 @@ function skipRest() {
   render();
 }
 // Re-sync immediately when tab regains focus (mobile bg throttling).
-document.addEventListener('visibilitychange', () => { if (!document.hidden && state.resting) tickRest(); });
-window.addEventListener('focus', () => { if (state.resting) tickRest(); });
+function _resyncTimers() {
+  if (state.resting) tickRest();
+  if (state.running) tickTimer();
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) _resyncTimers(); });
+window.addEventListener('focus', _resyncTimers);
 
 // Sets are now logged via logReps() in renderSetRow
 
