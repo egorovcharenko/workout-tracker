@@ -1581,21 +1581,26 @@ function logReps(exIdx, setKey, reps, isWarmup, ev) {
     requestMotivation(exIdx);
   }
   if (!state.running) startTimer();
-  // Rest timer after every working set
-  // Skip rest only between superset partners (e.g. curls→extensions with no break)
-  if (!isWarmup) {
+  // Rest timer:
+  //  - after working sets: full duration (per-exercise override or workout default)
+  //  - after warmup: half duration (shorter breather before working sets begin)
+  //  - skipped between superset sub-exercises within the same round
+  {
     const ex = state.workout.exercises[exIdx];
-    // For superset exercises: skip rest between sub-exercises within the same round
-    let skipRest = false;
-    if (ex.supersetExercises && typeof sk === "number") {
-      const subIdx = sk % ex.supersetExercises.length;
-      // Skip rest if not the last sub-exercise in a round
-      if (subIdx < ex.supersetExercises.length - 1) skipRest = true;
+    const baseRest = ex.rest || state.workout.rest || 0;
+    let restDur = 0;
+    if (isWarmup) {
+      restDur = Math.round(baseRest / 2);
+    } else {
+      let skipRestBetween = false;
+      if (ex.supersetExercises && typeof sk === "number") {
+        const subIdx = sk % ex.supersetExercises.length;
+        // Skip rest if not the last sub-exercise in a round
+        if (subIdx < ex.supersetExercises.length - 1) skipRestBetween = true;
+      }
+      if (!skipRestBetween) restDur = baseRest;
     }
-    if (!skipRest) {
-      const restDur = ex.rest || state.workout.rest;
-      startRest(restDur);
-    }
+    if (restDur > 0) startRest(restDur);
   }
   if (allDone()) { stopTimer(); skipRest(); }
   triggerSave();
