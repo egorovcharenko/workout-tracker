@@ -728,21 +728,31 @@ function ensureCelebrationLayer() {
   return layer;
 }
 
+const CELEBRATION_VARIANTS = [
+  'Confetti', 'Emoji rain', 'Screen shake', 'Big text', 'Speech bubble',
+  'Fireworks', 'Dumbbell drop', 'Side cannons', 'Flame ring', 'Slot reel',
+];
+
 function runCelebration(exIdx) {
   const sid = state.sessionId || 'tmp';
   const key = `${sid}-${exIdx}`;
   if (!state.celebrations) state.celebrations = {};
   if (state.celebrations[key]) return;
   state.celebrations[key] = true;
+  playCelebration();
+}
 
+function playCelebration(idx) {
   const layer = ensureCelebrationLayer();
   const variants = [
     ceConfetti, ceEmojiRain, ceShake, ceBigText, ceSpeechBubble,
     ceFireworks, ceDumbbellDrop, ceCannons, ceFlameRing, ceSlotReel,
   ];
-  const fn = variants[Math.floor(Math.random() * variants.length)];
+  const fn = (idx == null) ? variants[Math.floor(Math.random() * variants.length)] : variants[idx % variants.length];
   try { fn(layer); } catch (e) { console.warn('[celebration]', e); }
 }
+// Expose for console testing
+window.playCelebration = playCelebration;
 
 function ceMakeEl(tag, parent, style, text) {
   const el = document.createElement(tag);
@@ -2594,6 +2604,17 @@ function renderStats() {
       <button onclick="state.screen='home';history.replaceState(null,'','#');render()" style="color:#2563eb;font-size:14px;font-weight:500;background:none;border:none;cursor:pointer;padding:0;margin-bottom:8px">← Back</button>
       <h1 style="font-size:24px;font-weight:700;color:#111827;margin:0">Progress</h1>
       <p style="font-size:13px;color:#6b7280;margin:4px 0 0">${uniqueExercises} exercises · ${totalSessions} sessions · ${volStr}lb total volume</p>
+    </div>
+    <div style="padding:0 16px 16px">
+      <details style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:8px 12px;margin-bottom:12px">
+        <summary style="font-size:12px;font-weight:600;color:#92400e;cursor:pointer;list-style:none">🎊 Preview celebration animations <span style="font-weight:400;color:#a16207">(tap to expand)</span></summary>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+          ${CELEBRATION_VARIANTS.map((label, i) => `
+            <button onclick="playCelebration(${i})" style="background:white;border:1px solid #fde68a;color:#92400e;font-size:11px;font-weight:500;padding:6px 10px;border-radius:6px;cursor:pointer">${i + 1}. ${label}</button>
+          `).join('')}
+          <button onclick="playCelebration()" style="background:#f97316;border:1px solid #ea580c;color:white;font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer">🎲 Random</button>
+        </div>
+      </details>
     </div>
     <div style="padding:0 16px 32px">
       ${rows || '<p style="color:#9ca3af;text-align:center;padding:32px 0">No working sets logged yet.</p>'}
