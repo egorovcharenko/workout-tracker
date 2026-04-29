@@ -36,6 +36,70 @@
   #app img, #app video, #app svg, #app iframe, #app embed, #app object, #app [data-noinvert] {
     filter: invert(1) hue-rotate(180deg) saturate(1.28);
   }
+
+  /* ---------- Celebration animations ---------- */
+  #celebration-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9999; overflow: hidden; }
+  .ce-particle { position: absolute; will-change: transform, opacity; }
+
+  @keyframes ce-confetti {
+    0% { transform: translate(-50%,-50%) rotate(0deg); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)); opacity: 0; }
+  }
+  @keyframes ce-fall {
+    0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(110vh) rotate(720deg); opacity: 0.2; }
+  }
+  @keyframes ce-shake {
+    0%,100% { transform: translateX(0) rotate(0); }
+    15% { transform: translateX(-12px) rotate(-1.5deg); }
+    30% { transform: translateX(12px) rotate(1.5deg); }
+    45% { transform: translateX(-9px) rotate(-1deg); }
+    60% { transform: translateX(9px) rotate(1deg); }
+    75% { transform: translateX(-4px) rotate(-0.4deg); }
+    90% { transform: translateX(4px) rotate(0.4deg); }
+  }
+  .ce-shaking #app { animation: ce-shake 0.55s cubic-bezier(.36,.07,.19,.97) both; }
+  @keyframes ce-bigtext {
+    0% { transform: translate(-50%,-50%) scale(0.2) rotate(-10deg); opacity: 0; }
+    25% { transform: translate(-50%,-50%) scale(1.3) rotate(2deg); opacity: 1; }
+    55% { transform: translate(-50%,-50%) scale(1) rotate(-2deg); opacity: 1; }
+    100% { transform: translate(-50%,-55%) scale(1.5) rotate(0); opacity: 0; }
+  }
+  @keyframes ce-bubble {
+    0% { transform: translate(-50%,-50%) scale(0); opacity: 0; }
+    35% { transform: translate(-50%,-50%) scale(1.15) rotate(-3deg); opacity: 1; }
+    55% { transform: translate(-50%,-50%) scale(1) rotate(2deg); opacity: 1; }
+    80% { transform: translate(-50%,-50%) scale(1) rotate(-1deg); opacity: 1; }
+    100% { transform: translate(-50%,-50%) scale(0.6); opacity: 0; }
+  }
+  @keyframes ce-firework {
+    0% { transform: translate(-50%,-50%) scale(0); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.4); opacity: 0; }
+  }
+  @keyframes ce-bounce {
+    0% { transform: translate(-50%, -120vh) rotate(0); opacity: 1; }
+    55% { transform: translate(-50%, 0) rotate(380deg); opacity: 1; }
+    70% { transform: translate(-50%, -40px) rotate(360deg); }
+    85% { transform: translate(-50%, 0) rotate(360deg); }
+    100% { transform: translate(-50%, -8px) rotate(360deg); opacity: 0; }
+  }
+  @keyframes ce-cannonL {
+    0% { transform: translate(-120%, -50%) rotate(0); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)); opacity: 0; }
+  }
+  @keyframes ce-cannonR {
+    0% { transform: translate(120%, -50%) rotate(0); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)); opacity: 0; }
+  }
+  @keyframes ce-flameUp {
+    0% { transform: translate(-50%, 0) scale(0.6); opacity: 0; }
+    20% { opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% - 60vh)) scale(1.2); opacity: 0; }
+  }
+  @keyframes ce-slotPop {
+    0% { transform: translate(-50%,-50%) scale(0); opacity: 0; }
+    100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  }
 </style>
 </head>
 <body>
@@ -651,6 +715,197 @@ function startRest(duration) {
 function skipRest() { clearInterval(restInterval); restInterval = null; state.resting = false; state.restLeft = 0; render(); }
 
 // Sets are now logged via logReps() in renderSetRow
+
+// ----- Celebration animations -----
+// Random funny visual when an exercise is finished. Once per (sessionId, exIdx).
+function ensureCelebrationLayer() {
+  let layer = document.getElementById('celebration-layer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.id = 'celebration-layer';
+    document.body.appendChild(layer);
+  }
+  return layer;
+}
+
+function runCelebration(exIdx) {
+  const sid = state.sessionId || 'tmp';
+  const key = `${sid}-${exIdx}`;
+  if (!state.celebrations) state.celebrations = {};
+  if (state.celebrations[key]) return;
+  state.celebrations[key] = true;
+
+  const layer = ensureCelebrationLayer();
+  const variants = [
+    ceConfetti, ceEmojiRain, ceShake, ceBigText, ceSpeechBubble,
+    ceFireworks, ceDumbbellDrop, ceCannons, ceFlameRing, ceSlotReel,
+  ];
+  const fn = variants[Math.floor(Math.random() * variants.length)];
+  try { fn(layer); } catch (e) { console.warn('[celebration]', e); }
+}
+
+function ceMakeEl(tag, parent, style, text) {
+  const el = document.createElement(tag);
+  if (style) el.style.cssText = style;
+  if (text != null) el.textContent = text;
+  parent.appendChild(el);
+  return el;
+}
+function ceCleanup(el, ms) { setTimeout(() => el.remove(), ms); }
+function ceRand(min, max) { return Math.random() * (max - min) + min; }
+function cePick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// 1. Confetti burst from center
+function ceConfetti(layer) {
+  const colors = ['#ef4444','#f59e0b','#eab308','#22c55e','#3b82f6','#a855f7','#ec4899','#06b6d4'];
+  for (let i = 0; i < 50; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = ceRand(120, 320);
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist + 60; // bias downward (gravity)
+    const size = ceRand(6, 12);
+    const p = ceMakeEl('div', layer, `
+      left:50%;top:50%;width:${size}px;height:${size * 0.5}px;background:${cePick(colors)};
+      border-radius:2px;--dx:${dx}px;--dy:${dy}px;--rot:${ceRand(180, 720)}deg;
+      animation: ce-confetti ${ceRand(900, 1500)}ms cubic-bezier(.2,.6,.3,1) forwards;
+    `);
+    ceCleanup(p, 1600);
+  }
+}
+
+// 2. Emoji rain from top
+function ceEmojiRain(layer) {
+  const emojis = ['💪','🔥','👏','🎉','⭐','🚀','💥','🏋️','✨','🥇'];
+  for (let i = 0; i < 28; i++) {
+    const e = ceMakeEl('div', layer, `
+      left:${ceRand(0, 100)}%;top:0;font-size:${ceRand(20, 36)}px;
+      animation: ce-fall ${ceRand(1400, 2400)}ms linear forwards;
+      animation-delay:${ceRand(0, 600)}ms;
+    `, cePick(emojis));
+    ceCleanup(e, 3200);
+  }
+}
+
+// 3. Screen shake
+function ceShake(_layer) {
+  document.body.classList.add('ce-shaking');
+  setTimeout(() => document.body.classList.remove('ce-shaking'), 600);
+}
+
+// 4. Big bold "BOOM!" text
+function ceBigText(layer) {
+  const words = ['BOOM!','NICE!','BEAST!','LEGEND','CRUSHED IT','💯','LFG!','LET\'S GO','HUGE!','DONE!'];
+  const colors = ['#fbbf24','#f97316','#ef4444','#22c55e','#3b82f6','#a855f7','#ec4899'];
+  const el = ceMakeEl('div', layer, `
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    font-size:14vw;font-weight:900;font-family:'Impact','Helvetica Neue',sans-serif;
+    color:${cePick(colors)};text-shadow:4px 4px 0 #000,8px 8px 0 rgba(0,0,0,0.2);
+    letter-spacing:-0.02em;white-space:nowrap;
+    animation: ce-bigtext 1.4s cubic-bezier(.2,.8,.3,1) forwards;
+  `, cePick(words));
+  ceCleanup(el, 1500);
+}
+
+// 5. Comic speech bubble
+function ceSpeechBubble(layer) {
+  const lines = ['POW!','ZAP!','BAM!','WHAM!','KABOOM!','OOMPH!','SLAM!','SMASH!','BLAST!','POW POW!'];
+  const el = ceMakeEl('div', layer, `
+    position:absolute;left:50%;top:50%;
+    background:#fde047;color:#7c2d12;padding:18px 32px;
+    border:4px solid #000;border-radius:50% / 38%;
+    font-size:42px;font-weight:900;font-family:'Impact','Comic Sans MS',sans-serif;
+    box-shadow:6px 6px 0 #000;letter-spacing:0.04em;
+    animation: ce-bubble 1.5s cubic-bezier(.2,.8,.3,1) forwards;
+  `, cePick(lines));
+  ceCleanup(el, 1600);
+}
+
+// 6. Fireworks (3 bursts)
+function ceFireworks(layer) {
+  const starColors = ['#fbbf24','#ef4444','#22c55e','#3b82f6','#ec4899','#06b6d4'];
+  for (let burst = 0; burst < 3; burst++) {
+    const cx = ceRand(20, 80), cy = ceRand(20, 60); // viewport %
+    setTimeout(() => {
+      const color = cePick(starColors);
+      for (let i = 0; i < 18; i++) {
+        const angle = (i / 18) * Math.PI * 2;
+        const dist = ceRand(80, 140);
+        const dx = Math.cos(angle) * dist;
+        const dy = Math.sin(angle) * dist;
+        const p = ceMakeEl('div', layer, `
+          left:${cx}%;top:${cy}%;width:8px;height:8px;background:${color};border-radius:50%;
+          box-shadow:0 0 12px ${color};
+          --dx:${dx}px;--dy:${dy}px;
+          animation: ce-firework 900ms ease-out forwards;
+        `);
+        ceCleanup(p, 1000);
+      }
+    }, burst * 250);
+  }
+}
+
+// 7. Dumbbell drops & bounces
+function ceDumbbellDrop(layer) {
+  const e = ceMakeEl('div', layer, `
+    position:absolute;left:50%;top:50%;font-size:96px;
+    animation: ce-bounce 1.6s cubic-bezier(.5,0,.5,1) forwards;
+  `, cePick(['🏋️','💪','🥇','🏆']));
+  ceCleanup(e, 1700);
+}
+
+// 8. Side cannons
+function ceCannons(layer) {
+  const colors = ['#ef4444','#f59e0b','#22c55e','#3b82f6','#a855f7','#ec4899'];
+  for (let i = 0; i < 30; i++) {
+    const fromLeft = i % 2 === 0;
+    const dx = fromLeft ? ceRand(40, 220) : ceRand(-220, -40);
+    const dy = ceRand(-160, 160);
+    const size = ceRand(7, 13);
+    const p = ceMakeEl('div', layer, `
+      left:50%;top:50%;width:${size}px;height:${size}px;background:${cePick(colors)};border-radius:50%;
+      --dx:${dx}px;--dy:${dy}px;--rot:${ceRand(180, 720)}deg;
+      animation: ce-${fromLeft ? 'cannonL' : 'cannonR'} ${ceRand(900, 1400)}ms cubic-bezier(.2,.7,.3,1) forwards;
+      animation-delay:${ceRand(0, 200)}ms;
+    `);
+    ceCleanup(p, 1700);
+  }
+}
+
+// 9. Flame ring rising up
+function ceFlameRing(layer) {
+  for (let i = 0; i < 14; i++) {
+    const dx = ceRand(-180, 180);
+    const e = ceMakeEl('div', layer, `
+      position:absolute;left:50%;bottom:0;font-size:${ceRand(28, 48)}px;
+      --dx:${dx}px;
+      animation: ce-flameUp ${ceRand(1400, 2200)}ms ease-out forwards;
+      animation-delay:${ceRand(0, 400)}ms;
+    `, cePick(['🔥','🔥','🔥','💥','⚡','✨']));
+    ceCleanup(e, 2700);
+  }
+}
+
+// 10. Slot reel — rapid-cycle big emoji landing on trophy
+function ceSlotReel(layer) {
+  const cycle = ['🎰','💪','🔥','🏋️','💯','🏆','🥇','⚡','🚀','🎯','🏅'];
+  const el = ceMakeEl('div', layer, `
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(0);
+    font-size:120px;animation: ce-slotPop 200ms ease-out forwards;
+  `, '🎰');
+  let i = 0;
+  const tick = setInterval(() => {
+    el.textContent = cycle[i % cycle.length];
+    i++;
+  }, 80);
+  setTimeout(() => {
+    clearInterval(tick);
+    el.textContent = '🏆';
+    el.style.transition = 'transform 350ms ease-out, opacity 600ms ease-in 800ms';
+    el.style.transform = 'translate(-50%,-50%) scale(1.4)';
+    setTimeout(() => { el.style.opacity = '0'; }, 350);
+  }, 1000);
+  ceCleanup(el, 2000);
+}
 
 // ----- AI motivation -----
 // Once per (sessionId, exercise), call /api/motivate and stash the message
@@ -1533,8 +1788,8 @@ function renderWorkout() {
     const warmupDone = !!state.completed[`${exIdx}-warmup`];
     const setCount = getSetCount(exIdx);
     const exDone = (isSuperset || warmupDone) && Array.from({length:setCount}).every((_,i) => state.completed[`${exIdx}-${i}`]);
-    // Fire motivation request once per exercise per session
-    if (exDone) requestMotivation(exIdx);
+    // Fire motivation request + celebration animation once per exercise per session
+    if (exDone) { requestMotivation(exIdx); runCelebration(exIdx); }
     const motivKey = `${state.sessionId || 'tmp'}-${exIdx}`;
     const motivMsg = state.motivations?.[motivKey];
     const motivLoading = state.motivationsLoading?.[motivKey];
