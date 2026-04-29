@@ -1482,17 +1482,73 @@ function renderMuscleMap() {
   `;
 }
 
+function getExerciseStatsFromHistory(exName) {
+  // Walk state.history (newest-first) and build a chronological per-session
+  // best 1RM + best reps for this exercise. Returns null if no data.
+  const history = state.history || [];
+  const perSession = [];
+  for (const s of history) {
+    let bestOrm = 0, maxReps = 0, didLog = false;
+    for (const st of (s.sets || [])) {
+      if (st.exercise !== exName || st.set_type !== 'working') continue;
+      const r = parseInt(st.reps) || 0;
+      const w = st.weight_lb || 0;
+      if (r <= 0) continue;
+      didLog = true;
+      if (w > 0) {
+        const orm = r > 1 ? w * (1 + r / 30) : w;
+        if (orm > bestOrm) bestOrm = orm;
+      }
+      if (r > maxReps) maxReps = r;
+    }
+    if (didLog) perSession.push({ date: s.date, orm: bestOrm, reps: maxReps });
+  }
+  perSession.reverse(); // ascending
+  if (!perSession.length) return null;
+  const ormVals = perSession.map(p => p.orm).filter(v => v > 0);
+  const repsVals = perSession.map(p => p.reps);
+  // Prefer 1RM trend; fall back to reps for bodyweight exercises.
+  const series = ormVals.length >= 2 ? ormVals : repsVals;
+  if (series.length < 1) return null;
+  const latest = series[series.length - 1];
+  const peak = Math.max(...series);
+  const prev = series.length >= 2 ? series[series.length - 2] : null;
+  const isPR = latest >= peak && series.length >= 2;
+  const isImproved = prev != null && latest > prev;
+  // 3+ consecutive ups → streak
+  const isStreak = series.length >= 3
+    && series[series.length - 1] > series[series.length - 2]
+    && series[series.length - 2] > series[series.length - 3];
+  return { series, isPR, isImproved, isStreak, sessionCount: perSession.length, latest };
+}
+
+function microSparkline(vals, color) {
+  if (!vals || vals.length < 2) return '';
+  const max = Math.max(...vals), min = Math.min(...vals), range = max - min || 1;
+  const w = 36, h = 12, pad = 1;
+  const points = vals.map((v, i) =>
+    `${pad + (i / (vals.length - 1)) * (w - pad * 2)},${pad + (1 - (v - min) / range) * (h - pad * 2)}`
+  ).join(' ');
+  const latest = vals[vals.length - 1];
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;opacity:0.9">
+    <polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${w - pad}" cy="${pad + (1 - (latest - min) / range) * (h - pad * 2)}" r="1.6" fill="${color}"/>
+  </svg>`;
+}
+
 function renderWorkoutCard(w, i) {
   const rec = getWorkoutRecovery(w);
-  const exerciseNames = [];
+  const exerciseEntries = [];
   w.exercises.forEach(ex => {
     if (ex.supersetExercises) {
-      ex.supersetExercises.forEach(sub => exerciseNames.push(sub));
+      ex.supersetExercises.forEach(sub => exerciseEntries.push(sub));
     } else {
-      exerciseNames.push(ex);
+      exerciseEntries.push(ex);
     }
   });
-  const exerciseList = exerciseNames.map(ex => {
+
+  const rowsHTML = exerciseEntries.map(ex => {
+    // Recovery dot color
     const mapping = EXERCISE_MUSCLES[ex.name];
     const primaryMuscles = mapping ? mapping.primary : [];
     let worstPct = 100;
@@ -1506,22 +1562,47 @@ function renderWorkoutCard(w, i) {
     else if (worstPct >= 50) dotColor = "#eab308";
     else if (worstPct > 0) dotColor = "#ef4444";
     else dotColor = "#d1d5db";
-    return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:12px;color:#6b7280">' +
-      '<span style="width:6px;height:6px;border-radius:50%;background:' + dotColor + ';display:inline-block;flex-shrink:0"></span>' +
-      ex.name + '</span>';
-  }).join('<span style="color:#e5e7eb;font-size:10px;margin:0 2px">&middot;</span>');
 
-  return '<button onclick="startWorkout(WORKOUTS[' + i + '])" style="width:100%;text-align:left;background:white;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px;cursor:pointer">' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-      '<div style="display:flex;align-items:center;gap:6px"><span style="font-weight:600;color:#111827">' + w.name + '</span>' + (w.main ? '<span style="font-size:10px;background:#dbeafe;color:#2563eb;padding:1px 6px;border-radius:4px;font-weight:600">MAIN</span>' : '') + '</div>' +
-      '<div style="display:flex;align-items:center;gap:8px">' +
-        recoveryBadge(rec.avg) +
-        '<span style="color:#d1d5db;font-size:18px">&rarr;</span>' +
-      '</div>' +
-    '</div>' +
-    '<div style="font-size:13px;color:#9ca3af;margin-bottom:6px">' + w.exercises.length + ' exercises &middot; ' + w.duration + '</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px;line-height:1.6">' + exerciseList + '</div>' +
-  '</button>';
+    // Stats / badge
+    const stats = getExerciseStatsFromHistory(ex.name);
+    let badge = '';
+    let sparkColor = '#9ca3af';
+    if (stats) {
+      // Priority: PR > streak > improved
+      if (stats.isPR) { badge = '🔥'; sparkColor = '#f59e0b'; }
+      else if (stats.isStreak) { badge = '💪'; sparkColor = '#22c55e'; }
+      else if (stats.isImproved) { badge = '⭐'; sparkColor = '#22c55e'; }
+      else if (stats.series.length >= 2) {
+        const latest = stats.series[stats.series.length-1];
+        const prev = stats.series[stats.series.length-2];
+        sparkColor = latest > prev ? '#22c55e' : latest < prev ? '#ef4444' : '#9ca3af';
+      }
+    }
+    const sparkHTML = stats ? microSparkline(stats.series, sparkColor) : '';
+
+    return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px;color:#374151;min-width:0">
+      <span style="width:6px;height:6px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0"></span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
+      ${sparkHTML}
+      <span style="width:18px;text-align:center;flex-shrink:0;font-size:13px;line-height:1">${badge}</span>
+    </div>`;
+  }).join('');
+
+  return `
+    <button onclick="startWorkout(WORKOUTS[${i}])" style="width:100%;text-align:left;background:white;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:12px;cursor:pointer">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-weight:600;color:#111827">${w.name}</span>
+          ${w.main ? '<span style="font-size:10px;background:#dbeafe;color:#2563eb;padding:1px 6px;border-radius:4px;font-weight:600">MAIN</span>' : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${recoveryBadge(rec.avg)}
+          <span style="color:#d1d5db;font-size:18px">&rarr;</span>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">${w.exercises.length} exercises &middot; ${w.duration}</div>
+      <div>${rowsHTML}</div>
+    </button>`;
 }
 
 function getExpectedSets(workoutName) {
@@ -1832,11 +1913,13 @@ function miniSparkline(vals, label, unit, color, compact) {
   const points = vals.map((v, i) =>
     `${pad + (i / (vals.length - 1)) * (w - pad * 2)},${pad + (1 - (v - min) / range) * (h - pad * 2)}`
   ).join(" ");
-  const trend = latest >= prev ? "#16a34a" : "#ef4444";
+  // Trend color: > prev = green, < prev = red, equal/flat = neutral grey
+  // (so "haven't beaten yesterday yet but tied" doesn't look like a regression).
+  const trend = latest > prev ? "#16a34a" : latest < prev ? "#ef4444" : "#9ca3af";
   const dispVal = latest >= 1000 ? (latest / 1000).toFixed(1) + "k" : Math.round(latest);
   const diff = Math.abs(latest - prev);
   const diffDisp = diff >= 1000 ? (diff / 1000).toFixed(1) + "k" : Math.round(diff);
-  const diffStr = diff > 0 ? `${latest >= prev ? '+' : '−'}${diffDisp}` : '';
+  const diffStr = diff > 0 ? `${latest > prev ? '+' : '−'}${diffDisp}` : '';
   if (compact) {
     return `<div style="display:flex;align-items:center;gap:2px;flex-shrink:0">
       <div style="text-align:right;line-height:1">
