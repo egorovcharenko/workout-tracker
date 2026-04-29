@@ -1636,23 +1636,36 @@ function currentSessionVolume(exerciseName) {
   return Math.round(vol);
 }
 
-function miniSparkline(vals, label, unit, color) {
+function miniSparkline(vals, label, unit, color, compact) {
   if (vals.length < 2) return "";
   const latest = vals[vals.length - 1];
   const prev = vals[vals.length - 2];
   const max = Math.max(...vals);
   const min = Math.min(...vals);
   const range = max - min || 1;
-  const w = 48, h = 20, pad = 2;
+  const w = compact ? 34 : 48;
+  const h = compact ? 16 : 20;
+  const pad = 2;
   const points = vals.map((v, i) =>
     `${pad + (i / (vals.length - 1)) * (w - pad * 2)},${pad + (1 - (v - min) / range) * (h - pad * 2)}`
   ).join(" ");
   const trend = latest >= prev ? "#16a34a" : "#ef4444";
-  const arrow = latest >= prev ? "↑" : "↓";
-  const diff = Math.abs(latest - prev);
   const dispVal = latest >= 1000 ? (latest / 1000).toFixed(1) + "k" : Math.round(latest);
+  const diff = Math.abs(latest - prev);
   const diffDisp = diff >= 1000 ? (diff / 1000).toFixed(1) + "k" : Math.round(diff);
   const diffStr = diff > 0 ? `${latest >= prev ? '+' : '−'}${diffDisp}` : '';
+  if (compact) {
+    return `<div style="display:flex;align-items:center;gap:2px;flex-shrink:0">
+      <div style="text-align:right;line-height:1">
+        <div style="font-size:7px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.02em">${label}</div>
+        <div style="font-size:9px;color:${trend};font-weight:600;margin-top:1px">${dispVal}${unit}</div>
+      </div>
+      <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block">
+        <polyline points="${points}" fill="none" stroke="${trend}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="${w - pad}" cy="${pad + (1 - (latest - min) / range) * (h - pad * 2)}" r="1.8" fill="${trend}"/>
+      </svg>
+    </div>`;
+  }
   return `<div style="display:flex;align-items:center;gap:2px">
     <div style="text-align:right">
       <div style="font-size:7px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.03em">${label}</div>
@@ -1780,28 +1793,28 @@ function renderSparkline(exerciseName) {
   const isBW = exInWorkout?.bodyweight;
   if (isBW) return renderBWSparkline(exerciseName);
 
-  // Max weight sparkline
-  const wtData = mergeWithLive((state.wtHistory || {})[exerciseName] || [], currentSessionMaxWeight(exerciseName), "wt");
-  const wtVals = wtData.map(d => d.wt);
-  const wtHTML = miniSparkline(wtVals, "Max Wt", "lb", "#0d9488");
-
-  // Max reps sparkline
-  const repsData = mergeWithLive((state.repsHistory || {})[exerciseName] || [], currentSessionBestReps(exerciseName), "reps");
-  const repsVals = repsData.map(d => d.reps);
-  const repsHTML = miniSparkline(repsVals, "Max Reps", "", "#ea580c");
-
-  // 1RM sparkline
+  // 1RM sparkline (primary)
   const ormData = mergeWithLive((state.ormHistory || {})[exerciseName] || [], currentSessionOrm(exerciseName), "orm");
   const ormVals = ormData.map(d => d.orm);
-  const ormHTML = miniSparkline(ormVals, "1RM", "lb", "#3b82f6");
+  const ormHTML = miniSparkline(ormVals, "1RM", "lb", "#3b82f6", true);
 
   // Volume sparkline
   const volData = mergeWithLive((state.volHistory || {})[exerciseName] || [], currentSessionVolume(exerciseName), "vol");
   const volVals = volData.map(d => d.vol);
-  const volHTML = miniSparkline(volVals, "Vol", "lb", "#8b5cf6");
+  const volHTML = miniSparkline(volVals, "Vol", "lb", "#8b5cf6", true);
+
+  // Max weight sparkline
+  const wtData = mergeWithLive((state.wtHistory || {})[exerciseName] || [], currentSessionMaxWeight(exerciseName), "wt");
+  const wtVals = wtData.map(d => d.wt);
+  const wtHTML = miniSparkline(wtVals, "Max Wt", "lb", "#0d9488", true);
+
+  // Max reps sparkline
+  const repsData = mergeWithLive((state.repsHistory || {})[exerciseName] || [], currentSessionBestReps(exerciseName), "reps");
+  const repsVals = repsData.map(d => d.reps);
+  const repsHTML = miniSparkline(repsVals, "Max Reps", "", "#ea580c", true);
 
   if (!wtHTML && !repsHTML && !ormHTML && !volHTML) return "";
-  return `<div style="display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;row-gap:6px">${wtHTML}${repsHTML}${ormHTML}${volHTML}</div>`;
+  return `<div style="display:flex;gap:6px;align-items:center;overflow:hidden">${ormHTML}${volHTML}${wtHTML}${repsHTML}</div>`;
 }
 
 function getBandSelection(exIdx, setKey) {
