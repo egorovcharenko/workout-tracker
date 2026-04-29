@@ -1862,7 +1862,7 @@ function renderSparkline(exerciseName) {
   const repsHTML = miniSparkline(repsVals, "Max Reps", "", "#ea580c", true);
 
   if (!wtHTML && !repsHTML && !ormHTML && !volHTML) return "";
-  return `<div style="display:flex;gap:6px;align-items:center;overflow:hidden">${ormHTML}${volHTML}${wtHTML}${repsHTML}</div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:4px">${ormHTML}${volHTML}${wtHTML}${repsHTML}</div>`;
 }
 
 function getBandSelection(exIdx, setKey) {
