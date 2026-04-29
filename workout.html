@@ -100,6 +100,55 @@
     0% { transform: translate(-50%,-50%) scale(0); opacity: 0; }
     100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
   }
+
+  /* ---------- Per-set subtle animations (quick, anchored to button) ---------- */
+  @keyframes set-ring {
+    0% { transform: translate(-50%,-50%) scale(0.4); opacity: 0.7; }
+    100% { transform: translate(-50%,-50%) scale(2.2); opacity: 0; }
+  }
+  @keyframes set-mini-burst {
+    0% { transform: translate(-50%,-50%); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))); opacity: 0; }
+  }
+  @keyframes set-popup-up {
+    0% { transform: translate(-50%, 0) scale(0.6); opacity: 0; }
+    25% { transform: translate(-50%, -8px) scale(1.1); opacity: 1; }
+    100% { transform: translate(-50%, -38px) scale(1); opacity: 0; }
+  }
+  @keyframes set-check {
+    0% { transform: translate(-50%,-50%) scale(0) rotate(-25deg); opacity: 0; }
+    40% { transform: translate(-50%,-50%) scale(1.4) rotate(0); opacity: 1; }
+    100% { transform: translate(-50%,-50%) scale(1) rotate(0); opacity: 0; }
+  }
+  @keyframes set-ripple {
+    0% { transform: translate(-50%,-50%) scale(0); opacity: 0.5; }
+    100% { transform: translate(-50%,-50%) scale(3); opacity: 0; }
+  }
+  @keyframes set-sparkle {
+    0% { transform: translate(-50%,-50%) scale(0) rotate(0); opacity: 0; }
+    50% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1) rotate(180deg); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.4) rotate(360deg); opacity: 0; }
+  }
+  @keyframes set-pop-shrink {
+    0% { transform: translate(-50%,-50%) scale(0); opacity: 0.8; }
+    35% { transform: translate(-50%,-50%) scale(1.4); opacity: 0.7; }
+    100% { transform: translate(-50%,-50%) scale(0); opacity: 0; }
+  }
+  @keyframes set-arrow-up {
+    0% { transform: translate(-50%, 0); opacity: 0; }
+    20% { transform: translate(-50%, -10px); opacity: 1; }
+    100% { transform: translate(-50%, -42px); opacity: 0; }
+  }
+  @keyframes set-star {
+    0% { transform: translate(-50%,-50%) scale(0) rotate(-45deg); opacity: 0; }
+    50% { transform: translate(-50%,-50%) scale(1.3) rotate(0); opacity: 1; }
+    100% { transform: translate(-50%,-50%) scale(0.7) rotate(45deg); opacity: 0; }
+  }
+  @keyframes set-flash {
+    0% { transform: translate(-50%,-50%) scale(0.6); opacity: 0; }
+    25% { transform: translate(-50%,-50%) scale(1.2); opacity: 0.8; }
+    100% { transform: translate(-50%,-50%) scale(2); opacity: 0; }
+  }
 </style>
 </head>
 <body>
@@ -917,6 +966,157 @@ function ceSlotReel(layer) {
   ceCleanup(el, 2000);
 }
 
+// ----- Per-set subtle animations -----
+// Fired on every set tap. Quick (~400-700ms), anchored to the clicked button.
+const SET_VARIANTS = [
+  'Pulse ring','Mini burst','+reps popup','Check pop','Ripple wave',
+  'Sparkle trio','Pop & shrink','Up arrow','Star burst','Color flash',
+];
+
+function runSetCelebration(rect, reps) {
+  if (!rect) return;
+  const layer = ensureCelebrationLayer();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  const variants = [setPulseRing, setMiniBurst, setRepsPopup, setCheckPop, setRipple,
+                    setSparkleTrio, setPopShrink, setUpArrow, setStarBurst, setFlash];
+  // Random with no-immediate-repeat
+  let pick = Math.floor(Math.random() * variants.length);
+  if (state._lastSetAnim === pick) pick = (pick + 1) % variants.length;
+  state._lastSetAnim = pick;
+  try { variants[pick](layer, x, y, reps); } catch (e) { console.warn('[setCe]', e); }
+}
+
+function playSetCelebration(idx) {
+  // Fake center-screen rect for the preview panel
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+  const fakeRect = { left: cx - 18, top: cy - 18, width: 36, height: 36 };
+  const layer = ensureCelebrationLayer();
+  const variants = [setPulseRing, setMiniBurst, setRepsPopup, setCheckPop, setRipple,
+                    setSparkleTrio, setPopShrink, setUpArrow, setStarBurst, setFlash];
+  const fn = (idx == null) ? variants[Math.floor(Math.random() * variants.length)] : variants[idx % variants.length];
+  try { fn(layer, cx, cy, 10); } catch (e) { console.warn('[setCe]', e); }
+}
+window.playSetCelebration = playSetCelebration;
+
+// 1. Pulse ring expanding from button
+function setPulseRing(layer, x, y) {
+  const c = '#22c55e';
+  const e = ceMakeEl('div', layer, `
+    position:absolute;left:${x}px;top:${y}px;width:38px;height:38px;border-radius:50%;
+    border:2px solid ${c};
+    animation: set-ring 600ms ease-out forwards;
+  `);
+  ceCleanup(e, 700);
+}
+
+// 2. Mini confetti burst from button (8 particles)
+function setMiniBurst(layer, x, y) {
+  const colors = ['#22c55e','#3b82f6','#f59e0b','#ec4899'];
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2 + ceRand(-0.3, 0.3);
+    const dist = ceRand(28, 50);
+    const dx = Math.cos(angle) * dist, dy = Math.sin(angle) * dist;
+    const e = ceMakeEl('div', layer, `
+      position:absolute;left:${x}px;top:${y}px;width:6px;height:6px;background:${cePick(colors)};border-radius:50%;
+      --dx:${dx}px;--dy:${dy}px;
+      animation: set-mini-burst 500ms cubic-bezier(.2,.8,.3,1) forwards;
+    `);
+    ceCleanup(e, 600);
+  }
+}
+
+// 3. Floating "+N reps" text
+function setRepsPopup(layer, x, y, reps) {
+  const e = ceMakeEl('div', layer, `
+    position:absolute;left:${x}px;top:${y - 18}px;
+    font-size:14px;font-weight:700;color:#15803d;
+    text-shadow:0 1px 2px rgba(255,255,255,0.9), 0 0 8px rgba(34,197,94,0.4);
+    animation: set-popup-up 700ms cubic-bezier(.2,.8,.3,1) forwards;
+  `, `+${reps}`);
+  ceCleanup(e, 800);
+}
+
+// 4. Big checkmark pop on the button
+function setCheckPop(layer, x, y) {
+  const e = ceMakeEl('div', layer, `
+    position:absolute;left:${x}px;top:${y}px;
+    font-size:30px;color:#22c55e;font-weight:900;
+    text-shadow:0 1px 2px rgba(255,255,255,0.9);
+    animation: set-check 500ms cubic-bezier(.2,.8,.3,1) forwards;
+  `, '✓');
+  ceCleanup(e, 600);
+}
+
+// 5. Soft ripple wave
+function setRipple(layer, x, y) {
+  const e = ceMakeEl('div', layer, `
+    position:absolute;left:${x}px;top:${y}px;width:30px;height:30px;border-radius:50%;
+    background:radial-gradient(circle, rgba(34,197,94,0.4) 0%, rgba(34,197,94,0) 70%);
+    animation: set-ripple 600ms ease-out forwards;
+  `);
+  ceCleanup(e, 700);
+}
+
+// 6. Three sparkles around the button
+function setSparkleTrio(layer, x, y) {
+  const offsets = [[-22, -16], [22, -16], [0, 22]];
+  for (const [dx, dy] of offsets) {
+    const e = ceMakeEl('div', layer, `
+      position:absolute;left:${x}px;top:${y}px;
+      font-size:14px;
+      --dx:${dx}px;--dy:${dy}px;
+      animation: set-sparkle 600ms cubic-bezier(.2,.8,.3,1) forwards;
+      animation-delay:${ceRand(0, 80)}ms;
+    `, '✨');
+    ceCleanup(e, 700);
+  }
+}
+
+// 7. Filled circle pops then shrinks
+function setPopShrink(layer, x, y) {
+  const e = ceMakeEl('div', layer, `
+    position:absolute;left:${x}px;top:${y}px;width:40px;height:40px;border-radius:50%;
+    background:radial-gradient(circle, #4ade80 0%, #22c55e 70%);
+    box-shadow:0 0 12px rgba(34,197,94,0.5);
+    animation: set-pop-shrink 500ms cubic-bezier(.4,0,.2,1) forwards;
+  `);
+  ceCleanup(e, 600);
+}
+
+// 8. Small up arrow trail
+function setUpArrow(layer, x, y) {
+  const e = ceMakeEl('div', layer, `
+    position:absolute;left:${x}px;top:${y - 10}px;
+    font-size:18px;font-weight:700;color:#3b82f6;
+    text-shadow:0 1px 2px rgba(255,255,255,0.9);
+    animation: set-arrow-up 700ms cubic-bezier(.3,.9,.4,1) forwards;
+  `, '↑');
+  ceCleanup(e, 800);
+}
+
+// 9. Five-pointed star burst
+function setStarBurst(layer, x, y) {
+  const e = ceMakeEl('div', layer, `
+    position:absolute;left:${x}px;top:${y}px;
+    font-size:26px;color:#f59e0b;
+    text-shadow:0 0 10px rgba(245,158,11,0.6);
+    animation: set-star 550ms cubic-bezier(.2,.8,.3,1) forwards;
+  `, '★');
+  ceCleanup(e, 600);
+}
+
+// 10. Soft color flash
+function setFlash(layer, x, y) {
+  const c = cePick(['#22c55e','#3b82f6','#f59e0b','#a855f7']);
+  const e = ceMakeEl('div', layer, `
+    position:absolute;left:${x}px;top:${y}px;width:34px;height:34px;border-radius:50%;
+    background:${c};opacity:0;
+    animation: set-flash 450ms ease-out forwards;
+  `);
+  ceCleanup(e, 500);
+}
+
 // ----- AI motivation -----
 // Once per (sessionId, exercise), call /api/motivate and stash the message
 // in state.motivations so the exercise summary can render it.
@@ -1297,11 +1497,19 @@ function getLastReps(exIdx, setKey) {
   return null;
 }
 
-function logReps(exIdx, setKey, reps, isWarmup) {
+function logReps(exIdx, setKey, reps, isWarmup, ev) {
   // setKey comes as string from onclick — parse to number for working sets
   const sk = (setKey === "warmup") ? "warmup" : parseInt(setKey);
+  // Capture clicked button rect BEFORE render() replaces the DOM, so the
+  // set-completion animation can be anchored where the user just tapped.
+  let _setRect = null;
+  try {
+    const tgt = ev && (ev.currentTarget || ev.target);
+    if (tgt && tgt.getBoundingClientRect) _setRect = tgt.getBoundingClientRect();
+  } catch (_) {}
   state.reps[`${exIdx}-${sk}`] = reps;
   state.completed[`${exIdx}-${sk}`] = true;
+  if (_setRect) runSetCelebration(_setRect, reps);
   if (!state.running) startTimer();
   // Rest timer after every working set
   // Skip rest only between superset partners (e.g. curls→extensions with no break)
@@ -1767,14 +1975,14 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
                   <span style="font-size:8px;color:#16a34a;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">last</span>
                   <button class="reps-btn" style="background:white;color:#16a34a;border:2px dashed #16a34a;width:44px;height:44px;font-size:15px;font-weight:700;box-shadow:0 2px 8px rgba(22,163,74,0.22)"
                     data-scroll-target
-                    onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup})">
+                    onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup},event)">
                     ${r}
                   </button>
                 </div>`;
             }
             return `
               <button class="reps-btn" style="${repsBtnStyle(r, false, false, r >= lo && r <= hi)};flex-shrink:0"
-                onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup})">
+                onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup},event)">
                 ${r}
               </button>`;
           }).join(""); })()}
@@ -2606,13 +2814,22 @@ function renderStats() {
       <p style="font-size:13px;color:#6b7280;margin:4px 0 0">${uniqueExercises} exercises · ${totalSessions} sessions · ${volStr}lb total volume</p>
     </div>
     <div style="padding:0 16px 16px">
-      <details style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:8px 12px;margin-bottom:12px">
-        <summary style="font-size:12px;font-weight:600;color:#92400e;cursor:pointer;list-style:none">🎊 Preview celebration animations <span style="font-weight:400;color:#a16207">(tap to expand)</span></summary>
+      <details style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:8px 12px;margin-bottom:8px">
+        <summary style="font-size:12px;font-weight:600;color:#92400e;cursor:pointer;list-style:none">🎊 Preview exercise-finish animations <span style="font-weight:400;color:#a16207">(big · tap to expand)</span></summary>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
           ${CELEBRATION_VARIANTS.map((label, i) => `
             <button onclick="playCelebration(${i})" style="background:white;border:1px solid #fde68a;color:#92400e;font-size:11px;font-weight:500;padding:6px 10px;border-radius:6px;cursor:pointer">${i + 1}. ${label}</button>
           `).join('')}
           <button onclick="playCelebration()" style="background:#f97316;border:1px solid #ea580c;color:white;font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer">🎲 Random</button>
+        </div>
+      </details>
+      <details style="background:#dcfce7;border:1px solid #86efac;border-radius:10px;padding:8px 12px;margin-bottom:12px">
+        <summary style="font-size:12px;font-weight:600;color:#166534;cursor:pointer;list-style:none">✨ Preview per-set animations <span style="font-weight:400;color:#15803d">(subtle · tap to expand)</span></summary>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+          ${SET_VARIANTS.map((label, i) => `
+            <button onclick="playSetCelebration(${i})" style="background:white;border:1px solid #86efac;color:#166534;font-size:11px;font-weight:500;padding:6px 10px;border-radius:6px;cursor:pointer">${i + 1}. ${label}</button>
+          `).join('')}
+          <button onclick="playSetCelebration()" style="background:#22c55e;border:1px solid #16a34a;color:white;font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer">🎲 Random</button>
         </div>
       </details>
     </div>
