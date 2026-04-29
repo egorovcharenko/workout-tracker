@@ -970,40 +970,82 @@ function ceCannons(layer) {
   }
 }
 
-// 9. Flame ring rising up
+// 9. (RARE 5%) Flame ring rising up + screen shake at peak + emoji rain finale
 function ceFlameRing(layer) {
-  for (let i = 0; i < 14; i++) {
-    const dx = ceRand(-180, 180);
+  // Phase 1: flames rise (denser than before)
+  for (let i = 0; i < 22; i++) {
+    const dx = ceRand(-200, 200);
     const e = ceMakeEl('div', layer, `
-      position:absolute;left:50%;bottom:0;font-size:${ceRand(28, 48)}px;
+      position:absolute;left:50%;bottom:0;font-size:${ceRand(30, 54)}px;
       --dx:${dx}px;
-      animation: ce-flameUp ${ceRand(1400, 2200)}ms ease-out forwards;
-      animation-delay:${ceRand(0, 400)}ms;
+      animation: ce-flameUp ${ceRand(1600, 2400)}ms ease-out forwards;
+      animation-delay:${ceRand(0, 500)}ms;
     `, cePick(['🔥','🔥','🔥','💥','⚡','✨']));
-    ceCleanup(e, 2700);
+    ceCleanup(e, 3100);
   }
+  // Phase 2: screen shake at the peak of the rise
+  setTimeout(() => {
+    document.body.classList.add('ce-shaking');
+    setTimeout(() => document.body.classList.remove('ce-shaking'), 600);
+  }, 700);
+  // Phase 3: a quick emoji rain finale of just fire/lightning
+  setTimeout(() => {
+    for (let i = 0; i < 14; i++) {
+      const e = ceMakeEl('div', layer, `
+        left:${ceRand(0, 100)}%;top:0;font-size:${ceRand(22, 36)}px;
+        animation: ce-fall ${ceRand(1400, 2200)}ms linear forwards;
+        animation-delay:${ceRand(0, 300)}ms;
+      `, cePick(['🔥','💥','⚡']));
+      ceCleanup(e, 3000);
+    }
+  }, 1400);
 }
 
-// 10. Slot reel — rapid-cycle big emoji landing on trophy
+// 10. (RAREST 4%) Slot reel — cycle, land on trophy, then confetti burst from trophy
 function ceSlotReel(layer) {
   const cycle = ['🎰','💪','🔥','🏋️','💯','🏆','🥇','⚡','🚀','🎯','🏅'];
+  // Phase 1: emoji slot cycling
   const el = ceMakeEl('div', layer, `
     position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(0);
-    font-size:120px;animation: ce-slotPop 200ms ease-out forwards;
+    font-size:120px;animation: ce-slotPop 220ms ease-out forwards;
+    filter: drop-shadow(0 4px 20px rgba(245,158,11,0.5));
   `, '🎰');
   let i = 0;
   const tick = setInterval(() => {
     el.textContent = cycle[i % cycle.length];
     i++;
   }, 80);
+  // Phase 2: lands on 🏆 with a dramatic scale-up
   setTimeout(() => {
     clearInterval(tick);
     el.textContent = '🏆';
-    el.style.transition = 'transform 350ms ease-out, opacity 600ms ease-in 800ms';
-    el.style.transform = 'translate(-50%,-50%) scale(1.4)';
-    setTimeout(() => { el.style.opacity = '0'; }, 350);
-  }, 1000);
-  ceCleanup(el, 2000);
+    el.style.transition = 'transform 380ms cubic-bezier(.2,1.4,.4,1)';
+    el.style.transform = 'translate(-50%,-50%) scale(1.6)';
+  }, 1100);
+  // Phase 3: confetti burst centered on the trophy
+  setTimeout(() => {
+    const colors = ['#fbbf24','#ef4444','#22c55e','#3b82f6','#a855f7','#ec4899','#f59e0b'];
+    for (let k = 0; k < 60; k++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = ceRand(140, 360);
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist + 50;
+      const size = ceRand(7, 13);
+      const p = ceMakeEl('div', layer, `
+        left:50%;top:50%;width:${size}px;height:${size * 0.5}px;background:${cePick(colors)};
+        border-radius:2px;--dx:${dx}px;--dy:${dy}px;--rot:${ceRand(180, 720)}deg;
+        animation: ce-confetti ${ceRand(1000, 1700)}ms cubic-bezier(.2,.6,.3,1) forwards;
+      `);
+      ceCleanup(p, 1800);
+    }
+  }, 1550);
+  // Phase 4: trophy fades out after confetti has spread
+  setTimeout(() => {
+    el.style.transition = 'transform 500ms ease-in, opacity 500ms ease-in';
+    el.style.transform = 'translate(-50%,-65%) scale(1.3)';
+    el.style.opacity = '0';
+  }, 2400);
+  ceCleanup(el, 3200);
 }
 
 // ----- Per-set subtle animations -----
@@ -1042,26 +1084,26 @@ window.playSetCelebration = playSetCelebration;
 function setPulseRing(layer, x, y) {
   const c = '#22c55e';
   const e = ceMakeEl('div', layer, `
-    position:absolute;left:${x}px;top:${y}px;width:38px;height:38px;border-radius:50%;
-    border:2px solid ${c};
-    animation: set-ring 600ms ease-out forwards;
+    position:absolute;left:${x}px;top:${y}px;width:42px;height:42px;border-radius:50%;
+    border:3px solid ${c};
+    animation: set-ring 1100ms ease-out forwards;
   `);
-  ceCleanup(e, 700);
+  ceCleanup(e, 1200);
 }
 
-// 2. Mini confetti burst from button (8 particles)
+// 2. Mini confetti burst from button (10 particles)
 function setMiniBurst(layer, x, y) {
   const colors = ['#22c55e','#3b82f6','#f59e0b','#ec4899'];
-  for (let i = 0; i < 8; i++) {
-    const angle = (i / 8) * Math.PI * 2 + ceRand(-0.3, 0.3);
-    const dist = ceRand(28, 50);
+  for (let i = 0; i < 10; i++) {
+    const angle = (i / 10) * Math.PI * 2 + ceRand(-0.3, 0.3);
+    const dist = ceRand(36, 64);
     const dx = Math.cos(angle) * dist, dy = Math.sin(angle) * dist;
     const e = ceMakeEl('div', layer, `
-      position:absolute;left:${x}px;top:${y}px;width:6px;height:6px;background:${cePick(colors)};border-radius:50%;
+      position:absolute;left:${x}px;top:${y}px;width:7px;height:7px;background:${cePick(colors)};border-radius:50%;
       --dx:${dx}px;--dy:${dy}px;
-      animation: set-mini-burst 500ms cubic-bezier(.2,.8,.3,1) forwards;
+      animation: set-mini-burst 950ms cubic-bezier(.2,.8,.3,1) forwards;
     `);
-    ceCleanup(e, 600);
+    ceCleanup(e, 1050);
   }
 }
 
@@ -1069,91 +1111,122 @@ function setMiniBurst(layer, x, y) {
 function setRepsPopup(layer, x, y, reps) {
   const e = ceMakeEl('div', layer, `
     position:absolute;left:${x}px;top:${y - 18}px;
-    font-size:14px;font-weight:700;color:#15803d;
-    text-shadow:0 1px 2px rgba(255,255,255,0.9), 0 0 8px rgba(34,197,94,0.4);
-    animation: set-popup-up 700ms cubic-bezier(.2,.8,.3,1) forwards;
+    font-size:16px;font-weight:800;color:#15803d;
+    text-shadow:0 1px 2px rgba(255,255,255,0.95), 0 0 10px rgba(34,197,94,0.5);
+    animation: set-popup-up 1100ms cubic-bezier(.2,.8,.3,1) forwards;
   `, `+${reps}`);
-  ceCleanup(e, 800);
+  ceCleanup(e, 1200);
 }
 
 // 4. Big checkmark pop on the button
 function setCheckPop(layer, x, y) {
   const e = ceMakeEl('div', layer, `
     position:absolute;left:${x}px;top:${y}px;
-    font-size:30px;color:#22c55e;font-weight:900;
-    text-shadow:0 1px 2px rgba(255,255,255,0.9);
-    animation: set-check 500ms cubic-bezier(.2,.8,.3,1) forwards;
+    font-size:34px;color:#22c55e;font-weight:900;
+    text-shadow:0 1px 3px rgba(255,255,255,0.95), 0 0 12px rgba(34,197,94,0.4);
+    animation: set-check 900ms cubic-bezier(.2,.8,.3,1) forwards;
   `, '✓');
-  ceCleanup(e, 600);
+  ceCleanup(e, 1000);
 }
 
-// 5. Soft ripple wave
+// 5. Soft ripple wave (now double-ring for visibility)
 function setRipple(layer, x, y) {
-  const e = ceMakeEl('div', layer, `
-    position:absolute;left:${x}px;top:${y}px;width:30px;height:30px;border-radius:50%;
-    background:radial-gradient(circle, rgba(34,197,94,0.4) 0%, rgba(34,197,94,0) 70%);
-    animation: set-ripple 600ms ease-out forwards;
-  `);
-  ceCleanup(e, 700);
+  for (let i = 0; i < 2; i++) {
+    const e = ceMakeEl('div', layer, `
+      position:absolute;left:${x}px;top:${y}px;width:32px;height:32px;border-radius:50%;
+      background:radial-gradient(circle, rgba(34,197,94,0.45) 0%, rgba(34,197,94,0) 70%);
+      animation: set-ripple 1100ms ease-out forwards;
+      animation-delay:${i * 220}ms;
+    `);
+    ceCleanup(e, 1400);
+  }
 }
 
 // 6. Three sparkles around the button
 function setSparkleTrio(layer, x, y) {
-  const offsets = [[-22, -16], [22, -16], [0, 22]];
+  const offsets = [[-26, -20], [26, -20], [0, 28]];
   for (const [dx, dy] of offsets) {
     const e = ceMakeEl('div', layer, `
       position:absolute;left:${x}px;top:${y}px;
-      font-size:14px;
+      font-size:18px;
       --dx:${dx}px;--dy:${dy}px;
-      animation: set-sparkle 600ms cubic-bezier(.2,.8,.3,1) forwards;
-      animation-delay:${ceRand(0, 80)}ms;
+      animation: set-sparkle 1100ms cubic-bezier(.2,.8,.3,1) forwards;
+      animation-delay:${ceRand(0, 120)}ms;
     `, '✨');
-    ceCleanup(e, 700);
+    ceCleanup(e, 1300);
   }
 }
 
-// 7. Filled circle pops then shrinks
+// 7. (RARE 4%) Filled circle pops then shrinks → followed by sparkles
 function setPopShrink(layer, x, y) {
   const e = ceMakeEl('div', layer, `
-    position:absolute;left:${x}px;top:${y}px;width:40px;height:40px;border-radius:50%;
+    position:absolute;left:${x}px;top:${y}px;width:48px;height:48px;border-radius:50%;
     background:radial-gradient(circle, #4ade80 0%, #22c55e 70%);
-    box-shadow:0 0 12px rgba(34,197,94,0.5);
-    animation: set-pop-shrink 500ms cubic-bezier(.4,0,.2,1) forwards;
+    box-shadow:0 0 18px rgba(34,197,94,0.6);
+    animation: set-pop-shrink 900ms cubic-bezier(.4,0,.2,1) forwards;
   `);
-  ceCleanup(e, 600);
+  ceCleanup(e, 1000);
+  // Phase 2: trio of sparkles spreading outward as the disc collapses
+  setTimeout(() => setSparkleTrio(layer, x, y), 480);
 }
 
 // 8. Small up arrow trail
 function setUpArrow(layer, x, y) {
   const e = ceMakeEl('div', layer, `
     position:absolute;left:${x}px;top:${y - 10}px;
-    font-size:18px;font-weight:700;color:#3b82f6;
-    text-shadow:0 1px 2px rgba(255,255,255,0.9);
-    animation: set-arrow-up 700ms cubic-bezier(.3,.9,.4,1) forwards;
+    font-size:22px;font-weight:800;color:#3b82f6;
+    text-shadow:0 1px 3px rgba(255,255,255,0.95), 0 0 10px rgba(59,130,246,0.4);
+    animation: set-arrow-up 1100ms cubic-bezier(.3,.9,.4,1) forwards;
   `, '↑');
-  ceCleanup(e, 800);
+  ceCleanup(e, 1200);
 }
 
-// 9. Five-pointed star burst
+// 9. (RAREST 3%) Multi-step star burst — ring + star + radial sparkle ring
 function setStarBurst(layer, x, y) {
-  const e = ceMakeEl('div', layer, `
+  // Phase 1: golden ring
+  const ring = ceMakeEl('div', layer, `
+    position:absolute;left:${x}px;top:${y}px;width:38px;height:38px;border-radius:50%;
+    border:2px solid #f59e0b;box-shadow:0 0 14px rgba(245,158,11,0.7);
+    animation: set-ring 900ms ease-out forwards;
+  `);
+  ceCleanup(ring, 1000);
+  // Phase 2: the big golden star
+  const star = ceMakeEl('div', layer, `
     position:absolute;left:${x}px;top:${y}px;
-    font-size:26px;color:#f59e0b;
-    text-shadow:0 0 10px rgba(245,158,11,0.6);
-    animation: set-star 550ms cubic-bezier(.2,.8,.3,1) forwards;
+    font-size:34px;color:#f59e0b;
+    text-shadow:0 0 14px rgba(245,158,11,0.85);
+    animation: set-star 1000ms cubic-bezier(.2,.8,.3,1) forwards;
+    animation-delay:120ms;opacity:0;
   `, '★');
-  ceCleanup(e, 600);
+  ceCleanup(star, 1300);
+  // Phase 3: 8 small sparkle particles radiating outward
+  setTimeout(() => {
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const dist = ceRand(40, 70);
+      const dx = Math.cos(angle) * dist, dy = Math.sin(angle) * dist;
+      const sp = ceMakeEl('div', layer, `
+        position:absolute;left:${x}px;top:${y}px;font-size:12px;
+        --dx:${dx}px;--dy:${dy}px;
+        animation: set-sparkle 900ms cubic-bezier(.2,.8,.3,1) forwards;
+      `, cePick(['✨','⭐','✦']));
+      ceCleanup(sp, 1000);
+    }
+  }, 350);
 }
 
 // 10. Soft color flash
 function setFlash(layer, x, y) {
   const c = cePick(['#22c55e','#3b82f6','#f59e0b','#a855f7']);
-  const e = ceMakeEl('div', layer, `
-    position:absolute;left:${x}px;top:${y}px;width:34px;height:34px;border-radius:50%;
-    background:${c};opacity:0;
-    animation: set-flash 450ms ease-out forwards;
-  `);
-  ceCleanup(e, 500);
+  for (let i = 0; i < 2; i++) {
+    const e = ceMakeEl('div', layer, `
+      position:absolute;left:${x}px;top:${y}px;width:38px;height:38px;border-radius:50%;
+      background:${c};opacity:0;
+      animation: set-flash 900ms ease-out forwards;
+      animation-delay:${i * 200}ms;
+    `);
+    ceCleanup(e, 1200);
+  }
 }
 
 // ----- AI motivation -----
