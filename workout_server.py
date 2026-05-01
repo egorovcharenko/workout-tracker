@@ -425,6 +425,95 @@ def call_claude_motivate(payload):
     return (None, None)
 
 
+def call_claude_motivate_finish(payload):
+    """
+    Witty end-of-workout closer. payload = {
+        workout: str,
+        duration_sec: int,
+        total_sets: int,
+        exercises: [name, ...],
+        prs: [{sub, is_orm_pr, is_weight_pr, is_reps_pr, ...}, ...],
+        total_volume_lb: number,
+    }
+    Returns (message, model_used) tuple.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return (None, None)
+    import urllib.request
+    import urllib.error
+
+    system = (
+        "You are the user's smart-aleck gym buddy writing a quick post-workout "
+        "victory lap. They just finished the whole session. Your job: deliver "
+        "2–3 sentences that are WITTY, a little cocky, with a charming tongue-"
+        "in-cheek line implying the work is paying off — heads will turn, "
+        "the dating pool just shrunk for them, women won't be able to look "
+        "away, etc. Lean playful and confident, never crass, never creepy, "
+        "never explicit. Think locker-room hype crossed with a sitcom one-liner.\n\n"
+        "RULES:\n"
+        "1. Open with a specific callout from their data: a PR, total volume, "
+        "duration, or a number of completed sets. Cite a real number.\n"
+        "2. Include exactly ONE charming line about the off-the-bench upside — "
+        "people noticing, mirrors agreeing, dating apps trembling, shirts "
+        "fitting differently, etc. Make it clever, not gross.\n"
+        "3. 2–3 sentences. Hard cap 55 words.\n"
+        "4. Vary openers across messages — no same-y \"Crushed it.\" starts.\n"
+        "5. Skip cheesy fitness clichés (\"beast mode\", \"crush it\", \"no "
+        "pain no gain\").\n"
+        "6. Up to 2 emojis if they actually land. None is also fine.\n"
+        "7. Tone: confident wingman, dry humor, warm. Not corporate, not horny."
+    )
+    user_prompt = (
+        f"Workout: {payload.get('workout')}\n"
+        f"Duration: {payload.get('duration_sec', 0)} seconds\n"
+        f"Total sets: {payload.get('total_sets', 0)}\n"
+        f"Total volume (lb·reps): {payload.get('total_volume_lb', 0)}\n"
+        f"Exercises today: {', '.join(payload.get('exercises') or [])}\n\n"
+        f"PRs achieved this session (look here for celebration material):\n"
+        f"{json.dumps(payload.get('prs') or [], indent=2)}\n\n"
+        "Write the closer message."
+    )
+    body = {
+        "model": MOTIVATE_MODEL,
+        "max_tokens": 240,
+        "system": system,
+        "messages": [{"role": "user", "content": user_prompt}],
+    }
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=json.dumps(body).encode(),
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+    )
+    last_err = None
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(req, timeout=9) as resp:
+                data = json.loads(resp.read())
+            return (data["content"][0]["text"].strip(), MOTIVATE_MODEL)
+        except urllib.error.HTTPError as e:
+            last_err = e
+            print(f"  [FINISH] HTTP {e.code} on attempt {attempt + 1}: {e}")
+            if 500 <= e.code < 600 and attempt == 0:
+                continue
+            return (None, None)
+        except Exception as e:
+            last_err = e
+            print(f"  [FINISH] Anthropic call failed on attempt {attempt + 1}: {e}")
+            return (None, None)
+    print(f"  [FINISH] Gave up after retries: {last_err}")
+    return (None, None)
+
+
+# Sentinel exercise name used to persist the workout-closer message in the
+# `motivations` table alongside per-exercise messages. Single row per session.
+FINISH_KEY = "__workout_finish__"
+
+
 def save_motivation(session_id, exercise, message, model):
     if not session_id or not message:
         return
@@ -564,6 +653,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"message": msg, "model": model_used}).encode())
             except Exception as e:
                 print(f"  [MOTIVATE] Error: {e}")
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+            return
+        if self.path == "/api/motivate-finish":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length)
+                body = json.loads(raw)
+                msg, model_used = call_claude_motivate_finish(body)
+                print(f"  [FINISH] workout={body.get('workout')!r} ({model_used}) -> {msg!r}")
+                if msg:
+                    save_motivation(body.get("session_id"), FINISH_KEY, msg, model_used)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"message": msg, "model": model_used}).encode())
+            except Exception as e:
+                print(f"  [FINISH] Error: {e}")
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
