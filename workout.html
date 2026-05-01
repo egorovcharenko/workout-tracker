@@ -176,7 +176,7 @@ const WORKOUTS = [
       { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4", extraWeights: [55, 60], rest: 120 },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
       { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
-      { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120 },
+      { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
       { name: "Seated Overhead Press", sets: 2, reps: "8-10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
       { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
         supersetExercises: [
@@ -196,7 +196,7 @@ const WORKOUTS = [
       { name: "Band Squat", sets: 3, reps: "12-15", notes: "Stand on band, handles at shoulders", superset: false, video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
       { name: "Band Row", sets: 3, reps: "12-15", notes: "Stand on band, pull to chest, squeeze back", superset: false, video: "https://www.youtube.com/shorts/BAlsaA1wIhY", equipment: "band", rest: 120 },
-      { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120 },
+      { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
       { name: "Seated Overhead Press", sets: 2, reps: "8-10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
       { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", superset: false, video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
       { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
@@ -1361,11 +1361,33 @@ async function requestMotivation(exIdx) {
     if (m) muscles.push(...(m.primary || []), ...(m.secondary || []));
   }
 
+  // Compute explicit PR signals per sub-exercise so the AI can celebrate
+  // them directly instead of having to infer from raw set lists.
+  const today = (typeof localDate === 'function') ? localDate() : new Date().toISOString().slice(0, 10);
+  const prs = subNames.map(subName => {
+    const ormHist = ((state.ormHistory || {})[subName] || []).filter(d => d.date !== today);
+    const wtHist = ((state.wtHistory || {})[subName] || []).filter(d => d.date !== today);
+    const repsHist = ((state.repsHistory || {})[subName] || []).filter(d => d.date !== today);
+    const prevMaxOrm = ormHist.length ? Math.max(...ormHist.map(d => +d.value || 0)) : 0;
+    const prevMaxWt = wtHist.length ? Math.max(...wtHist.map(d => +d.value || 0)) : 0;
+    const prevMaxReps = repsHist.length ? Math.max(...repsHist.map(d => +d.value || 0)) : 0;
+    const curOrm = currentSessionOrm(subName) || 0;
+    const curWt = currentSessionMaxWeight(subName) || 0;
+    const curReps = currentSessionBestReps(subName) || 0;
+    return {
+      sub: subName,
+      current_orm: curOrm, previous_best_orm: prevMaxOrm, is_orm_pr: !!(curOrm && curOrm > prevMaxOrm),
+      current_max_weight: curWt, previous_best_weight: prevMaxWt, is_weight_pr: !!(curWt && curWt > prevMaxWt),
+      current_max_reps: curReps, previous_best_reps: prevMaxReps, is_reps_pr: !!(curReps && curReps > prevMaxReps),
+      sessions_in_history: ormHist.length,
+    };
+  });
+
   try {
     const res = await fetch('/api/motivate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: state.sessionId, exercise: ex.name, muscles: [...new Set(muscles)], current, previous }),
+      body: JSON.stringify({ session_id: state.sessionId, exercise: ex.name, muscles: [...new Set(muscles)], current, previous, prs }),
     });
     const data = await res.json();
     state.motivations[cacheKey] = data.message || null;
@@ -1398,6 +1420,14 @@ function startWorkout(w) {
   state.elapsed = 0; state.running = false; state.saved = false; state.showGif = {};
   state.sessionId = null; state.lastSaved = null;
   state.motivations = {}; state.motivationsLoading = {}; state.activeMotivation = null;
+  state.warmupOff = {};
+  // Apply data-driven `noWarmup: true` defaults — auto-skip warmup for these.
+  w.exercises.forEach((ex, exIdx) => {
+    if (ex.noWarmup) {
+      state.warmupOff[exIdx] = true;
+      state.completed[`${exIdx}-warmup`] = true;
+    }
+  });
   history.replaceState(null, '', '#' + w.id);
   render();
   loadSessionData(w.name);
