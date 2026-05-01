@@ -84,6 +84,7 @@ def get_db():
             completed INTEGER DEFAULT 1
         )''')
         conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS bands_json TEXT")
+        conn.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMP")
         conn.execute('''CREATE TABLE IF NOT EXISTS motivations (
             id SERIAL PRIMARY KEY,
             session_id INTEGER NOT NULL REFERENCES sessions(id),
@@ -124,6 +125,11 @@ def get_db():
         conn.commit()
     except sqlite3.OperationalError:
         pass
+    try:
+        conn.execute("ALTER TABLE sessions ADD COLUMN started_at TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
     conn.execute('''CREATE TABLE IF NOT EXISTS motivations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id INTEGER NOT NULL,
@@ -156,10 +162,14 @@ def save_session(data):
         # Replace all sets
         c.execute("DELETE FROM sets WHERE session_id = ?", (session_id,))
     else:
-        # Create new session
+        # Create new session — anchor started_at as the wall-clock origin so
+        # the frontend can derive elapsed = (now - started_at) regardless of
+        # when individual sets were saved. Frontend may pass an ISO string
+        # (its own Date.now() at workout start); fall back to server now.
+        started_at = data.get("started_at") or datetime.datetime.utcnow().isoformat() + "Z"
         c.execute(
-            "INSERT INTO sessions (workout_name, date, duration_sec, notes) VALUES (?, ?, ?, ?)",
-            (data["workout"], data["date"], data.get("duration_sec", 0), data.get("notes", "")),
+            "INSERT INTO sessions (workout_name, date, duration_sec, notes, started_at) VALUES (?, ?, ?, ?, ?)",
+            (data["workout"], data["date"], data.get("duration_sec", 0), data.get("notes", ""), started_at),
         )
         session_id = c.lastrowid
 
@@ -181,6 +191,14 @@ def get_history(limit=20):
     for sess in sessions:
         c.execute("SELECT * FROM sets WHERE session_id = ? ORDER BY id", (sess["id"],))
         sess["sets"] = [dict(r) for r in c.fetchall()]
+        # Attach the workout-finish motivation if one was generated for this
+        # session — so the home screen can show the witty closer per session.
+        c.execute(
+            "SELECT message FROM motivations WHERE session_id = ? AND exercise = ? ORDER BY id DESC LIMIT 1",
+            (sess["id"], "__workout_finish__"),
+        )
+        row = c.fetchone()
+        sess["finish_motivation"] = row["message"] if row else None
     conn.close()
     return sessions
 
@@ -321,14 +339,19 @@ def get_today_session(workout_name, today=None):
     conn = get_db()
     c = conn.cursor()
     c.execute(
-        "SELECT id, duration_sec FROM sessions WHERE workout_name = ? AND date >= ? ORDER BY id DESC LIMIT 1",
+        "SELECT id, duration_sec, started_at FROM sessions WHERE workout_name = ? AND date >= ? ORDER BY id DESC LIMIT 1",
         (workout_name, _yesterday()),
     )
     row = c.fetchone()
     if not row:
         conn.close()
         return None
-    session = {"id": row["id"], "duration_sec": row["duration_sec"], "sets": []}
+    session = {
+        "id": row["id"],
+        "duration_sec": row["duration_sec"],
+        "started_at": row["started_at"],
+        "sets": [],
+    }
     c.execute("SELECT exercise, set_type, set_number, weight_lb, reps, bands_json FROM sets WHERE session_id = ? ORDER BY id", (row["id"],))
     session["sets"] = [dict(r) for r in c.fetchall()]
     conn.close()
@@ -446,23 +469,28 @@ def call_claude_motivate_finish(payload):
     system = (
         "You are the user's smart-aleck gym buddy writing a quick post-workout "
         "victory lap. They just finished the whole session. Your job: deliver "
-        "2–3 sentences that are WITTY, a little cocky, with a charming tongue-"
-        "in-cheek line implying the work is paying off — heads will turn, "
-        "the dating pool just shrunk for them, women won't be able to look "
-        "away, etc. Lean playful and confident, never crass, never creepy, "
-        "never explicit. Think locker-room hype crossed with a sitcom one-liner.\n\n"
+        "EXACTLY 3 sentences that are WITTY, a little cocky, and end with a "
+        "charming tongue-in-cheek line about how the work is paying off — heads "
+        "turning, women not being able to look away, dating pool shrinking, "
+        "shirts fitting tighter, mirrors filing complaints. Playful and "
+        "confident, never crass, never creepy, never explicit. Think "
+        "locker-room hype crossed with a sitcom one-liner.\n\n"
+        "STRUCTURE (3 sentences, in order):\n"
+        "1. SENTENCE 1: Hard numbers — a specific PR, total volume, duration, "
+        "or set count. Cite a REAL number from the data.\n"
+        "2. SENTENCE 2: A specific physical/performance callout — a muscle "
+        "group cooked, a strength-trend observation, the way they handled the "
+        "load. Stay grounded in the data.\n"
+        "3. SENTENCE 3: The charming wingman line about ladies / heads "
+        "turning / shirts fitting / dating-pool consequences. Clever, not "
+        "gross. Bring the wit.\n\n"
         "RULES:\n"
-        "1. Open with a specific callout from their data: a PR, total volume, "
-        "duration, or a number of completed sets. Cite a real number.\n"
-        "2. Include exactly ONE charming line about the off-the-bench upside — "
-        "people noticing, mirrors agreeing, dating apps trembling, shirts "
-        "fitting differently, etc. Make it clever, not gross.\n"
-        "3. 2–3 sentences. Hard cap 55 words.\n"
-        "4. Vary openers across messages — no same-y \"Crushed it.\" starts.\n"
-        "5. Skip cheesy fitness clichés (\"beast mode\", \"crush it\", \"no "
-        "pain no gain\").\n"
-        "6. Up to 2 emojis if they actually land. None is also fine.\n"
-        "7. Tone: confident wingman, dry humor, warm. Not corporate, not horny."
+        "- Vary openers across messages. No \"Crushed it.\" \"Wow.\" \"Beast.\"\n"
+        "- Skip fitness clichés (\"beast mode\", \"crush it\", \"no pain no "
+        "gain\", \"keep grinding\").\n"
+        "- Up to 2 emojis total if they actually land. None is also fine.\n"
+        "- Hard cap 70 words.\n"
+        "- Tone: confident wingman, dry humor, warm. Not corporate. Not horny."
     )
     user_prompt = (
         f"Workout: {payload.get('workout')}\n"

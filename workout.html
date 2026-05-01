@@ -609,6 +609,10 @@ async function autoSave() {
     date: localDate(),
     duration_sec: state.elapsed,
     session_id: state.sessionId || null,
+    // Send the wall-clock anchor on the FIRST save (no sessionId yet) so
+    // the server can persist it as started_at. Backend ignores this on
+    // updates.
+    started_at: state.timerStartedAt ? new Date(state.timerStartedAt).toISOString() : null,
     sets
   };
   try {
@@ -639,7 +643,25 @@ async function loadSessionData(workoutName) {
     if (todayData && todayData.id) {
       // Resume today's session
       state.sessionId = todayData.id;
-      state.elapsed = todayData.duration_sec || 0;
+      // Use the persisted wall-clock anchor as the source of truth — total
+      // elapsed is now (now - started_at), so it ticks regardless of when
+      // the last save happened. Fall back to duration_sec if the row is
+      // pre-migration and started_at is missing.
+      if (todayData.started_at) {
+        const startedMs = Date.parse(todayData.started_at);
+        if (!isNaN(startedMs)) {
+          state.timerStartedAt = startedMs;
+          state.elapsed = Math.floor((Date.now() - startedMs) / 1000);
+        } else {
+          state.elapsed = todayData.duration_sec || 0;
+        }
+      } else {
+        state.elapsed = todayData.duration_sec || 0;
+      }
+      // Auto-resume the running timer so the wall-clock continues to tick.
+      startTimer();
+      // Restore an in-flight rest period from localStorage (if any).
+      restoreRestState();
       // Auto-detect swapped exercises: if saved exercise isn't in template but is in a swap group, replace the template entry
       const savedNames = new Set(todayData.sets.map(s => s.exercise));
       savedNames.forEach(name => {
@@ -779,14 +801,19 @@ async function loadHistory() {
   loadHomeData();
 }
 
-// Timer controls
+// Timer controls — total elapsed is always derived from a wall-clock
+// anchor (state.timerStartedAt), persisted to the DB as `started_at`.
+// That way reload mid-workout shows the true wall-clock time since the
+// session began, not whatever happened to be saved at the last set.
 function startTimer() {
   if (timerInterval) return;
   state.running = true;
-  // Anchor to wall-clock so background-tab throttling can't make us
-  // undercount. state.elapsed may already be non-zero on resume; we
-  // compute "started at" so that (now - startedAt)/1000 == elapsed.
-  state.timerStartedAt = Date.now() - (state.elapsed || 0) * 1000;
+  // Only set the anchor if it isn't already (preserve wall-clock origin
+  // across pause/resume calls; the very-first start is set in startWorkout
+  // or loadSessionData).
+  if (!state.timerStartedAt) {
+    state.timerStartedAt = Date.now() - (state.elapsed || 0) * 1000;
+  }
   timerInterval = setInterval(tickTimer, 1000);
 }
 function tickTimer() {
@@ -799,6 +826,45 @@ function stopTimer() {
   clearInterval(timerInterval); timerInterval = null;
   state.timerStartedAt = 0;
 }
+function _restStorageKey() {
+  // Scope by workout id so rest state from a different workout isn't picked up.
+  const wid = state.workout?.id || '_';
+  return `restState:${wid}`;
+}
+function _persistRestState() {
+  try {
+    if (state.resting && state.restEndAt) {
+      localStorage.setItem(_restStorageKey(), JSON.stringify({
+        endAt: state.restEndAt,
+        dur: state.restDur,
+      }));
+    } else {
+      localStorage.removeItem(_restStorageKey());
+    }
+  } catch (_) {}
+}
+function restoreRestState() {
+  // Called from loadSessionData on workout-view entry. If localStorage has
+  // an active rest that hasn't expired yet, resume the countdown so the
+  // user picks back up where they were. If it's expired, just clear.
+  try {
+    const raw = localStorage.getItem(_restStorageKey());
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    const left = saved && saved.endAt ? Math.ceil((saved.endAt - Date.now()) / 1000) : 0;
+    if (left > 0) {
+      state.resting = true;
+      state.restEndAt = saved.endAt;
+      state.restDur = saved.dur || left;
+      state.restLeft = left;
+      if (restInterval) clearInterval(restInterval);
+      restInterval = setInterval(tickRest, 1000);
+      console.log(`[REST] resumed with ${left}s left`);
+    } else {
+      localStorage.removeItem(_restStorageKey());
+    }
+  } catch (_) {}
+}
 function startRest(duration) {
   if (restInterval) { clearInterval(restInterval); restInterval = null; }
   if (!duration || duration <= 0) return;
@@ -806,6 +872,7 @@ function startRest(duration) {
   state.restDur = duration;
   state.restEndAt = Date.now() + duration * 1000;
   state.restLeft = duration;
+  _persistRestState();
   restInterval = setInterval(tickRest, 1000);
 }
 function tickRest() {
@@ -816,6 +883,7 @@ function tickRest() {
   if (left <= 0) {
     clearInterval(restInterval); restInterval = null;
     state.resting = false; state.restEndAt = 0;
+    _persistRestState();
     // Natural completion → flash the screen + brief "GO!" cue.
     if (wasResting) flashRestDone();
   }
@@ -1505,6 +1573,7 @@ function startWorkout(w) {
   state.screen = "workout"; state.workout = w; state.completed = {}; state.weights = {}; state.reps = {};
   state.elapsed = 0; state.running = false; state.saved = false; state.showGif = {};
   state.sessionId = null; state.lastSaved = null;
+  state.timerStartedAt = 0;
   state.motivations = {}; state.motivationsLoading = {}; state.activeMotivation = null;
   state.finishMotivation = null; state.finishMotivationLoading = false; state.activeFinishMotivation = null;
   state.warmupOff = {};
@@ -1764,6 +1833,34 @@ function getExpectedSets(workoutName) {
   return w.exercises.reduce((s, e) => s + e.sets + 1, 0); // working sets + warmup per exercise
 }
 
+function renderLastFinishCard() {
+  // The witty workout-finish closer for the most recent session that has one.
+  const history = state.history || [];
+  const latest = history.find(s => s.finish_motivation);
+  if (!latest) return '';
+  const dateLabel = (() => {
+    const d = new Date(latest.date + 'T00:00:00');
+    if (isNaN(d.getTime())) return latest.date;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((today - d) / (24 * 3600 * 1000));
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return d.toLocaleDateString('en-US', { weekday: 'long' });
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  })();
+  return `
+    <div style="margin-bottom:14px;padding:16px 18px 14px;background:linear-gradient(135deg,#fef3c7,#fde68a 50%,#fbbf24);border:1px solid #f59e0b;border-radius:14px;box-shadow:0 4px 14px rgba(245,158,11,0.18)">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <span style="font-size:22px;flex-shrink:0;line-height:1">💪</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#92400e;margin-bottom:6px">${dateLabel} · ${latest.workout_name}</div>
+          <div style="font-size:14px;line-height:1.55;color:#451a03;font-weight:500">${latest.finish_motivation}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderHome() {
   // Check for active sessions today — filter out completed ones
   const activeSessions = (state._activeSessions || []).filter(s => s.sets_done < getExpectedSets(s.workout_name));
@@ -1787,6 +1884,7 @@ function renderHome() {
       <button onclick="showStats()" style="margin-top:6px;background:#f3f4f6;border:1px solid #e5e7eb;color:#374151;font-size:13px;font-weight:500;padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap">📈 Progress</button>
     </div>
     <div style="padding:0 16px">
+      ${renderLastFinishCard()}
       ${activeSessionHTML ? `<div style="margin-bottom:4px"><p style="font-size:11px;font-weight:600;color:#3b82f6;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">In Progress</p>${activeSessionHTML}</div>` : ""}
       ${WORKOUTS.filter(w => !w.hidden).map((w,i) => renderWorkoutCard(w, WORKOUTS.indexOf(w))).join("")}
       ${renderCalendar()}
@@ -2869,14 +2967,14 @@ function renderMotivationBanner() {
     const animOuter = alreadyShown ? '' : 'animation:motiv-fade-in 220ms ease-out;';
     const animInner = alreadyShown ? '' : 'animation:motiv-pop-in 320ms cubic-bezier(.2,.9,.3,1.18);';
     return `
-      <div id="finish-motiv-banner" onclick="dismissFinishMotivation()" style="
+      <div id="finish-motiv-banner" data-noinvert onclick="dismissFinishMotivation()" style="
         position:fixed;left:0;right:0;bottom:0;top:0;
         background:rgba(15,23,42,0.55);
         z-index:9100;
         display:flex;align-items:center;justify-content:center;
         ${animOuter}
       ">
-        <div onclick="event.stopPropagation()" style="
+        <div data-noinvert onclick="event.stopPropagation()" style="
           width:100%;max-width:560px;margin:0 12px;
           background:linear-gradient(135deg,#fef3c7,#fde68a 50%,#fbbf24);
           border:1px solid #f59e0b;
@@ -2916,14 +3014,14 @@ function renderMotivationBanner() {
   const animOuter = alreadyShown ? '' : 'animation:motiv-fade-in 220ms ease-out;';
   const animInner = alreadyShown ? '' : 'animation:motiv-slide-up 280ms cubic-bezier(.2,.9,.3,1.15);';
   return `
-    <div id="motiv-banner" onclick="dismissMotivation()" style="
+    <div id="motiv-banner" data-noinvert onclick="dismissMotivation()" style="
       position:fixed;left:0;right:0;bottom:0;top:0;
       background:rgba(15,23,42,0.45);
       z-index:9000;
       display:flex;align-items:flex-end;justify-content:center;
       ${animOuter}
     ">
-      <div onclick="event.stopPropagation()" style="
+      <div data-noinvert onclick="event.stopPropagation()" style="
         width:100%;max-width:560px;margin:0 12px 18px;
         background:linear-gradient(135deg,#ede9fe,#dbeafe);
         border:1px solid #c7d2fe;
