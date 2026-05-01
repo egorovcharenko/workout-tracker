@@ -2292,6 +2292,18 @@ function toggleBand(exIdx, setKey, bandLb) {
   render();
 }
 
+// One-tap apply for the "use last bands" shortcut. Commits the auto-suggested
+// band set as an explicit selection so it persists across reloads.
+function applyBandSelection(exIdx, setKey, bandsCSV) {
+  const bands = bandsCSV.split(',').map(n => parseInt(n)).filter(n => !isNaN(n));
+  const k = `${exIdx}-${setKey}-bands`;
+  if (!state.bands) state.bands = {};
+  state.bands[k] = bands.slice();
+  state.weights[`${exIdx}-${setKey}`] = bands.reduce((a, b) => a + b, 0) || null;
+  triggerSave();
+  render();
+}
+
 function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext) {
   const ex = state.workout.exercises[exIdx];
   const subEx = getSubExercise(exIdx, setKey);
@@ -2379,15 +2391,47 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     // to match the weight-hint style, so it's clear nothing is locked in yet.
     const bandsKey = `${exIdx}-${setKey}-bands`;
     const isExplicit = !!(state.bands && state.bands[bandsKey] && state.bands[bandsKey].length);
+    // When 2+ bands are auto-suggested, show a single "use last" pill that
+    // visually connects the suggested bands and commits them in one tap.
+    const showCombo = !isExplicit && selectedBands.length >= 2;
+    const comboTotal = showCombo ? selectedBands.reduce((a,b)=>a+b,0) : 0;
+    const suggestedIdx = showCombo ? BANDS.map((b,i) => selectedBands.includes(b.lb) ? i : -1).filter(i => i >= 0) : [];
+    const firstSel = suggestedIdx.length ? suggestedIdx[0] : -1;
+    const lastSel = suggestedIdx.length ? suggestedIdx[suggestedIdx.length - 1] : -1;
+    const comboCSV = selectedBands.join(',');
+    // Build a top "connector" row that lines up with the band buttons —
+    // a colored bracket spans only the suggested band columns; the gap
+    // segments between them are filled too so it reads as one bar.
+    const connectorRow = showCombo ? `
+      <div onclick="applyBandSelection(${exIdx},'${setKey}','${comboCSV}')" style="display:flex;gap:3px;padding-left:26px;cursor:pointer;margin-bottom:2px;position:relative;height:18px;align-items:flex-end">
+        ${BANDS.map((b, i) => {
+          const inRange = i >= firstSel && i <= lastSel;
+          const isEnd = i === firstSel || i === lastSel;
+          if (!inRange) return `<div style="flex-shrink:0;min-width:44px;width:44px"></div>`;
+          // bracket: full-width colored segment with end-caps that drop down
+          return `<div style="flex-shrink:0;min-width:44px;width:44px;height:100%;display:flex;align-items:flex-end;justify-content:center;position:relative">
+            <div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,#a855f7,#7c3aed);border-radius:2px"></div>
+            ${isEnd ? `<div style="position:absolute;${i===firstSel?'left:0':'right:0'};bottom:0;width:3px;height:8px;background:#7c3aed;border-radius:2px"></div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      <div onclick="applyBandSelection(${exIdx},'${setKey}','${comboCSV}')" style="margin:0 0 6px;padding-left:26px;cursor:pointer">
+        <div style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#f3e8ff,#ede9fe);border:1px dashed #a855f7;color:#6b21a8;font-weight:700;font-size:12px;padding:5px 12px;border-radius:999px;box-shadow:0 1px 4px rgba(124,58,237,0.18)">
+          <span style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;opacity:0.8">use last</span>
+          <span style="font-family:monospace;font-size:13px">${comboTotal}lb</span>
+          <span style="font-size:11px;opacity:0.7">tap to apply</span>
+        </div>
+      </div>` : '';
     resistanceHTML = `
       <div style="margin-bottom:6px">
         <div style="font-size:10px;color:#7c3aed;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Band</div>
+        ${connectorRow}
         <div class="scroll-row" style="display:flex;gap:3px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
           ${BANDS.map(b => {
             const sel = selectedBands.includes(b.lb);
-            if (sel && !isExplicit) {
-              // auto-suggested from last session — prominent "LAST" chip above,
-              // bigger dashed button. Matches the weight/reps suggestion style.
+            // Per-band "LAST" chip is suppressed when the combo pill is showing
+            // (the pill already calls out the suggestion at the row level).
+            if (sel && !isExplicit && !showCombo) {
               return `
                 <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
                   <span style="font-size:8px;color:${b.color};letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">last</span>
@@ -2397,12 +2441,15 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
                 </div>`;
             }
             let style;
-            if (sel) {
+            if (sel && isExplicit) {
               style = `background:${b.color};color:${b.text};outline:2px solid ${b.color};box-shadow:0 1px 3px rgba(0,0,0,0.2);`;
+            } else if (sel && showCombo) {
+              // dashed-suggestion look so it's clear bands aren't locked in yet
+              style = `background:white;color:${b.color};border:2px dashed ${b.color};box-shadow:0 1px 3px ${b.color}22;`;
             } else {
               style = `background:white;color:${b.color};border:2px solid ${b.color};opacity:0.7;`;
             }
-            return `<button class="weight-btn" style="${style};font-size:11px;padding:4px 6px;min-width:0" onclick="toggleBand(${exIdx},'${setKey}',${b.lb})">
+            return `<button class="weight-btn" style="${style};font-size:11px;padding:4px 6px;min-width:44px" onclick="toggleBand(${exIdx},'${setKey}',${b.lb})">
               ${b.lb}lb
             </button>`;
           }).join("")}
@@ -2810,15 +2857,24 @@ function renderWorkout() {
 }
 
 function renderMotivationBanner() {
+  // The renderer runs on every tick (rest timer is 1Hz), so naively
+  // outputting an entry animation here causes the banner to "blink" every
+  // second. We detect whether the banner is already in the DOM (meaning
+  // this is a re-render, not a fresh appearance) and skip the animation
+  // in that case. The CSS rules are emitted unconditionally so first
+  // appearances keep their pop-in.
   const finishMsg = state.activeFinishMotivation;
   if (finishMsg) {
+    const alreadyShown = !!document.getElementById('finish-motiv-banner');
+    const animOuter = alreadyShown ? '' : 'animation:motiv-fade-in 220ms ease-out;';
+    const animInner = alreadyShown ? '' : 'animation:motiv-pop-in 320ms cubic-bezier(.2,.9,.3,1.18);';
     return `
-      <div onclick="dismissFinishMotivation()" style="
+      <div id="finish-motiv-banner" onclick="dismissFinishMotivation()" style="
         position:fixed;left:0;right:0;bottom:0;top:0;
         background:rgba(15,23,42,0.55);
         z-index:9100;
         display:flex;align-items:center;justify-content:center;
-        animation:motiv-fade-in 220ms ease-out;
+        ${animOuter}
       ">
         <div onclick="event.stopPropagation()" style="
           width:100%;max-width:560px;margin:0 12px;
@@ -2827,7 +2883,7 @@ function renderMotivationBanner() {
           border-radius:18px;
           padding:22px 20px 16px;
           box-shadow:0 22px 60px rgba(15,23,42,0.45);
-          animation:motiv-pop-in 320ms cubic-bezier(.2,.9,.3,1.18);
+          ${animInner}
         ">
           <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:14px">
             <span style="font-size:26px;flex-shrink:0;line-height:1">💪</span>
@@ -2856,13 +2912,16 @@ function renderMotivationBanner() {
   const am = state.activeMotivation;
   if (!am || !am.msg) return '';
   const exName = state.workout?.exercises?.[am.exIdx]?.name || '';
+  const alreadyShown = !!document.getElementById('motiv-banner');
+  const animOuter = alreadyShown ? '' : 'animation:motiv-fade-in 220ms ease-out;';
+  const animInner = alreadyShown ? '' : 'animation:motiv-slide-up 280ms cubic-bezier(.2,.9,.3,1.15);';
   return `
-    <div onclick="dismissMotivation()" style="
+    <div id="motiv-banner" onclick="dismissMotivation()" style="
       position:fixed;left:0;right:0;bottom:0;top:0;
       background:rgba(15,23,42,0.45);
       z-index:9000;
       display:flex;align-items:flex-end;justify-content:center;
-      animation:motiv-fade-in 220ms ease-out;
+      ${animOuter}
     ">
       <div onclick="event.stopPropagation()" style="
         width:100%;max-width:560px;margin:0 12px 18px;
@@ -2871,7 +2930,7 @@ function renderMotivationBanner() {
         border-radius:16px;
         padding:18px 18px 14px;
         box-shadow:0 18px 50px rgba(15,23,42,0.35);
-        animation:motiv-slide-up 280ms cubic-bezier(.2,.9,.3,1.15);
+        ${animInner}
       ">
         <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
           <span style="font-size:22px;flex-shrink:0;line-height:1">✨</span>
