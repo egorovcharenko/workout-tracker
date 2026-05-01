@@ -754,7 +754,7 @@ async function loadSessionData(workoutName) {
       state.workout.exercises.forEach((ex, exIdx) => {
         const msg = motivationsJson[ex.name];
         if (msg) {
-          state.motivations[`${state.sessionId}-${exIdx}`] = msg;
+          state.motivations[String(exIdx)] = msg;
         }
       });
       console.log(`[MOTIVATE] Hydrated ${Object.keys(motivationsJson).length} motivations for session ${state.sessionId}`);
@@ -1310,13 +1310,14 @@ function setFlash(layer, x, y) {
 // in state.motivations so the exercise summary can render it.
 async function requestMotivation(exIdx) {
   const ex = state.workout.exercises[exIdx];
-  const sid = state.sessionId || 'tmp';
-  const cacheKey = `${sid}-${exIdx}`;
+  const cacheKey = String(exIdx);
   if (!state.motivations) state.motivations = {};
   if (!state.motivationsLoading) state.motivationsLoading = {};
-  if (state.motivations[cacheKey] !== undefined) return;     // already done (or null = no API key)
+  // Allow retry when previous attempt returned null (no API key, transient err).
+  if (state.motivations[cacheKey]) return;                   // have a real message already
   if (state.motivationsLoading[cacheKey]) return;            // in flight
   state.motivationsLoading[cacheKey] = true;
+  console.log('[MOTIVATE] requesting for exIdx=' + exIdx + ' (' + ex.name + ')');
 
   // Build current-session payload for this exercise (incl. any sub-exercises)
   const subs = ex.supersetExercises || [{ name: ex.name, ...ex }];
@@ -1381,6 +1382,7 @@ function startWorkout(w) {
   state.screen = "workout"; state.workout = w; state.completed = {}; state.weights = {}; state.reps = {};
   state.elapsed = 0; state.running = false; state.saved = false; state.showGif = {};
   state.sessionId = null; state.lastSaved = null;
+  state.motivations = {}; state.motivationsLoading = {};
   history.replaceState(null, '', '#' + w.id);
   render();
   loadSessionData(w.name);
@@ -2352,7 +2354,7 @@ function renderWorkout() {
     // Triggers fire from logReps()/toggleWarmup() on user action — never on
     // page reload. requestMotivation is still called from those entrypoints
     // when an exercise transitions to fully-done.
-    const motivKey = `${state.sessionId || 'tmp'}-${exIdx}`;
+    const motivKey = String(exIdx);
     const motivMsg = state.motivations?.[motivKey];
     const motivLoading = state.motivationsLoading?.[motivKey];
     const motivHTML = exDone && (motivMsg || motivLoading) ? `
