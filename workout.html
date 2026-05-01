@@ -431,11 +431,27 @@ function getSetWeight(exIdx, setKey) {
 // Only looks within the SAME exercise — previous sets, warmup, or last session
 function getHintWeight(exIdx, setKey) {
   // For working sets: check previous working set in THIS session first
-  // (but NOT warmup — warmup weight is too light to hint working sets)
+  // (but NOT warmup — warmup weight is too light to hint working sets).
+  // For supersets we must skip back to the previous set of the SAME
+  // sub-exercise — set N-1 belongs to a different sub-exercise and would
+  // give a misleading hint (e.g. Pushdowns' 5lb bleeding into Curls).
   if (typeof setKey === "number" && setKey > 0) {
-    const prev = getSetWeight(exIdx, setKey - 1);
-    if (prev != null) return prev;
-    return getHintWeight(exIdx, setKey - 1);
+    const ex = state.workout?.exercises?.[exIdx];
+    if (ex && ex.supersetExercises) {
+      const subs = ex.supersetExercises;
+      const subIdx = setKey % subs.length;
+      // Walk back in same-sub steps (subs.length apart).
+      for (let prior = setKey - subs.length; prior >= 0; prior -= subs.length) {
+        if (prior % subs.length !== subIdx) continue; // safety
+        const prev = getSetWeight(exIdx, prior);
+        if (prev != null) return prev;
+      }
+      // Fall through to last-session lookup below if no in-session match.
+    } else {
+      const prev = getSetWeight(exIdx, setKey - 1);
+      if (prev != null) return prev;
+      return getHintWeight(exIdx, setKey - 1);
+    }
   }
   // For working set 0 (and all other cases): go straight to last session data
   if (state.lastSession && state.workout) {
@@ -2085,45 +2101,56 @@ function undoSet(exIdx, setKey) {
   render();
 }
 
+// Walk every completed set in the current session that belongs to the
+// given exercise NAME (matches top-level exercises AND superset
+// sub-exercises). Yields {weight, reps} for each. Used by the PR/stat
+// helpers below.
+function _iterCurrentSessionSets(exerciseName, fn) {
+  if (!state.workout) return;
+  state.workout.exercises.forEach((ex, exIdx) => {
+    const isSuperset = !!ex.supersetExercises;
+    const isMatch = ex.name === exerciseName;
+    const subIdxMatch = isSuperset
+      ? ex.supersetExercises.findIndex(s => s.name === exerciseName)
+      : -1;
+    if (!isMatch && subIdxMatch < 0) return;
+    for (let i = 0; i < getSetCount(exIdx); i++) {
+      if (!state.completed[`${exIdx}-${i}`]) continue;
+      // For supersets, only count sets that belong to the matching sub.
+      if (isSuperset && subIdxMatch >= 0) {
+        if (i % ex.supersetExercises.length !== subIdxMatch) continue;
+      }
+      const w = state.weights[`${exIdx}-${i}`] || 0;
+      const r = parseInt(state.reps[`${exIdx}-${i}`]) || 0;
+      if (r <= 0) continue;
+      fn({ w, r });
+    }
+  });
+}
+
 function currentSessionOrm(exerciseName) {
-  // Calculate best 1RM from current session's completed working sets for this exercise
-  const exIdx = state.workout ? state.workout.exercises.findIndex(e => e.name === exerciseName) : -1;
-  if (exIdx < 0) return 0;
-  const ex = state.workout.exercises[exIdx];
   let best = 0;
-  for (let i = 0; i < getSetCount(exIdx); i++) {
-    if (!state.completed[`${exIdx}-${i}`]) continue;
-    const w = state.weights[`${exIdx}-${i}`];
-    const r = parseInt(state.reps[`${exIdx}-${i}`]) || 0;
-    if (!w || r <= 0) continue;
+  _iterCurrentSessionSets(exerciseName, ({ w, r }) => {
+    if (!w) return;
     const orm = r > 1 ? w * (1 + r / 30) : w;
     if (orm > best) best = orm;
-  }
+  });
   return Math.round(best * 10) / 10;
 }
 
 function currentSessionBestReps(exerciseName) {
-  const exIdx = state.workout ? state.workout.exercises.findIndex(e => e.name === exerciseName) : -1;
-  if (exIdx < 0) return 0;
   let best = 0;
-  for (let i = 0; i < getSetCount(exIdx); i++) {
-    if (!state.completed[`${exIdx}-${i}`]) continue;
-    const r = parseInt(state.reps[`${exIdx}-${i}`]) || 0;
+  _iterCurrentSessionSets(exerciseName, ({ r }) => {
     if (r > best) best = r;
-  }
+  });
   return best;
 }
 
 function currentSessionMaxWeight(exerciseName) {
-  const exIdx = state.workout ? state.workout.exercises.findIndex(e => e.name === exerciseName) : -1;
-  if (exIdx < 0) return 0;
   let best = 0;
-  for (let i = 0; i < getSetCount(exIdx); i++) {
-    if (!state.completed[`${exIdx}-${i}`]) continue;
-    const w = state.weights[`${exIdx}-${i}`] || 0;
-    const r = parseInt(state.reps[`${exIdx}-${i}`]) || 0;
+  _iterCurrentSessionSets(exerciseName, ({ w, r }) => {
     if (w > 0 && r > 0 && w > best) best = w;
-  }
+  });
   return best;
 }
 
