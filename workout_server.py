@@ -84,6 +84,15 @@ def get_db():
             completed INTEGER DEFAULT 1
         )''')
         conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS bands_json TEXT")
+        conn.execute('''CREATE TABLE IF NOT EXISTS motivations (
+            id SERIAL PRIMARY KEY,
+            session_id INTEGER NOT NULL REFERENCES sessions(id),
+            exercise TEXT NOT NULL,
+            message TEXT NOT NULL,
+            model TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )''')
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_motivations_session ON motivations(session_id)")
         conn.commit()
         return conn
 
@@ -115,6 +124,16 @@ def get_db():
         conn.commit()
     except sqlite3.OperationalError:
         pass
+    conn.execute('''CREATE TABLE IF NOT EXISTS motivations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        exercise TEXT NOT NULL,
+        message TEXT NOT NULL,
+        model TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (session_id) REFERENCES sessions(id)
+    )''')
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_motivations_session ON motivations(session_id)")
     conn.commit()
     return conn
 
@@ -316,6 +335,9 @@ def get_today_session(workout_name, today=None):
     return session
 
 
+MOTIVATE_MODEL = "claude-sonnet-4-6"
+
+
 def call_claude_motivate(payload):
     """
     Call Claude Sonnet to generate a 1-2 sentence post-exercise motivation.
@@ -325,13 +347,15 @@ def call_claude_motivate(payload):
         current: [{set_number,reps,weight_lb}, ...],   # this session's sets
         previous: [{date, sets:[...]}],                # last 1-3 sessions for trend
     }
-    Returns string. Uses pure stdlib so no extra Python deps on Vercel.
+    Returns (message, model_used) tuple, or (None, None) on failure / no-key.
+    Uses pure stdlib so no extra Python deps on Vercel.
     """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        return None  # silent no-op if not configured
+        return (None, None)  # silent no-op if not configured
 
     import urllib.request
+    import urllib.error
 
     system = (
         "You are a concise, specific workout coach. After the user finishes an "
@@ -348,8 +372,8 @@ def call_claude_motivate(payload):
         "Write the message."
     )
     body = {
-        "model": "claude-sonnet-4-5",
-        "max_tokens": 120,
+        "model": MOTIVATE_MODEL,
+        "max_tokens": 150,
         "system": system,
         "messages": [{"role": "user", "content": user_prompt}],
     }
@@ -362,13 +386,63 @@ def call_claude_motivate(payload):
             "content-type": "application/json",
         },
     )
+    # One retry on 5xx; 9s timeout (Vercel hobby tier has 10s function limit).
+    last_err = None
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(req, timeout=9) as resp:
+                data = json.loads(resp.read())
+            return (data["content"][0]["text"].strip(), MOTIVATE_MODEL)
+        except urllib.error.HTTPError as e:
+            last_err = e
+            print(f"  [MOTIVATE] HTTP {e.code} on attempt {attempt + 1}: {e}")
+            if 500 <= e.code < 600 and attempt == 0:
+                continue  # retry once on 5xx
+            return (None, None)
+        except Exception as e:
+            last_err = e
+            print(f"  [MOTIVATE] Anthropic call failed on attempt {attempt + 1}: {e}")
+            return (None, None)
+    print(f"  [MOTIVATE] Gave up after retries: {last_err}")
+    return (None, None)
+
+
+def save_motivation(session_id, exercise, message, model):
+    if not session_id or not message:
+        return
+    conn = get_db()
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
-        return data["content"][0]["text"].strip()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO motivations (session_id, exercise, message, model) VALUES (?, ?, ?, ?)",
+            (session_id, exercise, message, model),
+        )
+        conn.commit()
     except Exception as e:
-        print(f"  [MOTIVATE] Anthropic call failed: {e}")
-        return None
+        print(f"  [MOTIVATE] Failed to persist motivation: {e}")
+    finally:
+        conn.close()
+
+
+def get_motivations_for_session(session_id):
+    """Returns {exercise_name: latest_message} for the given session."""
+    if not session_id:
+        return {}
+    conn = get_db()
+    try:
+        c = conn.cursor()
+        c.execute(
+            "SELECT exercise, message FROM motivations WHERE session_id = ? ORDER BY id ASC",
+            (session_id,),
+        )
+        # Latest write wins for a given exercise (ORDER BY id ASC + dict overwrite).
+        out = {}
+        for r in c.fetchall():
+            row = dict(r)
+            out[row["exercise"]] = row["message"]
+        return out
+    finally:
+        conn.close()
 
 
 # Read the HTML file
@@ -438,6 +512,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(json.dumps(data, default=str).encode())
+        elif parsed.path == "/api/motivations":
+            params = urllib.parse.parse_qs(parsed.query)
+            try:
+                sid = int(params.get("session_id", ["0"])[0])
+            except (ValueError, TypeError):
+                sid = 0
+            data = get_motivations_for_session(sid) if sid else {}
+            print(f"  [MOTIVATIONS] session_id={sid} -> {len(data)} entries")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(data, default=str).encode())
         else:
             self.send_response(404)
             self.end_headers()
@@ -448,13 +535,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 length = int(self.headers.get("Content-Length", 0))
                 raw = self.rfile.read(length)
                 body = json.loads(raw)
-                msg = call_claude_motivate(body)
-                print(f"  [MOTIVATE] {body.get('exercise')!r} -> {msg!r}")
+                msg, model_used = call_claude_motivate(body)
+                print(f"  [MOTIVATE] {body.get('exercise')!r} ({model_used}) -> {msg!r}")
+                if msg:
+                    save_motivation(body.get("session_id"), body.get("exercise"), msg, model_used)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
-                self.wfile.write(json.dumps({"message": msg}).encode())
+                self.wfile.write(json.dumps({"message": msg, "model": model_used}).encode())
             except Exception as e:
                 print(f"  [MOTIVATE] Error: {e}")
                 self.send_response(500)

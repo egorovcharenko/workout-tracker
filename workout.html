@@ -729,10 +729,14 @@ async function loadSessionData(workoutName) {
         return fallback;
       }
     }
-    const [lastJson, hintsJson, ormData] = await Promise.all([
+    const motivationsUrl = state.sessionId
+      ? `/api/motivations?session_id=${state.sessionId}`
+      : null;
+    const [lastJson, hintsJson, ormData, motivationsJson] = await Promise.all([
       safeFetchJSON(`/api/last-session?workout=${encodeURIComponent(workoutName)}`, {}),
       safeFetchJSON("/api/exercise-hints", {}),
       safeFetchJSON("/api/1rm-history", { orm: {}, reps: {}, vol: {} }),
+      motivationsUrl ? safeFetchJSON(motivationsUrl, {}) : Promise.resolve({}),
     ]);
     state.lastSession = lastJson || {};
     state.exerciseHints = hintsJson || {};
@@ -740,6 +744,21 @@ async function loadSessionData(workoutName) {
     state.repsHistory = ormData.reps || {};
     state.volHistory = ormData.vol || {};
     state.wtHistory = ormData.wt || {};
+
+    // Hydrate persisted motivations: backend returns { exerciseName: message, ... }
+    // We need to convert that into the state.motivations cache key format
+    // `${sessionId}-${exIdx}` keyed by exercise position in the current workout.
+    if (!state.motivations) state.motivations = {};
+    if (!state.motivationsLoading) state.motivationsLoading = {};
+    if (state.sessionId && motivationsJson && Object.keys(motivationsJson).length) {
+      state.workout.exercises.forEach((ex, exIdx) => {
+        const msg = motivationsJson[ex.name];
+        if (msg) {
+          state.motivations[`${state.sessionId}-${exIdx}`] = msg;
+        }
+      });
+      console.log(`[MOTIVATE] Hydrated ${Object.keys(motivationsJson).length} motivations for session ${state.sessionId}`);
+    }
 
     // Merge: same-workout session takes priority, cross-workout fills gaps
     const merged = { ...state.exerciseHints, ...state.lastSession };
@@ -1345,7 +1364,7 @@ async function requestMotivation(exIdx) {
     const res = await fetch('/api/motivate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ exercise: ex.name, muscles: [...new Set(muscles)], current, previous }),
+      body: JSON.stringify({ session_id: state.sessionId, exercise: ex.name, muscles: [...new Set(muscles)], current, previous }),
     });
     const data = await res.json();
     state.motivations[cacheKey] = data.message || null;
