@@ -1618,8 +1618,8 @@ async function requestMotivation(exIdx) {
     });
     const data = await res.json();
     state.motivations[cacheKey] = data.message || null;
-    // Surface as a sticky banner that stays until user dismisses it.
-    if (data.message) state.activeMotivation = { exIdx, msg: data.message };
+    // Note-only — message is rendered inline on the collapsed exercise card.
+    // No popup banner.
   } catch (e) {
     console.warn('[MOTIVATE]', e);
     state.motivations[cacheKey] = null;
@@ -3044,7 +3044,7 @@ function renderWorkout() {
     const motivMsg = state.motivations?.[motivKey];
     const motivLoading = state.motivationsLoading?.[motivKey];
     const motivHTML = exDone && (motivMsg || motivLoading) ? `
-      <div ${motivMsg ? `onclick="showMotivation(${exIdx})"` : ''} style="margin-top:10px;padding:10px 12px;background:linear-gradient(135deg,#ede9fe,#dbeafe);border-radius:8px;display:flex;align-items:flex-start;gap:8px;${motivMsg ? 'cursor:pointer' : ''}">
+      <div style="margin-top:10px;padding:10px 12px;background:linear-gradient(135deg,#ede9fe,#dbeafe);border-radius:8px;display:flex;align-items:flex-start;gap:8px">
         <span style="font-size:14px;flex-shrink:0">✨</span>
         <span style="font-size:12px;color:#4c1d95;line-height:1.45;font-weight:500">${motivLoading && !motivMsg ? '<span style="opacity:0.6">thinking…</span>' : motivMsg}</span>
       </div>` : '';
@@ -3446,48 +3446,9 @@ function renderMotivationBanner() {
       </style>
     `;
   }
-  const am = state.activeMotivation;
-  if (!am || !am.msg) return '';
-  const exName = state.workout?.exercises?.[am.exIdx]?.name || '';
-  const alreadyShown = !!document.getElementById('motiv-banner');
-  const animOuter = alreadyShown ? '' : 'animation:motiv-fade-in 220ms ease-out;';
-  const animInner = alreadyShown ? '' : 'animation:motiv-slide-up 280ms cubic-bezier(.2,.9,.3,1.15);';
-  return `
-    <div id="motiv-banner" data-noinvert onclick="dismissMotivation()" style="
-      position:fixed;left:0;right:0;bottom:0;top:0;
-      background:rgba(15,23,42,0.45);
-      z-index:9000;
-      display:flex;align-items:flex-end;justify-content:center;
-      ${animOuter}
-    ">
-      <div data-noinvert onclick="event.stopPropagation()" style="
-        width:100%;max-width:560px;margin:0 12px 18px;
-        background:linear-gradient(135deg,#ede9fe,#dbeafe);
-        border:1px solid #c7d2fe;
-        border-radius:16px;
-        padding:18px 18px 14px;
-        box-shadow:0 18px 50px rgba(15,23,42,0.35);
-        ${animInner}
-      ">
-        <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
-          <span style="font-size:22px;flex-shrink:0;line-height:1">✨</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#6d28d9;margin-bottom:4px">${exName} done</div>
-            <div style="font-size:16px;line-height:1.5;color:#1e1b4b;font-weight:500">${am.msg}</div>
-          </div>
-        </div>
-        <button onclick="dismissMotivation()" style="
-          width:100%;background:#4c1d95;color:white;border:none;
-          padding:10px 14px;border-radius:10px;font-size:14px;font-weight:600;
-          cursor:pointer;
-        ">Got it</button>
-      </div>
-    </div>
-    <style>
-      @keyframes motiv-fade-in { from { opacity: 0 } to { opacity: 1 } }
-      @keyframes motiv-slide-up { from { transform: translateY(40px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
-    </style>
-  `;
+  // Per-exercise motivation no longer pops up. The message lives inline on
+  // the collapsed exercise card — see motivHTML in renderWorkout().
+  return '';
 }
 
 function renderCalendar() {
