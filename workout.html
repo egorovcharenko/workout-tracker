@@ -1548,25 +1548,65 @@ async function requestMotivation(exIdx) {
   // Compute explicit PR signals per sub-exercise so the AI can celebrate
   // them directly instead of having to infer from raw set lists.
   const today = (typeof localDate === 'function') ? localDate() : new Date().toISOString().slice(0, 10);
+  const todayMs = Date.parse(today + 'T00:00:00Z');
   const prs = subNames.map(subName => {
     const ormHist = ((state.ormHistory || {})[subName] || []).filter(d => d.date !== today);
     const wtHist = ((state.wtHistory || {})[subName] || []).filter(d => d.date !== today);
     const repsHist = ((state.repsHistory || {})[subName] || []).filter(d => d.date !== today);
-    // Backend returns metric-specific keys: {date, orm}, {date, wt}, {date, reps}.
-    // Reading d.value (which doesn't exist) made every previous max collapse
-    // to 0, falsely flagging every set as a PR.
+    const volHist = ((state.volHistory || {})[subName] || []).filter(d => d.date !== today);
+    // Backend returns metric-specific keys: {date, orm}, {date, wt}, {date, reps}, {date, vol}.
     const prevMaxOrm = ormHist.length ? Math.max(...ormHist.map(d => +d.orm || 0)) : 0;
     const prevMaxWt = wtHist.length ? Math.max(...wtHist.map(d => +d.wt || 0)) : 0;
     const prevMaxReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps || 0)) : 0;
     const curOrm = currentSessionOrm(subName) || 0;
     const curWt = currentSessionMaxWeight(subName) || 0;
     const curReps = currentSessionBestReps(subName) || 0;
+    const curVol = currentSessionVolume(subName) || 0;
+
+    // Build a unified per-date history timeseries — newest LAST so the AI
+    // reads it as a chronological story (X 6 weeks ago → Y last session →
+    // today). Cap to last 12 sessions to keep the prompt compact.
+    const byDate = {};
+    ormHist.forEach(d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).orm = +d.orm || 0; });
+    wtHist.forEach(d  => { (byDate[d.date] = byDate[d.date] || { date: d.date }).wt  = +d.wt  || 0; });
+    repsHist.forEach(d=> { (byDate[d.date] = byDate[d.date] || { date: d.date }).reps= +d.reps|| 0; });
+    volHist.forEach(d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).vol = +d.vol || 0; });
+    const history = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+    const trimmed = history.slice(-12);
+
+    // Trend / consistency signals so the AI can celebrate non-PR wins.
+    const lastSessionDate = history.length ? history[history.length - 1].date : null;
+    const daysSinceLast = lastSessionDate
+      ? Math.round((todayMs - Date.parse(lastSessionDate + 'T00:00:00Z')) / 86400000)
+      : null;
+    // 4-week (28-day) average vs prior 4-week avg → trend percentage on volume.
+    const recent = history.filter(h => todayMs - Date.parse(h.date + 'T00:00:00Z') <= 28 * 86400000);
+    const prior  = history.filter(h => {
+      const ago = todayMs - Date.parse(h.date + 'T00:00:00Z');
+      return ago > 28 * 86400000 && ago <= 56 * 86400000;
+    });
+    const avg = arr => arr.length ? arr.reduce((s, x) => s + (+x.vol || 0), 0) / arr.length : 0;
+    const recentAvg = avg(recent), priorAvg = avg(prior);
+    const volTrendPct = priorAvg > 0 ? Math.round((recentAvg - priorAvg) / priorAvg * 100) : null;
+
+    // Reps trend at the modal heaviest weight: are you putting up more reps
+    // at the same load over time? A common silent win that isn't a PR.
+    const sameWtReps = curWt > 0 ? history.filter(h => h.wt === curWt).map(h => h.reps).filter(r => r > 0) : [];
+    const repsAtCurWtImproved = sameWtReps.length >= 2 && curReps > Math.max(...sameWtReps);
+
     return {
       sub: subName,
       current_orm: curOrm, previous_best_orm: prevMaxOrm, is_orm_pr: !!(curOrm && curOrm > prevMaxOrm),
       current_max_weight: curWt, previous_best_weight: prevMaxWt, is_weight_pr: !!(curWt && curWt > prevMaxWt),
       current_max_reps: curReps, previous_best_reps: prevMaxReps, is_reps_pr: !!(curReps && curReps > prevMaxReps),
-      sessions_in_history: ormHist.length,
+      current_volume: curVol,
+      sessions_in_history: history.length,
+      days_since_last_session: daysSinceLast,
+      returning_after_layoff: daysSinceLast != null && daysSinceLast >= 14,
+      vol_trend_pct_4wk_vs_prior: volTrendPct,
+      reps_at_current_weight_improved: repsAtCurWtImproved,
+      tied_previous_best_orm: !!(curOrm && prevMaxOrm && curOrm === prevMaxOrm),
+      history_timeseries: trimmed,
     };
   });
 
@@ -1814,6 +1854,147 @@ function renderMuscleMap() {
             <path d="M30,125 L28,155 Q27,160 33,160 L40,160 L41,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
             <path d="M59,125 L60,160 L67,160 Q73,160 72,155 L70,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
             <!-- Muscle zones - back -->
+            ${muscleRect("rear_delts", 28, 28, 17, 12, 3)}
+            ${muscleRect("rear_delts", 55, 28, 17, 12, 3)}
+            ${muscleRect("upper_back", 36, 33, 28, 13, 4)}
+            ${muscleRect("triceps", 22, 44, 13, 18, 3)}
+            ${muscleRect("triceps", 65, 44, 13, 18, 3)}
+            ${muscleRect("lats", 34, 48, 32, 16, 4)}
+            ${muscleRect("lower_back", 38, 66, 24, 14, 4)}
+            ${muscleRect("glutes", 34, 82, 32, 16, 4)}
+            ${muscleRect("hamstrings", 32, 100, 15, 24, 4)}
+            ${muscleRect("hamstrings", 53, 100, 15, 24, 4)}
+            ${muscleRect("calves", 32, 130, 13, 22, 4)}
+            ${muscleRect("calves", 55, 130, 13, 22, 4)}
+          </svg>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">${legendHTML}</div>
+    </div>
+  `;
+}
+
+// Walk all completed sets and accumulate volume per muscle. Primary muscles
+// get full set volume (weight × reps); secondary muscles get half. Warmup is
+// counted at half weight × full reps to reflect its lighter contribution.
+function computeSessionVolumePerMuscle() {
+  if (!state.workout) return {};
+  const vol = {};
+  const add = (mapping, setVol) => {
+    if (!mapping) return;
+    (mapping.primary || []).forEach(m => { vol[m] = (vol[m] || 0) + setVol; });
+    (mapping.secondary || []).forEach(m => { vol[m] = (vol[m] || 0) + setVol * 0.5; });
+  };
+  state.workout.exercises.forEach((ex, exIdx) => {
+    const subs = ex.supersetExercises;
+    // Working sets
+    for (let i = 0; i < getSetCount(exIdx); i++) {
+      if (!state.completed[`${exIdx}-${i}`]) continue;
+      const w = state.weights[`${exIdx}-${i}`] || 0;
+      const r = parseInt(state.reps[`${exIdx}-${i}`]) || 0;
+      if (w <= 0 || r <= 0) continue;
+      const exName = subs ? subs[i % subs.length].name : ex.name;
+      add(EXERCISE_MUSCLES[exName], w * r);
+    }
+    // Warmup (top-level only, counted at 0.5x to discount lighter load)
+    if (state.completed[`${exIdx}-warmup`]) {
+      const w = state.weights[`${exIdx}-warmup`] || 0;
+      const r = parseInt(state.reps[`${exIdx}-warmup`]) || 0;
+      if (w > 0 && r > 0) add(EXERCISE_MUSCLES[ex.name], w * r * 0.5);
+    }
+  });
+  return vol;
+}
+
+function _volColor(pct) {
+  // 5-step heat scale: cool blue (light) → green → orange → red.
+  if (pct === 0)  return { bg: "#f3f4f6", fg: "#9ca3af" };  // untouched
+  if (pct < 0.20) return { bg: "#dbeafe", fg: "#1d4ed8" };  // light load
+  if (pct < 0.50) return { bg: "#bbf7d0", fg: "#15803d" };  // medium
+  if (pct < 0.80) return { bg: "#fed7aa", fg: "#c2410c" };  // heavy
+  return                 { bg: "#fca5a5", fg: "#991b1b" };  // primary mover
+}
+
+function renderSessionMuscleMap() {
+  const vol = computeSessionVolumePerMuscle();
+  const maxVol = Math.max(0, ...Object.values(vol));
+  if (maxVol === 0) return '';
+
+  function muscleRect(id, x, y, w, h, rx) {
+    const v = vol[id] || 0;
+    const pct = v / maxVol;
+    const c = _volColor(pct);
+    const info = MUSCLE_GROUPS[id];
+    const tip = v > 0 ? `${Math.round(v)}` : '—';
+    return `
+      <g>
+        <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx || 4}" fill="${c.bg}" stroke="${c.fg}" stroke-width="1.2" opacity="0.88"/>
+        <text x="${x + w/2}" y="${y + h/2 + 1}" text-anchor="middle" dominant-baseline="middle" font-size="7" font-weight="600" fill="${c.fg}">${info.label}</text>
+        <text x="${x + w/2}" y="${y + h - 2}" text-anchor="middle" font-size="5" fill="${c.fg}" opacity="0.7">${tip}</text>
+      </g>
+    `;
+  }
+
+  const legendItems = [
+    { color: "#f3f4f6", border: "#9ca3af", label: "—" },
+    { color: "#dbeafe", border: "#1d4ed8", label: "light" },
+    { color: "#bbf7d0", border: "#15803d", label: "med" },
+    { color: "#fed7aa", border: "#c2410c", label: "heavy" },
+    { color: "#fca5a5", border: "#991b1b", label: "max" },
+  ];
+  const legendHTML = legendItems.map(l => `
+    <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#6b7280">
+      <span style="width:10px;height:10px;border-radius:2px;background:${l.color};border:1px solid ${l.border};display:inline-block"></span>${l.label}
+    </span>
+  `).join("");
+
+  // Top-3 ranked muscles by volume — surfaces the dominant muscles even if
+  // you can't read the labels in the small SVG.
+  const ranked = Object.entries(vol).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const rankedHTML = ranked.map(([m, v], i) => {
+    const info = MUSCLE_GROUPS[m];
+    const pct = v / maxVol;
+    const c = _volColor(pct);
+    return `<span style="display:inline-flex;align-items:center;gap:5px;background:${c.bg};color:${c.fg};border:1px solid ${c.fg};font-size:11px;font-weight:600;padding:2px 8px;border-radius:9999px">
+      <span style="opacity:0.7;font-size:9px">${i + 1}</span>${info?.label || m}
+      <span style="opacity:0.7;font-family:monospace;font-size:10px">${Math.round(v)}lb</span>
+    </span>`;
+  }).join('');
+
+  return `
+    <div class="card" style="padding:14px 16px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <h3 style="font-size:13px;font-weight:600;color:#111827;margin:0">Today's Load Map</h3>
+        <span style="font-size:10px;color:#9ca3af">volume = weight × reps</span>
+      </div>
+      ${ranked.length ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">${rankedHTML}</div>` : ''}
+      <div style="display:flex;justify-content:center;gap:8px;margin-bottom:6px">
+        <div style="text-align:center">
+          <p style="font-size:10px;color:#9ca3af;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Front</p>
+          <svg viewBox="0 0 100 170" width="130" height="220" style="display:block">
+            <ellipse cx="50" cy="14" rx="12" ry="13" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <path d="M35,28 Q30,30 26,40 L20,65 Q18,70 22,70 L32,60 L32,75 L30,120 Q29,125 34,125 L42,125 L44,90 L50,80 L56,90 L58,125 L66,125 Q71,125 70,120 L68,75 L68,60 L78,70 Q82,70 80,65 L74,40 Q70,30 65,28 Z" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <path d="M30,125 L28,155 Q27,160 33,160 L40,160 L41,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <path d="M59,125 L60,160 L67,160 Q73,160 72,155 L70,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            ${muscleRect("shoulders", 28, 28, 17, 14, 3)}
+            ${muscleRect("shoulders", 55, 28, 17, 14, 3)}
+            ${muscleRect("chest", 36, 38, 28, 16, 4)}
+            ${muscleRect("biceps", 22, 44, 13, 18, 3)}
+            ${muscleRect("biceps", 65, 44, 13, 18, 3)}
+            ${muscleRect("forearms", 20, 55, 11, 14, 3)}
+            ${muscleRect("forearms", 69, 55, 11, 14, 3)}
+            ${muscleRect("core", 38, 56, 24, 20, 4)}
+            ${muscleRect("quads", 32, 90, 15, 30, 4)}
+            ${muscleRect("quads", 53, 90, 15, 30, 4)}
+          </svg>
+        </div>
+        <div style="text-align:center">
+          <p style="font-size:10px;color:#9ca3af;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Back</p>
+          <svg viewBox="0 0 100 170" width="130" height="220" style="display:block">
+            <ellipse cx="50" cy="14" rx="12" ry="13" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <path d="M35,28 Q30,30 26,40 L20,65 Q18,70 22,70 L32,60 L32,75 L30,120 Q29,125 34,125 L42,125 L44,90 L50,80 L56,90 L58,125 L66,125 Q71,125 70,120 L68,75 L68,60 L78,70 Q82,70 80,65 L74,40 Q70,30 65,28 Z" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <path d="M30,125 L28,155 Q27,160 33,160 L40,160 L41,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+            <path d="M59,125 L60,160 L67,160 Q73,160 72,155 L70,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
             ${muscleRect("rear_delts", 28, 28, 17, 12, 3)}
             ${muscleRect("rear_delts", 55, 28, 17, 12, 3)}
             ${muscleRect("upper_back", 36, 33, 28, 13, 4)}
@@ -3166,6 +3347,7 @@ function renderWorkout() {
           <p style="font-size:14px;color:#6b7280;margin:4px 0 0">Time: ${formatTime(state.elapsed)}</p>
         </div>
         ${highlightsHTML}
+        ${renderSessionMuscleMap()}
         <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
           <p style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">Session Summary</p>
           ${summaryLines}
