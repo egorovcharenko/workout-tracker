@@ -175,14 +175,14 @@ const WORKOUTS = [
     exercises: [
       { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4", rest: 120 },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
-      { name: "Assisted Pull-Ups", sets: 3, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", superset: false, video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, rest: 120 },
+      { name: "Assisted Pull-Ups", sets: 3, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", superset: false, video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120 },
       { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
       { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
       { name: "Seated Overhead Press", sets: 2, reps: "8-10", notes: "Seated, controlled", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
       { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
         supersetExercises: [
           { name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
-          { name: "Dumbbell Hammer Curls", reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Neutral grip" },
+          { name: "Dumbbell Hammer Curls", reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Hammer grip default · toggle for variants", grips: ['hammer', 'supinated', 'reverse'] },
         ]},
     ],
     rest: 75,
@@ -203,7 +203,7 @@ const WORKOUTS = [
       { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
         supersetExercises: [
           { name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
-          { name: "Dumbbell Hammer Curls", reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Neutral grip" },
+          { name: "Dumbbell Hammer Curls", reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Hammer grip default · toggle for variants", grips: ['hammer', 'supinated', 'reverse'] },
         ]},
     ],
     rest: 75,
@@ -216,7 +216,7 @@ const WORKOUTS = [
     duration: "~15 min",
     exercises: [
       { name: "Overhead Dumbbell Press", sets: 3, reps: "6-10", notes: "Seated or standing", superset: false, video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
-      { name: "Dumbbell Bicep Curls", sets: 3, reps: "8-12", notes: "Superset with next", superset: "A", video: "https://www.youtube.com/shorts/MKWBV29S6c0" },
+      { name: "Dumbbell Bicep Curls", sets: 3, reps: "8-12", notes: "Superset with next", superset: "A", video: "https://www.youtube.com/shorts/MKWBV29S6c0", grips: ['supinated', 'hammer', 'reverse'] },
       { name: "Overhead Tricep Extension", sets: 3, reps: "10-15", notes: "Single DB, both hands", superset: "A", video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
     ],
     rest: 60,
@@ -403,16 +403,38 @@ function getGrip(exIdx, setKey) {
     }
   }
   if (grips[`${exIdx}-warmup`]) return grips[`${exIdx}-warmup`];
-  return 'neutral';
+  // Fall back to the first declared grip on the exercise (or 'neutral' if none).
+  const ex = state.workout?.exercises?.[exIdx];
+  const subEx = (typeof getSubExercise === 'function') ? getSubExercise(exIdx, setKey) : null;
+  const eff = subEx ? { ...ex, ...subEx } : ex;
+  return (eff?.grips && eff.grips[0]) || 'neutral';
 }
-const GRIP_OPTIONS = [
-  { id: 'neutral', label: 'Neutral', icon: '∥' },
-  { id: 'chinup',  label: 'Chin-Up', icon: '◡' },
-  { id: 'pullup',  label: 'Pull-Up', icon: '◠' },
-];
+// Global grip dictionary. Exercises declare which grips apply via a
+// `grips: ['id', 'id', ...]` array; the renderer looks each id up here.
+// `desc` shows up as a tooltip on the toggle button (HTML title attribute)
+// so you can quickly remember what each grip is best for.
+const GRIP_DEFS = {
+  // Pull-up grips (assist exercises)
+  neutral:   { label: 'Neutral',   icon: '∥', desc: 'Palms facing each other. Shoulder-friendliest. Balanced lats + biceps. Best starting grip while building strength.' },
+  chinup:    { label: 'Chin-Up',   icon: '◡', desc: 'Palms toward you (supinated). Easiest variation — biceps help more. Great for working up reps.' },
+  pullup:    { label: 'Pull-Up',   icon: '◠', desc: 'Palms away (pronated). Hardest variation. Most lat-dominant. Save for when you can do 8 clean chin-ups.' },
+  // Curl grips
+  hammer:    { label: 'Hammer',    icon: '∥', desc: 'Palms facing each other. Hits brachialis + forearms. Easiest on wrists. Builds thicker-looking arms from the side.' },
+  supinated: { label: 'Supinated', icon: '◡', desc: 'Palms up. Classic curl — peak biceps contraction. The "show muscle" variant.' },
+  reverse:   { label: 'Reverse',   icon: '◠', desc: 'Palms down. Targets brachialis + forearm extensors. Best for grip strength and forearm size. Use lighter weight.' },
+};
 function gripLabel(g) {
-  const opt = GRIP_OPTIONS.find(o => o.id === g);
-  return opt ? opt.label : 'Neutral';
+  return GRIP_DEFS[g]?.label || 'Neutral';
+}
+function getGripOptions(ex) {
+  // Resolve declared grip ids on this exercise to renderable {id,label,icon,desc}.
+  const ids = (ex && ex.grips) || [];
+  return ids.map(id => ({
+    id,
+    label: GRIP_DEFS[id]?.label || id,
+    icon:  GRIP_DEFS[id]?.icon  || '·',
+    desc:  GRIP_DEFS[id]?.desc  || '',
+  })).filter(o => o.label);
 }
 
 let timerInterval = null;
@@ -637,8 +659,8 @@ function removeLastSet(exIdx) {
 // Swappable exercise groups — any exercise can be swapped for others in its group
 const SWAP_GROUPS = [
   [
-    { name: "Dumbbell Bicep Curls", sets: 2, reps: "8-12", notes: "Finish strong", superset: false, video: "https://www.youtube.com/shorts/MKWBV29S6c0" },
-    { name: "Band Bicep Curls", sets: 2, reps: "12-15", notes: "Stand on band, curl handles up", superset: false, video: "https://www.youtube.com/shorts/5ACsDBt_sMQ", equipment: "band" },
+    { name: "Dumbbell Bicep Curls", sets: 2, reps: "8-12", notes: "Finish strong", superset: false, video: "https://www.youtube.com/shorts/MKWBV29S6c0", grips: ['supinated', 'hammer', 'reverse'] },
+    { name: "Band Bicep Curls", sets: 2, reps: "12-15", notes: "Stand on band, curl handles up", superset: false, video: "https://www.youtube.com/shorts/5ACsDBt_sMQ", equipment: "band", grips: ['supinated', 'hammer', 'reverse'] },
     { name: "Bench Dips", sets: 2, reps: "10-15", notes: "Hands on bench behind you, lower until 90°", superset: false, video: "https://www.youtube.com/shorts/0326dy_-CzM", bodyweight: true },
     { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", superset: false, video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
   ],
@@ -2845,6 +2867,44 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     weightDisplay = `<span style="font-size:11px;font-family:monospace;color:#93c5fd;border-bottom:1px dashed #93c5fd">${wHint}lb?</span>`;
   }
 
+  // Bodyweight pill (assist only): tap to edit. Available in both branches
+  // for assist-band exercises so it sits ABOVE whatever resistance picker
+  // shows up next.
+  const bodyweightPill = isAssist ? `
+    <div style="padding-left:26px;margin-bottom:5px">
+      <button onclick="promptBodyweight()" style="background:linear-gradient(135deg,#ecfeff,#cffafe);color:#0e7490;border:1px solid #67e8f9;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;cursor:pointer;font-family:monospace">
+        BW ${state.bodyweight || 175}lb
+        <span style="opacity:0.6;font-size:9px;margin-left:3px;font-weight:500">tap to edit</span>
+      </button>
+    </div>` : '';
+  // Grip toggle: shows for any exercise with `grips: [...]` declared.
+  // Assist exercises use cyan tint; everything else uses indigo so the
+  // toggle stays visually distinct from the band/weight pickers.
+  const gripOpts = getGripOptions(effectiveEx);
+  const hasGripToggle = gripOpts.length > 0;
+  const currentGrip = hasGripToggle ? getGrip(exIdx, setKey) : null;
+  const gripAccent = isAssist
+    ? { label: '#0891b2', selBg: '#0891b2', idleBorder: '#a5f3fc', idleColor: '#0e7490', glow: 'rgba(8,145,178,0.3)' }
+    : { label: '#6366f1', selBg: '#6366f1', idleBorder: '#c7d2fe', idleColor: '#4338ca', glow: 'rgba(99,102,241,0.3)' };
+  const gripToggle = hasGripToggle ? `
+    <div style="padding-left:26px;margin-bottom:6px">
+      <div style="font-size:10px;color:${gripAccent.label};font-weight:600;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.03em">Grip <span style="opacity:0.5;font-weight:400;text-transform:none;letter-spacing:0">· hover for details</span></div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">
+        ${gripOpts.map(g => {
+          const sel = currentGrip === g.id;
+          const style = sel
+            ? `background:${gripAccent.selBg};color:white;border:1px solid ${gripAccent.selBg};box-shadow:0 1px 3px ${gripAccent.glow}`
+            : `background:white;color:${gripAccent.idleColor};border:1px solid ${gripAccent.idleBorder};opacity:0.85`;
+          // Tooltip via title attribute — works on desktop hover and iOS long-press.
+          const tip = (g.desc || '').replace(/"/g, '&quot;');
+          return `<button title="${tip}" onclick="selectGrip(${exIdx},'${setKey}','${g.id}')" style="${style};font-size:11px;font-weight:600;padding:5px 11px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
+            <span style="font-size:13px;font-family:monospace;line-height:1">${g.icon}</span>
+            <span>${g.label}</span>
+          </button>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
   let resistanceHTML;
   if (isBW) {
     resistanceHTML = '';
@@ -2866,33 +2926,9 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     const sectionLabel = isAssist ? 'Assist Band' : 'Band';
     const sectionColor = isAssist ? '#0891b2' : '#7c3aed';
     const pillUseText = isAssist ? 'use last assist' : 'use last';
-    // Bodyweight pill (assist only): tap to edit. Sits ABOVE the band picker
-    // so it reads "BW − assist = effective" top to bottom.
-    const bodyweightPill = isAssist ? `
-      <div style="padding-left:26px;margin-bottom:5px">
-        <button onclick="promptBodyweight()" style="background:linear-gradient(135deg,#ecfeff,#cffafe);color:#0e7490;border:1px solid #67e8f9;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;cursor:pointer;font-family:monospace">
-          BW ${state.bodyweight || 175}lb
-          <span style="opacity:0.6;font-size:9px;margin-left:3px;font-weight:500">tap to edit</span>
-        </button>
-      </div>` : '';
-    // Grip toggle (assist only): 3-way pill row — Neutral / Chin-Up / Pull-Up.
-    const currentGrip = isAssist ? getGrip(exIdx, setKey) : null;
-    const gripToggle = isAssist ? `
-      <div style="padding-left:26px;margin-bottom:6px">
-        <div style="font-size:10px;color:#0891b2;font-weight:600;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.03em">Grip</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          ${GRIP_OPTIONS.map(g => {
-            const sel = currentGrip === g.id;
-            const style = sel
-              ? 'background:#0891b2;color:white;border:1px solid #0891b2;box-shadow:0 1px 3px rgba(8,145,178,0.3)'
-              : 'background:white;color:#0e7490;border:1px solid #a5f3fc;opacity:0.85';
-            return `<button onclick="selectGrip(${exIdx},'${setKey}','${g.id}')" style="${style};font-size:11px;font-weight:600;padding:5px 11px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
-              <span style="font-size:13px;font-family:monospace;line-height:1">${g.icon}</span>
-              <span>${g.label}</span>
-            </button>`;
-          }).join('')}
-        </div>
-      </div>` : '';
+    // bodyweightPill + gripToggle are computed earlier (above the if/else)
+    // so they can also render in the dumbbell branch when an exercise has
+    // grips declared but uses dumbbells (e.g. bicep curls).
     // Build the connector row that visually ties the suggested band columns
     // together. Sits BELOW the buttons so the reading order is: buttons →
     // bracket connecting them → pill to apply. End-caps extend UP toward the
@@ -2957,6 +2993,7 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       </div>`;
   } else {
     resistanceHTML = `
+      ${gripToggle}
       <div style="margin-bottom:6px">
         <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb)</div>
         <div class="scroll-row" style="display:flex;gap:4px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
