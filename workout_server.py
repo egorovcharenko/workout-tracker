@@ -315,19 +315,38 @@ def get_active_sessions(today=None):
     conn = get_db()
     c = conn.cursor()
     c.execute(
-        "SELECT id, workout_name, duration_sec FROM sessions WHERE date >= ? ORDER BY id DESC",
+        "SELECT id, workout_name, duration_sec, started_at FROM sessions WHERE date >= ? ORDER BY id DESC",
         (_yesterday(),),
     )
+    now = datetime.datetime.utcnow()
     sessions = []
     for row in c.fetchall():
         c2 = conn.cursor()
         c2.execute("SELECT COUNT(*) as cnt FROM sets WHERE session_id = ?", (row["id"],))
         cnt = c2.fetchone()["cnt"]
         if cnt > 0:
+            # Prefer live wall-clock from started_at over the persisted
+            # duration_sec snapshot. The snapshot is updated only on save and
+            # was historically polluted with negative values from the timezone
+            # parsing bug; recomputing here keeps the home tile honest.
+            started_at_raw = row["started_at"]
+            duration = row["duration_sec"] or 0
+            if started_at_raw is not None:
+                try:
+                    if isinstance(started_at_raw, str):
+                        s = started_at_raw.replace("Z", "").replace(" ", "T")
+                        started = datetime.datetime.fromisoformat(s)
+                    else:
+                        started = started_at_raw
+                        if started.tzinfo is not None:
+                            started = started.replace(tzinfo=None)
+                    duration = max(0, int((now - started).total_seconds()))
+                except Exception:
+                    pass
             sessions.append({
                 "id": row["id"],
                 "workout_name": row["workout_name"],
-                "duration_sec": row["duration_sec"],
+                "duration_sec": max(0, duration),
                 "sets_done": cnt,
             })
     conn.close()
