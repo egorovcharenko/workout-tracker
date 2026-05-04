@@ -336,6 +336,9 @@ let state = {
   // pull-ups) where effective load = bodyweight − sum(assist bands). Stored in
   // localStorage so it survives reloads and reopens.
   bodyweight: parseInt(localStorage.getItem('bodyweight')) || 175,
+  // Per-set grip choice for assist exercises. Persisted to localStorage scoped
+  // to (workout id × date). Hydrated in loadSessionData.
+  grip: {},
 };
 
 function setBodyweight(v) {
@@ -366,6 +369,50 @@ function setBodyweight(v) {
 function promptBodyweight() {
   const v = prompt('Bodyweight (lb)?', String(state.bodyweight));
   if (v != null && v !== '') setBodyweight(v);
+}
+
+// Grip choice for assist exercises (pull-ups). Stored per-set, persisted to
+// localStorage so it survives reloads. Not in the DB yet — add later if we
+// want grip-aware history/PRs.
+function _gripStorageKey() {
+  const today = new Date().toISOString().slice(0, 10);
+  return `gripState:${state.workout?.id || '_'}:${today}`;
+}
+function saveGripState() {
+  try { localStorage.setItem(_gripStorageKey(), JSON.stringify(state.grip || {})); } catch (e) {}
+}
+function loadGripState() {
+  try {
+    state.grip = JSON.parse(localStorage.getItem(_gripStorageKey()) || '{}');
+  } catch (e) { state.grip = {}; }
+}
+function selectGrip(exIdx, setKey, grip) {
+  if (!state.grip) state.grip = {};
+  state.grip[`${exIdx}-${setKey}`] = grip;
+  saveGripState();
+  render();
+}
+function getGrip(exIdx, setKey) {
+  const grips = state.grip || {};
+  const k = `${exIdx}-${setKey}`;
+  if (grips[k]) return grips[k];
+  // Inherit from most-recent prior set in this session.
+  if (typeof setKey === 'number') {
+    for (let i = setKey - 1; i >= 0; i--) {
+      if (grips[`${exIdx}-${i}`]) return grips[`${exIdx}-${i}`];
+    }
+  }
+  if (grips[`${exIdx}-warmup`]) return grips[`${exIdx}-warmup`];
+  return 'neutral';
+}
+const GRIP_OPTIONS = [
+  { id: 'neutral', label: 'Neutral', icon: '∥' },
+  { id: 'chinup',  label: 'Chin-Up', icon: '◡' },
+  { id: 'pullup',  label: 'Pull-Up', icon: '◠' },
+];
+function gripLabel(g) {
+  const opt = GRIP_OPTIONS.find(o => o.id === g);
+  return opt ? opt.label : 'Neutral';
 }
 
 let timerInterval = null;
@@ -726,6 +773,8 @@ async function loadSessionData(workoutName) {
       startTimer();
       // Restore an in-flight rest period from localStorage (if any).
       restoreRestState();
+      // Restore per-set grip choices for assist exercises.
+      loadGripState();
       // Auto-detect swapped exercises: if saved exercise isn't in template but is in a swap group, replace the template entry
       const savedNames = new Set(todayData.sets.map(s => s.exercise));
       savedNames.forEach(name => {
@@ -1503,9 +1552,12 @@ async function requestMotivation(exIdx) {
     const ormHist = ((state.ormHistory || {})[subName] || []).filter(d => d.date !== today);
     const wtHist = ((state.wtHistory || {})[subName] || []).filter(d => d.date !== today);
     const repsHist = ((state.repsHistory || {})[subName] || []).filter(d => d.date !== today);
-    const prevMaxOrm = ormHist.length ? Math.max(...ormHist.map(d => +d.value || 0)) : 0;
-    const prevMaxWt = wtHist.length ? Math.max(...wtHist.map(d => +d.value || 0)) : 0;
-    const prevMaxReps = repsHist.length ? Math.max(...repsHist.map(d => +d.value || 0)) : 0;
+    // Backend returns metric-specific keys: {date, orm}, {date, wt}, {date, reps}.
+    // Reading d.value (which doesn't exist) made every previous max collapse
+    // to 0, falsely flagging every set as a PR.
+    const prevMaxOrm = ormHist.length ? Math.max(...ormHist.map(d => +d.orm || 0)) : 0;
+    const prevMaxWt = wtHist.length ? Math.max(...wtHist.map(d => +d.wt || 0)) : 0;
+    const prevMaxReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps || 0)) : 0;
     const curOrm = currentSessionOrm(subName) || 0;
     const curWt = currentSessionMaxWeight(subName) || 0;
     const curReps = currentSessionBestReps(subName) || 0;
@@ -1564,9 +1616,9 @@ async function requestFinishMotivation(opts) {
     const ormHist = ((state.ormHistory || {})[subName] || []).filter(d => d.date !== today);
     const wtHist = ((state.wtHistory || {})[subName] || []).filter(d => d.date !== today);
     const repsHist = ((state.repsHistory || {})[subName] || []).filter(d => d.date !== today);
-    const prevMaxOrm = ormHist.length ? Math.max(...ormHist.map(d => +d.value || 0)) : 0;
-    const prevMaxWt = wtHist.length ? Math.max(...wtHist.map(d => +d.value || 0)) : 0;
-    const prevMaxReps = repsHist.length ? Math.max(...repsHist.map(d => +d.value || 0)) : 0;
+    const prevMaxOrm = ormHist.length ? Math.max(...ormHist.map(d => +d.orm || 0)) : 0;
+    const prevMaxWt = wtHist.length ? Math.max(...wtHist.map(d => +d.wt || 0)) : 0;
+    const prevMaxReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps || 0)) : 0;
     const curOrm = currentSessionOrm(subName) || 0;
     const curWt = currentSessionMaxWeight(subName) || 0;
     const curReps = currentSessionBestReps(subName) || 0;
@@ -1653,6 +1705,8 @@ function startWorkout(w) {
   state.motivations = {}; state.motivationsLoading = {}; state.activeMotivation = null;
   state.finishMotivation = null; state.finishMotivationLoading = false; state.activeFinishMotivation = null;
   state.warmupOff = {};
+  state.grip = {};
+  loadGripState();
   // Apply data-driven `noWarmup: true` defaults — auto-skip warmup for these.
   w.exercises.forEach((ex, exIdx) => {
     if (ex.noWarmup) {
@@ -2523,9 +2577,11 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     if (isBW) {
       bandSummary = '';
     } else if (isAssist) {
-      // "@ 145lb (BW −30 assist)"
+      // "@ 145lb (BW −30 assist) · neutral"
       const eff = w != null ? w : Math.max(0, (state.bodyweight || 175) - assistSum);
-      bandSummary = `<span style="font-size:12px;font-family:monospace;color:#0891b2">@ ${eff}lb${assistSum > 0 ? ` <span style="opacity:0.7">(BW −${assistSum})</span>` : ''}</span>`;
+      const grip = (state.grip || {})[`${exIdx}-${setKey}`];
+      const gripTag = grip ? ` <span style="opacity:0.6;font-weight:500">· ${gripLabel(grip).toLowerCase()}</span>` : '';
+      bandSummary = `<span style="font-size:12px;font-family:monospace;color:#0891b2">@ ${eff}lb${assistSum > 0 ? ` <span style="opacity:0.7">(BW −${assistSum})</span>` : ''}${gripTag}</span>`;
     } else if (isBand && selectedBands.length > 0) {
       bandSummary = `<span style="font-size:12px;font-family:monospace;color:#7c3aed">@ ${selectedBands.reduce((a,b)=>a+b,0)}lb bands</span>`;
     } else {
@@ -2635,6 +2691,24 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
           <span style="opacity:0.6;font-size:9px;margin-left:3px;font-weight:500">tap to edit</span>
         </button>
       </div>` : '';
+    // Grip toggle (assist only): 3-way pill row — Neutral / Chin-Up / Pull-Up.
+    const currentGrip = isAssist ? getGrip(exIdx, setKey) : null;
+    const gripToggle = isAssist ? `
+      <div style="padding-left:26px;margin-bottom:6px">
+        <div style="font-size:10px;color:#0891b2;font-weight:600;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.03em">Grip</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          ${GRIP_OPTIONS.map(g => {
+            const sel = currentGrip === g.id;
+            const style = sel
+              ? 'background:#0891b2;color:white;border:1px solid #0891b2;box-shadow:0 1px 3px rgba(8,145,178,0.3)'
+              : 'background:white;color:#0e7490;border:1px solid #a5f3fc;opacity:0.85';
+            return `<button onclick="selectGrip(${exIdx},'${setKey}','${g.id}')" style="${style};font-size:11px;font-weight:600;padding:5px 11px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
+              <span style="font-size:13px;font-family:monospace;line-height:1">${g.icon}</span>
+              <span>${g.label}</span>
+            </button>`;
+          }).join('')}
+        </div>
+      </div>` : '';
     // Build a top "connector" row that lines up with the band buttons —
     // a colored bracket spans only the suggested band columns; the gap
     // segments between them are filled too so it reads as one bar.
@@ -2662,6 +2736,7 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       </div>` : '';
     resistanceHTML = `
       ${bodyweightPill}
+      ${gripToggle}
       <div style="margin-bottom:6px">
         <div style="font-size:10px;color:${sectionColor};font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">${sectionLabel}</div>
         ${connectorRow}
