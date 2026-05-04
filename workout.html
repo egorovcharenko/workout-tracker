@@ -3654,6 +3654,16 @@ function renderSessionList() {
     "Full Body B": "#10b981",
   };
 
+  // Lookup: which exercises are assist-style (effective load = BW − bands)?
+  // Lets us decorate their per-row line with the assist amount from bands_json.
+  const assistExerciseNames = new Set();
+  WORKOUTS.forEach(w => {
+    w.exercises.forEach(ex => {
+      if (ex.assist) assistExerciseNames.add(ex.name);
+      if (ex.supersetExercises) ex.supersetExercises.forEach(s => { if (s.assist) assistExerciseNames.add(s.name); });
+    });
+  });
+
   // Pre-compute per-workout volume trends for sparklines
   const history = state.history || [];
   const workoutVolTrend = {};
@@ -3774,13 +3784,62 @@ function renderSessionList() {
           const repsList = workingSets.map(st => parseInt(st.reps) || 0).filter(r => r > 0);
           const weightStr = maxWeight > 0 ? `@ ${maxWeight}lb` : "";
           const repsDisplay = repsList.join('·');
+          // Assist exercises (pull-ups): surface the assist amount from
+          // bands_json so "135lb" doesn't look like a standalone weight.
+          let assistTag = '';
+          if (assistExerciseNames.has(ex)) {
+            const amts = workingSets.map(st => {
+              if (!st.bands_json) return 0;
+              try {
+                const b = JSON.parse(st.bands_json);
+                return Array.isArray(b) ? b.reduce((a, x) => a + (+x || 0), 0) : 0;
+              } catch (e) { return 0; }
+            }).filter(a => a > 0);
+            if (amts.length) {
+              const minA = Math.min(...amts), maxA = Math.max(...amts);
+              const range = minA === maxA ? `${minA}` : `${minA}–${maxA}`;
+              assistTag = ` <span style="color:#0891b2">· ${range}lb assist</span>`;
+            }
+          }
           exEntries.push(`<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0">
             <span style="font-size:12px;color:#374151">${ex}</span>
-            <span style="font-size:11px;color:#6b7280;font-family:monospace">${repsDisplay} ${weightStr}</span>
+            <span style="font-size:11px;color:#6b7280;font-family:monospace">${repsDisplay} ${weightStr}${assistTag}</span>
           </div>`);
         }
       });
       const exSummary = exEntries.join("");
+
+      // Per-session muscle volume: walks the saved sets, accumulates weight×reps
+      // per muscle (full credit for primary, half for secondary). Renders as a
+      // ranked pill row colored by relative load — at-a-glance view of which
+      // muscles got the most work this session.
+      const volByMuscle = {};
+      s.sets.forEach(st => {
+        if (st.set_type !== 'working') return;
+        const r = parseInt(st.reps) || 0;
+        const wt = st.weight_lb || 0;
+        if (r <= 0 || wt <= 0) return;
+        const m = EXERCISE_MUSCLES[st.exercise];
+        if (!m) return;
+        const setVol = wt * r;
+        (m.primary || []).forEach(mu => { volByMuscle[mu] = (volByMuscle[mu] || 0) + setVol; });
+        (m.secondary || []).forEach(mu => { volByMuscle[mu] = (volByMuscle[mu] || 0) + setVol * 0.5; });
+      });
+      const topMuscles = Object.entries(volByMuscle).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const maxMuscleVol = topMuscles.length ? topMuscles[0][1] : 0;
+      const muscleHTML = topMuscles.length ? `
+        <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e5e7eb">
+          <div style="font-size:9px;font-weight:600;color:#9ca3af;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px">Muscle load</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            ${topMuscles.map(([m, v]) => {
+              const info = MUSCLE_GROUPS[m];
+              const pct = v / maxMuscleVol;
+              const c = (typeof _volColor === 'function') ? _volColor(pct) : { bg: '#f3f4f6', fg: '#6b7280' };
+              const volLabel = v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v);
+              return `<span style="display:inline-flex;align-items:center;gap:4px;background:${c.bg};color:${c.fg};border:1px solid ${c.fg};font-size:10px;font-weight:500;padding:1px 6px;border-radius:9999px">${info?.label || m}<span style="opacity:0.6;font-family:monospace;font-size:9px">${volLabel}</span></span>`;
+            }).join('')}
+          </div>
+        </div>` : '';
 
       const volStr = totalVol >= 1000 ? (totalVol / 1000).toFixed(1) + 'k' : totalVol;
 
@@ -3847,6 +3906,7 @@ function renderSessionList() {
           ${totalVol > 0 ? `<span style="font-size:11px;color:#6b7280"><strong style="color:#374151">${volStr}</strong>lb vol</span>` : ''}
         </div>
         ${exSummary}
+        ${muscleHTML}
         ${highlightHTML}
       </div>`;
     }).join("");
