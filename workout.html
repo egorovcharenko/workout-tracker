@@ -2893,25 +2893,26 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
           }).join('')}
         </div>
       </div>` : '';
-    // Build a top "connector" row that lines up with the band buttons —
-    // a colored bracket spans only the suggested band columns; the gap
-    // segments between them are filled too so it reads as one bar.
+    // Build the connector row that visually ties the suggested band columns
+    // together. Sits BELOW the buttons so the reading order is: buttons →
+    // bracket connecting them → pill to apply. End-caps extend UP toward the
+    // button bottoms so the bracket appears anchored to those columns.
+    const gradStart = isAssist ? '#22d3ee' : '#a855f7';
+    const gradEnd = isAssist ? '#0891b2' : '#7c3aed';
     const connectorRow = showCombo ? `
-      <div onclick="applyBandSelection(${exIdx},'${setKey}','${comboCSV}')" style="display:flex;gap:3px;padding-left:26px;cursor:pointer;margin-bottom:2px;position:relative;height:18px;align-items:flex-end">
+      <div onclick="applyBandSelection(${exIdx},'${setKey}','${comboCSV}')" style="display:flex;gap:3px;padding-left:26px;cursor:pointer;margin-top:4px;position:relative;height:14px;align-items:flex-start">
         ${BANDS.map((b, i) => {
           const inRange = i >= firstSel && i <= lastSel;
           const isEnd = i === firstSel || i === lastSel;
           if (!inRange) return `<div style="flex-shrink:0;min-width:44px;width:44px"></div>`;
-          // bracket: full-width colored segment with end-caps that drop down
-          const gradStart = isAssist ? '#22d3ee' : '#a855f7';
-          const gradEnd = isAssist ? '#0891b2' : '#7c3aed';
-          return `<div style="flex-shrink:0;min-width:44px;width:44px;height:100%;display:flex;align-items:flex-end;justify-content:center;position:relative">
-            <div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,${gradStart},${gradEnd});border-radius:2px"></div>
-            ${isEnd ? `<div style="position:absolute;${i===firstSel?'left:0':'right:0'};bottom:0;width:3px;height:8px;background:${gradEnd};border-radius:2px"></div>` : ''}
+          return `<div style="flex-shrink:0;min-width:44px;width:44px;height:100%;display:flex;align-items:flex-start;justify-content:center;position:relative">
+            <div style="position:absolute;left:0;right:0;top:6px;height:3px;background:linear-gradient(90deg,${gradStart},${gradEnd});border-radius:2px"></div>
+            ${isEnd ? `<div style="position:absolute;${i===firstSel?'left:0':'right:0'};top:0;width:3px;height:9px;background:${gradEnd};border-radius:2px"></div>` : ''}
           </div>`;
         }).join('')}
-      </div>
-      <div onclick="applyBandSelection(${exIdx},'${setKey}','${comboCSV}')" style="margin:0 0 6px;padding-left:26px;cursor:pointer">
+      </div>` : '';
+    const usePill = showCombo ? `
+      <div onclick="applyBandSelection(${exIdx},'${setKey}','${comboCSV}')" style="margin:4px 0 0;padding-left:26px;cursor:pointer">
         <div style="display:inline-flex;align-items:center;gap:8px;background:${isAssist ? 'linear-gradient(135deg,#ecfeff,#cffafe)' : 'linear-gradient(135deg,#f3e8ff,#ede9fe)'};border:1px dashed ${isAssist ? '#0891b2' : '#a855f7'};color:${isAssist ? '#155e75' : '#6b21a8'};font-weight:700;font-size:12px;padding:5px 12px;border-radius:999px;box-shadow:0 1px 4px ${isAssist ? 'rgba(8,145,178,0.18)' : 'rgba(124,58,237,0.18)'}">
           <span style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;opacity:0.8">${pillUseText}</span>
           <span style="font-family:monospace;font-size:13px">${comboTotal}lb</span>
@@ -2923,8 +2924,7 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       ${gripToggle}
       <div style="margin-bottom:6px">
         <div style="font-size:10px;color:${sectionColor};font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">${sectionLabel}</div>
-        ${connectorRow}
-        <div class="scroll-row" style="display:flex;gap:3px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
+        <div class="scroll-row" style="display:flex;gap:3px;padding-left:26px;padding-bottom:0;align-items:flex-end">
           ${BANDS.map(b => {
             const sel = selectedBands.includes(b.lb);
             // Per-band "LAST" chip is suppressed when the combo pill is showing
@@ -2952,6 +2952,8 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
             </button>`;
           }).join("")}
         </div>
+        ${connectorRow}
+        ${usePill}
       </div>`;
   } else {
     resistanceHTML = `
