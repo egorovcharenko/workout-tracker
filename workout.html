@@ -173,7 +173,7 @@ const WORKOUTS = [
     main: true,
     duration: "~40 min",
     exercises: [
-      { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4", extraWeights: [55, 60], rest: 120 },
+      { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4", rest: 120 },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
       { name: "Assisted Pull-Ups", sets: 3, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", superset: false, video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, rest: 120 },
       { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
@@ -289,7 +289,7 @@ const MUSCLE_GROUPS = {
   calves:     { label: "Calves",      side: "back"  },
 };
 
-const WEIGHTS_LB = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
+const WEIGHTS_LB = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60];
 const lbToKg = lb => (lb * 0.453592).toFixed(1);
 
 const WEIGHT_COLORS = [
@@ -2284,7 +2284,10 @@ function renderRestSeparator() {
 function getRepsOptions(targetReps) {
   const [lo, hi] = parseRepRange(targetReps);
   const pad = hi - lo <= 3 ? 3 : 2;
-  const start = Math.max(1, lo - pad);
+  // Always offer 1..target-range. Tough sets (or assisted-band failure
+  // points) sometimes only get 1–2 clean reps and the picker should let
+  // you log that honestly. Scroll-row already handles overflow.
+  const start = 1;
   const end = hi + pad;
   const opts = [];
   for (let i = start; i <= end; i++) opts.push(i);
@@ -2955,7 +2958,7 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       <div style="margin-bottom:6px">
         <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb)</div>
         <div class="scroll-row" style="display:flex;gap:4px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
-          ${[...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])].sort((a,b) => a-b).map(lb => {
+          ${[...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b).map(lb => {
             const isSelected = w === lb;
             const isHinted = w == null && wHint === lb;
             if (isHinted) {
