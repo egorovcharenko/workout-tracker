@@ -2977,8 +2977,27 @@ function renderWorkout() {
       }
       const maxW = Math.max(...workingSets.map(s => s.wt || 0));
       const repsList = workingSets.map(s => s.rp).filter(r => r > 0);
-      const isBandEx = ex.equipment === 'band';
-      const weightStr = maxW > 0 ? (isBandEx ? `${maxW}lb` : `${maxW}lb`) : '';
+      const isAssistEx = ex.assist === true;
+      const isBandEx = ex.equipment === 'band' && !isAssistEx;
+      const weightStr = maxW > 0 ? `${maxW}lb` : '';
+      // Assist exercises (pull-ups) use a cyan badge to stand apart from
+      // weight (blue) and resistance bands (purple). The "BW" caption makes it
+      // obvious the number is BW − assist, not a standalone weight.
+      const badgeBg = isAssistEx ? '#cffafe' : (isBandEx ? '#ede9fe' : '#dbeafe');
+      const badgeFg = isAssistEx ? '#0891b2' : (isBandEx ? '#7c3aed' : '#2563eb');
+      const badgeSuffix = isAssistEx ? ` <span style="opacity:0.65;font-weight:500;font-size:9px;letter-spacing:0.04em">BW</span>` : '';
+      // Show the dominant grip used (most common pick across this exercise's
+      // working sets). Surfaces it on the card so you don't need to expand.
+      let gripTag = '';
+      if (isAssistEx) {
+        const counts = {};
+        for (let i = 0; i < setCount; i++) {
+          const g = (state.grip || {})[`${exIdx}-${i}`];
+          if (g) counts[g] = (counts[g] || 0) + 1;
+        }
+        const top = Object.entries(counts).sort((a,b) => b[1] - a[1])[0];
+        if (top) gripTag = `<span style="font-size:10px;color:#0e7490;opacity:0.7;font-style:italic">${gripLabel(top[0]).toLowerCase()} grip</span>`;
+      }
       const repsDisplay = repsList.length > 0 ? repsList.join(' · ') : '';
       return `
         <div class="card done" style="padding:14px 16px;cursor:pointer;border-left:3px solid #22c55e" onclick="state._expanded = state._expanded === ${exIdx} ? null : ${exIdx}; render()">
@@ -2988,9 +3007,10 @@ function renderWorkout() {
             </div>
             <div style="flex:1;min-width:0">
               <div style="font-weight:600;color:#15803d;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ex.name}</div>
-              <div style="display:flex;gap:8px;align-items:center;margin-top:2px">
+              <div style="display:flex;gap:8px;align-items:center;margin-top:2px;flex-wrap:wrap">
                 <span style="font-size:12px;color:#6b7280;font-family:monospace;letter-spacing:-0.3px">${repsDisplay}</span>
-                ${weightStr ? `<span style="font-size:10px;background:#dbeafe;color:#2563eb;padding:1px 6px;border-radius:4px;font-weight:600">${weightStr}</span>` : ''}
+                ${weightStr ? `<span style="font-size:10px;background:${badgeBg};color:${badgeFg};padding:1px 6px;border-radius:4px;font-weight:600">${weightStr}${badgeSuffix}</span>` : ''}
+                ${gripTag}
               </div>
             </div>
             <span style="font-size:10px;color:#d1d5db;transform:rotate(${state._expanded === exIdx ? '180' : '0'}deg);transition:transform 0.2s">▼</span>
@@ -3071,10 +3091,22 @@ function renderWorkout() {
   if (isDone) {
     const summaryLines = w.exercises.map((ex, exIdx) => {
       let lines = "";
+      // For assist exercises (pull-ups), append "(BW −X assist · grip)" so
+      // the number isn't ambiguous when reviewed later.
+      const assistCtx = (setKey) => {
+        if (!ex.assist) return '';
+        const bands = (state.bands || {})[`${exIdx}-${setKey}-bands`] || [];
+        const sum = bands.reduce((a, b) => a + b, 0);
+        const grip = (state.grip || {})[`${exIdx}-${setKey}`];
+        const parts = [];
+        if (sum > 0) parts.push(`BW −${sum}`);
+        if (grip) parts.push(gripLabel(grip).toLowerCase());
+        return parts.length ? ` <span style="opacity:0.55">(${parts.join(' · ')})</span>` : '';
+      };
       if (state.completed[`${exIdx}-warmup`]) {
         const wt = getEffectiveWeight(exIdx, "warmup");
         const rp = state.reps[`${exIdx}-warmup`] || ex.reps;
-        lines += `<p style="font-size:12px;color:#d97706;font-family:monospace;margin:2px 0 2px 8px">W: ${rp} reps ${wt ? `@ ${wt}lb / ${lbToKg(wt)}kg` : ""}</p>`;
+        lines += `<p style="font-size:12px;color:#d97706;font-family:monospace;margin:2px 0 2px 8px">W: ${rp} reps ${wt ? `@ ${wt}lb / ${lbToKg(wt)}kg${assistCtx('warmup')}` : ""}</p>`;
       }
       for (let i = 0; i < getSetCount(exIdx); i++) {
         if (state.completed[`${exIdx}-${i}`]) {
@@ -3082,7 +3114,7 @@ function renderWorkout() {
           const wt = getEffectiveWeight(exIdx, i);
           const rp = state.reps[`${exIdx}-${i}`] || (subEx ? subEx.reps : ex.reps);
           const label = subEx ? subEx.name.split(' ').map(w => w[0]).join('') : `#${i+1}`;
-          lines += `<p style="font-size:12px;color:#6b7280;font-family:monospace;margin:2px 0 2px 8px">${label}: ${rp} reps ${wt ? `@ ${wt}lb / ${lbToKg(wt)}kg` : ""}</p>`;
+          lines += `<p style="font-size:12px;color:#6b7280;font-family:monospace;margin:2px 0 2px 8px">${label}: ${rp} reps ${wt ? `@ ${wt}lb / ${lbToKg(wt)}kg${assistCtx(i)}` : ""}</p>`;
         }
       }
       const nameHTML = ex.supersetExercises
