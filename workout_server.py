@@ -346,10 +346,26 @@ def get_today_session(workout_name, today=None):
     if not row:
         conn.close()
         return None
+    # Normalize started_at to ISO with explicit "Z" so the JS client parses as
+    # UTC. SQLite returns the literal string we stored (already has "Z");
+    # Postgres returns a naive datetime that default=str renders as
+    # "2026-05-04 14:23:00.123456" — no timezone marker, which JS then treats
+    # as local time, producing a future timestamp for users west of UTC and a
+    # negative elapsed clock.
+    started_at_raw = row["started_at"]
+    if started_at_raw is None:
+        started_at_str = None
+    elif isinstance(started_at_raw, str):
+        s = started_at_raw.replace(" ", "T")
+        started_at_str = s if (s.endswith("Z") or "+" in s[10:]) else s + "Z"
+    else:
+        # datetime from Postgres
+        s = started_at_raw.isoformat()
+        started_at_str = s if started_at_raw.tzinfo is not None else s + "Z"
     session = {
         "id": row["id"],
         "duration_sec": row["duration_sec"],
-        "started_at": row["started_at"],
+        "started_at": started_at_str,
         "sets": [],
     }
     c.execute("SELECT exercise, set_type, set_number, weight_lb, reps, bands_json FROM sets WHERE session_id = ? ORDER BY id", (row["id"],))
