@@ -3963,6 +3963,35 @@ const MEASUREMENT_METRICS = [
   { id: 'weight_kg',   label: 'Weight',    group: 'misc',     direction: 'flat',  color: '#1f2937', unit: 'kg' },
 ];
 
+// Paired L/R sparkline — both lines on one chart, shared y-axis so the gap
+// between them reads as actual asymmetry. Solid = right, dashed = left.
+function _measurementPairedSparkline(leftVals, rightVals, color, direction) {
+  const all = [...leftVals, ...rightVals].filter(v => v != null);
+  if (all.length === 0) return '';
+  const w = 130, h = 38, pad = 3;
+  const max = Math.max(...all), min = Math.min(...all), range = max - min || 1;
+  function poly(vals) {
+    if (!vals.length) return '';
+    return vals.map((v, i) =>
+      `${pad + (i / Math.max(1, vals.length - 1)) * (w - pad * 2)},${pad + (1 - (v - min) / range) * (h - pad * 2)}`
+    ).join(' ');
+  }
+  const lPts = poly(leftVals);
+  const rPts = poly(rightVals);
+  // Last-point markers so you can see today's L vs R divergence at a glance.
+  const lastIdx = (vals) => vals.length - 1;
+  const cx = (vals) => pad + (lastIdx(vals) / Math.max(1, vals.length - 1)) * (w - pad * 2);
+  const cy = (v) => pad + (1 - (v - min) / range) * (h - pad * 2);
+  const lLast = leftVals.length ? leftVals[leftVals.length - 1] : null;
+  const rLast = rightVals.length ? rightVals[rightVals.length - 1] : null;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block">
+    ${lPts ? `<polyline points="${lPts}" fill="none" stroke="${color}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3,2" opacity="0.55"/>` : ''}
+    ${rPts ? `<polyline points="${rPts}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>` : ''}
+    ${lLast != null ? `<circle cx="${cx(leftVals)}" cy="${cy(lLast)}" r="2.2" fill="white" stroke="${color}" stroke-width="1.4" stroke-dasharray="2,1" opacity="0.85"/>` : ''}
+    ${rLast != null ? `<circle cx="${cx(rightVals)}" cy="${cy(rLast)}" r="2.5" fill="${color}"/>` : ''}
+  </svg>`;
+}
+
 function _measurementSparkline(values, color, direction) {
   // Polyline sparkline. Trend color: green if direction matches goal, red
   // if opposite, gray if flat or insufficient data.
@@ -4087,9 +4116,56 @@ function renderMeasurements() {
     </div>`;
   };
 
+  // Paired L/R cards — render both sides on a single graph so asymmetry is
+  // visible at a glance. Replaces the separate L/R cards in the Limbs group.
+  const LIMB_PAIRS = [
+    { label: 'Arm',   leftId: 'l_arm_cm',   rightId: 'r_arm_cm',   color: '#dc2626', direction: 'up' },
+    { label: 'Thigh', leftId: 'l_thigh_cm', rightId: 'r_thigh_cm', color: '#7c3aed', direction: 'up' },
+    { label: 'Calf',  leftId: 'l_calf_cm',  rightId: 'r_calf_cm',  color: '#15803d', direction: 'up' },
+  ];
+  function pairBlock(p) {
+    const lVals = sortedAsc.map(e => e[p.leftId]).filter(v => v != null);
+    const rVals = sortedAsc.map(e => e[p.rightId]).filter(v => v != null);
+    if (!lVals.length && !rVals.length) return '';
+    const lLatest = latest?.[p.leftId];
+    const rLatest = latest?.[p.rightId];
+    const gap = (lLatest != null && rLatest != null) ? (lLatest - rLatest) : null;
+    // Asymmetry color: noticeable gap (≥1cm) gets a red-ish tint; otherwise gray.
+    const gapColor = gap == null ? '#9ca3af'
+      : Math.abs(gap) >= 1.0 ? '#dc2626'
+      : Math.abs(gap) >= 0.5 ? '#f59e0b'
+      : '#16a34a';
+    const allVals = [...lVals, ...rVals];
+    const range = allVals.length > 1 ? `${Math.min(...allVals).toFixed(1)} → ${Math.max(...allVals).toFixed(1)}` : (allVals[0]?.toFixed(1) || '');
+    return `<div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:12px;color:#374151;font-weight:600">${p.label}</span>
+        <span style="font-size:9px;color:#9ca3af;display:inline-flex;align-items:center;gap:6px">
+          <span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;border-top:1.4px dashed ${p.color};opacity:0.7"></span>L</span>
+          <span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;border-top:1.6px solid ${p.color}"></span>R</span>
+        </span>
+      </div>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px">
+        ${_measurementPairedSparkline(lVals, rVals, p.color, p.direction)}
+        <div style="text-align:right;font-family:monospace;line-height:1.25">
+          <div style="font-size:11px;color:${p.color};opacity:0.7">L ${lLatest != null ? lLatest.toFixed(1) : '—'}</div>
+          <div style="font-size:13px;font-weight:700;color:${p.color}">R ${rLatest != null ? rLatest.toFixed(1) : '—'}</div>
+          <div style="font-size:9px;color:${gapColor};font-weight:600">${gap != null ? `Δ ${gap >= 0 ? '+' : ''}${gap.toFixed(1)}` : ''}</div>
+        </div>
+      </div>
+      <div style="font-size:9px;color:#9ca3af;font-family:monospace;margin-top:4px">range ${range}</div>
+    </div>`;
+  }
+
+  const limbsPairedHTML = LIMB_PAIRS.map(pairBlock).filter(Boolean).join('');
+  const limbsGroupHTML = limbsPairedHTML ? `<div style="margin-bottom:14px">
+    <h4 style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">Limbs <span style="opacity:0.6;font-weight:400;text-transform:none;letter-spacing:0">· left vs right</span></h4>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${limbsPairedHTML}</div>
+  </div>` : '';
+
   const graphsHTML = `
     ${groupBlock('Core', 'core')}
-    ${groupBlock('Limbs', 'limbs')}
+    ${limbsGroupHTML}
     ${groupBlock('Other', 'misc')}
   `;
 
