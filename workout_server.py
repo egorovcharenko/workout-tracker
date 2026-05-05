@@ -94,6 +94,23 @@ def get_db():
             created_at TIMESTAMP DEFAULT NOW()
         )''')
         conn.execute("CREATE INDEX IF NOT EXISTS idx_motivations_session ON motivations(session_id)")
+        # Body measurements (FitDays-style). All values in cm, nullable so a
+        # partial entry (just chest/waist, say) is fine. `taken_at` is an ISO
+        # string with date+time; `date` denormalized for index/filtering.
+        conn.execute('''CREATE TABLE IF NOT EXISTS measurements (
+            id SERIAL PRIMARY KEY,
+            taken_at TIMESTAMP NOT NULL,
+            date TEXT NOT NULL,
+            head_cm REAL, neck_cm REAL, shoulder_cm REAL, chest_cm REAL,
+            waist_cm REAL, hip_cm REAL,
+            l_arm_cm REAL, r_arm_cm REAL,
+            l_thigh_cm REAL, r_thigh_cm REAL,
+            l_calf_cm REAL, r_calf_cm REAL,
+            weight_kg REAL,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )''')
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_measurements_date ON measurements(date)")
         conn.commit()
         return conn
 
@@ -140,8 +157,86 @@ def get_db():
         FOREIGN KEY (session_id) REFERENCES sessions(id)
     )''')
     conn.execute("CREATE INDEX IF NOT EXISTS idx_motivations_session ON motivations(session_id)")
+    conn.execute('''CREATE TABLE IF NOT EXISTS measurements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        taken_at TEXT NOT NULL,
+        date TEXT NOT NULL,
+        head_cm REAL, neck_cm REAL, shoulder_cm REAL, chest_cm REAL,
+        waist_cm REAL, hip_cm REAL,
+        l_arm_cm REAL, r_arm_cm REAL,
+        l_thigh_cm REAL, r_thigh_cm REAL,
+        l_calf_cm REAL, r_calf_cm REAL,
+        weight_kg REAL,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+    )''')
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_measurements_date ON measurements(date)")
     conn.commit()
     return conn
+
+
+# Single canonical list of measurement column names so save/list/CSV-import
+# code never drifts from the schema.
+MEASUREMENT_FIELDS = [
+    "head_cm", "neck_cm", "shoulder_cm", "chest_cm", "waist_cm", "hip_cm",
+    "l_arm_cm", "r_arm_cm", "l_thigh_cm", "r_thigh_cm", "l_calf_cm", "r_calf_cm",
+    "weight_kg",
+]
+
+
+def save_measurement(data):
+    """Insert a body measurement row. data has taken_at (ISO) + any subset of
+    MEASUREMENT_FIELDS + optional notes. Missing fields stored as NULL."""
+    conn = get_db()
+    c = conn.cursor()
+    taken_at = data.get("taken_at") or datetime.datetime.utcnow().isoformat() + "Z"
+    # Derive date from taken_at first 10 chars (YYYY-MM-DD).
+    date = data.get("date") or taken_at[:10]
+    cols = ["taken_at", "date"] + MEASUREMENT_FIELDS + ["notes"]
+    placeholders = ", ".join(["?"] * len(cols))
+    vals = [taken_at, date] + [data.get(f) for f in MEASUREMENT_FIELDS] + [data.get("notes")]
+    c.execute(
+        f"INSERT INTO measurements ({', '.join(cols)}) VALUES ({placeholders})",
+        vals,
+    )
+    new_id = c.lastrowid if hasattr(c, 'lastrowid') else None
+    conn.commit()
+    conn.close()
+    return new_id
+
+
+def list_measurements(limit=500):
+    """Return all measurements, newest-first. Normalizes datetime columns to
+    ISO strings for the JSON response (same Z-suffix pattern as sessions)."""
+    conn = get_db()
+    c = conn.cursor()
+    cols = ["id", "taken_at", "date"] + MEASUREMENT_FIELDS + ["notes"]
+    c.execute(
+        f"SELECT {', '.join(cols)} FROM measurements ORDER BY taken_at DESC LIMIT ?",
+        (limit,),
+    )
+    rows = []
+    for r in c.fetchall():
+        d = dict(r)
+        ta = d.get("taken_at")
+        if ta is not None and not isinstance(ta, str):
+            # Postgres datetime — normalize to ISO + Z
+            s = ta.isoformat()
+            d["taken_at"] = s if ta.tzinfo is not None else s + "Z"
+        elif isinstance(ta, str):
+            s = ta.replace(" ", "T")
+            d["taken_at"] = s if (s.endswith("Z") or "+" in s[10:]) else s + "Z"
+        rows.append(d)
+    conn.close()
+    return rows
+
+
+def delete_measurement(meas_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("DELETE FROM measurements WHERE id = ?", (meas_id,))
+    conn.commit()
+    conn.close()
 
 
 def _yesterday():
@@ -714,6 +809,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(json.dumps(data, default=str).encode())
+        elif parsed.path == "/api/measurements":
+            data = list_measurements()
+            print(f"  [MEASUREMENTS] Returning {len(data)} entries")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(data, default=str).encode())
         else:
             self.send_response(404)
             self.end_headers()
@@ -763,6 +866,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
             return
+        if self.path == "/api/measurements":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length)
+                body = json.loads(raw)
+                # Accept either a single object or a {entries: [...]} bulk
+                # payload. Bulk is how the CSV importer pushes seed data.
+                if isinstance(body, dict) and isinstance(body.get("entries"), list):
+                    inserted = []
+                    for entry in body["entries"]:
+                        new_id = save_measurement(entry)
+                        if new_id is not None:
+                            inserted.append(new_id)
+                    print(f"  [MEASUREMENTS] Bulk inserted {len(inserted)} entries")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"ids": inserted, "count": len(inserted)}).encode())
+                else:
+                    new_id = save_measurement(body)
+                    print(f"  [MEASUREMENTS] Saved entry #{new_id}")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"id": new_id, "ok": True}).encode())
+            except Exception as e:
+                print(f"  [MEASUREMENTS] Error: {e}")
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+            return
         if self.path == "/api/save":
             try:
                 length = int(self.headers.get("Content-Length", 0))
@@ -788,11 +926,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    def do_DELETE(self):
+        parsed = urllib.parse.urlparse(self.path)
+        # /api/measurements/<id>
+        if parsed.path.startswith("/api/measurements/"):
+            try:
+                meas_id = int(parsed.path.rsplit("/", 1)[-1])
+                delete_measurement(meas_id)
+                print(f"  [MEASUREMENTS] Deleted #{meas_id}")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True, "id": meas_id}).encode())
+            except Exception as e:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+            return
+        self.send_response(404)
+        self.end_headers()
+
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
