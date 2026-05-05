@@ -5,9 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Workout Tracker</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+<!-- marked.js for rendering exercise notes (markdown). Tiny, no build step. -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <style>
   * { -webkit-tap-highlight-color: transparent; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f9fafb; margin: 0; }
+  /* Markdown styling for exercise notes — keep it tight (no big margins). */
+  .ex-note p { margin: 0 0 4px; }
+  .ex-note p:last-child { margin-bottom: 0; }
+  .ex-note ul, .ex-note ol { margin: 4px 0; padding-left: 18px; }
+  .ex-note li { margin: 1px 0; }
+  .ex-note strong { font-weight: 700; color: #78350f; }
+  .ex-note em { font-style: italic; }
+  .ex-note code { background: #fef3c7; padding: 1px 4px; border-radius: 3px; font-size: 0.85em; font-family: monospace; }
+  .ex-note a { color: #b45309; text-decoration: underline; }
+  .ex-note h1, .ex-note h2, .ex-note h3 { font-size: 13px; font-weight: 700; margin: 6px 0 2px; color: #78350f; }
+  .ex-note blockquote { border-left: 2px solid #fcd34d; padding-left: 8px; margin: 4px 0; color: #92400e; opacity: 0.85; }
   .weight-btn { min-width: 32px; padding: 2px 6px; border-radius: 6px; font-size: 11px; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s; }
   .reps-btn { width: 36px; height: 36px; border-radius: 50%; font-size: 13px; font-weight: 700; border: none; cursor: pointer; transition: all 0.15s; display:inline-flex; align-items:center; justify-content:center; }
   .set-btn { width: 32px; height: 32px; border-radius: 50%; font-weight: 700; font-size: 12px; border: none; cursor: pointer; transition: all 0.2s; }
@@ -339,7 +352,94 @@ let state = {
   // Per-set grip choice for assist exercises. Persisted to localStorage scoped
   // to (workout id × date). Hydrated in loadSessionData.
   grip: {},
+  // Persistent per-exercise notes (markdown body keyed by exercise name).
+  // Loaded once via fetchExerciseNotes(); upserted via saveExerciseNote().
+  exerciseNotes: {},
+  // Tracks which exercise's note is currently being edited so render() can
+  // skip re-painting that textarea and lose focus.
+  editingNote: null,
 };
+
+async function fetchExerciseNotes() {
+  try {
+    const res = await fetch('/api/exercise-notes');
+    if (!res.ok) return;
+    state.exerciseNotes = await res.json() || {};
+  } catch (e) {
+    console.warn('[EX-NOTES] load failed:', e);
+  }
+}
+
+async function saveExerciseNote(exerciseName, body) {
+  try {
+    await fetch('/api/exercise-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exercise: exerciseName, body: body || '' }),
+    });
+    if (!state.exerciseNotes) state.exerciseNotes = {};
+    if (body && body.trim()) state.exerciseNotes[exerciseName] = body;
+    else delete state.exerciseNotes[exerciseName];
+  } catch (e) {
+    console.warn('[EX-NOTES] save failed:', e);
+  }
+}
+
+function startEditNote(exerciseName) {
+  state.editingNote = exerciseName;
+  render();
+  // Focus the textarea after render places it in the DOM.
+  requestAnimationFrame(() => {
+    const ta = document.querySelector(`textarea[data-note-for="${CSS.escape(exerciseName)}"]`);
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  });
+}
+
+async function commitNoteEdit(exerciseName) {
+  const ta = document.querySelector(`textarea[data-note-for="${CSS.escape(exerciseName)}"]`);
+  const body = ta ? ta.value : '';
+  await saveExerciseNote(exerciseName, body);
+  state.editingNote = null;
+  render();
+}
+
+function cancelNoteEdit() {
+  state.editingNote = null;
+  render();
+}
+
+function renderExerciseNote(exerciseName) {
+  // Compact note block under the exercise card. Three states:
+  //   editing → textarea + Save / Cancel
+  //   has note → rendered markdown + small "edit" button
+  //   no note → muted "+ add note" link
+  const isEditing = state.editingNote === exerciseName;
+  const body = (state.exerciseNotes || {})[exerciseName] || '';
+  const safeName = exerciseName.replace(/"/g, '&quot;');
+  if (isEditing) {
+    return `<div data-noinvert style="margin-top:8px;padding:8px 10px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px">
+      <textarea data-note-for="${safeName}" placeholder="Add a note (markdown)…" style="width:100%;min-height:60px;font-size:12px;padding:6px 8px;border:1px solid #fde68a;border-radius:6px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;resize:vertical;box-sizing:border-box">${body.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea>
+      <div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end">
+        <button onclick="cancelNoteEdit()" style="font-size:11px;color:#92400e;background:transparent;border:1px solid #fde68a;padding:4px 10px;border-radius:6px;cursor:pointer">Cancel</button>
+        <button onclick="commitNoteEdit('${safeName}')" style="font-size:11px;color:white;background:#d97706;border:1px solid #d97706;padding:4px 12px;border-radius:6px;cursor:pointer;font-weight:600">Save</button>
+      </div>
+    </div>`;
+  }
+  if (body && body.trim()) {
+    // Render markdown via marked. If the lib isn't loaded yet, fall back to
+    // line-break-preserving plain text.
+    let rendered;
+    try {
+      rendered = (typeof marked !== 'undefined') ? marked.parse(body, { breaks: true, gfm: true }) : body.replace(/\n/g, '<br>');
+    } catch (e) {
+      rendered = body.replace(/\n/g, '<br>');
+    }
+    return `<div onclick="startEditNote('${safeName}')" data-noinvert style="margin-top:8px;padding:8px 10px 8px 12px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 6px 6px 0;cursor:pointer;font-size:12px;color:#451a03;line-height:1.5" class="ex-note">
+      ${rendered}
+    </div>`;
+  }
+  return `<div style="margin-top:6px"><button onclick="startEditNote('${safeName}')" style="font-size:10px;color:#9ca3af;background:transparent;border:1px dashed #e5e7eb;padding:3px 8px;border-radius:6px;cursor:pointer">+ note</button></div>`;
+}
 
 function setBodyweight(v) {
   const n = parseInt(v);
@@ -797,6 +897,9 @@ async function loadSessionData(workoutName) {
       restoreRestState();
       // Restore per-set grip choices for assist exercises.
       loadGripState();
+      // Hydrate persistent per-exercise notes (no await — render() will
+      // re-fire whenever a fetch resolves and we update state).
+      fetchExerciseNotes().then(() => render());
       // Auto-detect swapped exercises: if saved exercise isn't in template but is in a swap group, replace the template entry
       const savedNames = new Set(todayData.sets.map(s => s.exercise));
       savedNames.forEach(name => {
@@ -3285,6 +3388,7 @@ function renderWorkout() {
               `).join('')}
             </div>
             ${ex.notes ? `<p style="font-size:12px;color:#9ca3af;margin:0">${ex.notes}</p>` : ''}
+            ${renderExerciseNote(ex.name)}
             ${renderSupersetSparkline(ex) ? `<div style="margin-top:6px">${renderSupersetSparkline(ex)}</div>` : ''}
           </div>
           <div style="padding:0 16px 12px">${setsHTML}</div>
@@ -3311,6 +3415,7 @@ function renderWorkout() {
             </div>
           </div>
           ${ex.notes ? `<p style="font-size:12px;color:#9ca3af;margin:0">${ex.notes}</p>` : ''}
+          ${renderExerciseNote(ex.name)}
           ${renderSparkline(ex.name) ? `<div style="margin-top:6px">${renderSparkline(ex.name)}</div>` : ''}
         </div>
         <div style="padding:0 16px 12px">${setsHTML}</div>

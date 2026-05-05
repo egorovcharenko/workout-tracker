@@ -111,6 +111,14 @@ def get_db():
             created_at TIMESTAMP DEFAULT NOW()
         )''')
         conn.execute("CREATE INDEX IF NOT EXISTS idx_measurements_date ON measurements(date)")
+        # Per-exercise notes (markdown body). One row per exercise name; upsert
+        # on save. Keeps user-authored coaching cues with the exercise without
+        # bloating the workout-template definitions.
+        conn.execute('''CREATE TABLE IF NOT EXISTS exercise_notes (
+            exercise TEXT PRIMARY KEY,
+            body TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT NOW()
+        )''')
         conn.commit()
         return conn
 
@@ -171,8 +179,49 @@ def get_db():
         created_at TEXT DEFAULT (datetime('now'))
     )''')
     conn.execute("CREATE INDEX IF NOT EXISTS idx_measurements_date ON measurements(date)")
+    conn.execute('''CREATE TABLE IF NOT EXISTS exercise_notes (
+        exercise TEXT PRIMARY KEY,
+        body TEXT NOT NULL,
+        updated_at TEXT DEFAULT (datetime('now'))
+    )''')
     conn.commit()
     return conn
+
+
+def list_exercise_notes():
+    """Return all exercise notes as {exercise: body}."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT exercise, body FROM exercise_notes")
+    out = {row["exercise"]: row["body"] for row in c.fetchall()}
+    conn.close()
+    return out
+
+
+def upsert_exercise_note(exercise, body):
+    """Insert or update the note for an exercise. body=None or empty deletes."""
+    conn = get_db()
+    c = conn.cursor()
+    try:
+        if not body or not body.strip():
+            c.execute("DELETE FROM exercise_notes WHERE exercise = ?", (exercise,))
+            conn.commit()
+            return
+        if PG_URL:
+            c.execute(
+                "INSERT INTO exercise_notes (exercise, body, updated_at) VALUES (?, ?, NOW()) "
+                "ON CONFLICT (exercise) DO UPDATE SET body = EXCLUDED.body, updated_at = NOW()",
+                (exercise, body),
+            )
+        else:
+            c.execute(
+                "INSERT INTO exercise_notes (exercise, body, updated_at) VALUES (?, ?, datetime('now')) "
+                "ON CONFLICT(exercise) DO UPDATE SET body = excluded.body, updated_at = datetime('now')",
+                (exercise, body),
+            )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # Single canonical list of measurement column names so save/list/CSV-import
@@ -817,6 +866,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(json.dumps(data, default=str).encode())
+        elif parsed.path == "/api/exercise-notes":
+            data = list_exercise_notes()
+            print(f"  [EX-NOTES] Returning {len(data)} notes")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(data, default=str).encode())
         else:
             self.send_response(404)
             self.end_headers()
@@ -895,6 +952,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({"id": new_id, "ok": True}).encode())
             except Exception as e:
                 print(f"  [MEASUREMENTS] Error: {e}")
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+            return
+        if self.path == "/api/exercise-notes":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length)
+                body = json.loads(raw)
+                ex = body.get("exercise", "").strip()
+                note_body = body.get("body", "")
+                if not ex:
+                    raise ValueError("exercise is required")
+                upsert_exercise_note(ex, note_body)
+                print(f"  [EX-NOTES] Upsert {ex!r} ({len(note_body)} chars)")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True}).encode())
+            except Exception as e:
+                print(f"  [EX-NOTES] Error: {e}")
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
