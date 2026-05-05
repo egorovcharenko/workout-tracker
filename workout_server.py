@@ -207,10 +207,13 @@ def upsert_exercise_note(exercise, body):
             c.execute("DELETE FROM exercise_notes WHERE exercise = ?", (exercise,))
             conn.commit()
             return
+        # Note: explicit RETURNING short-circuits the _PGCursor auto-append of
+        # `RETURNING id` (which would fail — this table has no id column).
         if PG_URL:
             c.execute(
                 "INSERT INTO exercise_notes (exercise, body, updated_at) VALUES (?, ?, NOW()) "
-                "ON CONFLICT (exercise) DO UPDATE SET body = EXCLUDED.body, updated_at = NOW()",
+                "ON CONFLICT (exercise) DO UPDATE SET body = EXCLUDED.body, updated_at = NOW() "
+                "RETURNING exercise",
                 (exercise, body),
             )
         else:
