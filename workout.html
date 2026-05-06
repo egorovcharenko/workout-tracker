@@ -2589,70 +2589,87 @@ function getProgressionSuggestion(exIdx, setKey) {
   if (lastSets.length === 0) return null;
 
   const [lo, hi] = parseRepRange(effective.reps);
-  // Use the WORST (lowest reps) set as the bottleneck for the MODE decision
-  // (graduate / hold / regress) — progress weight only when the weakest set
-  // hits target. But the per-set REP target needs to honor what THIS specific
-  // set already did, so a strong set 1 doesn't get a TRY=10 chip when it
-  // hit 11 last time just because a later set fell off.
   const worst = lastSets.reduce((a, s) => s.reps < a.reps ? s : a, lastSets[0]);
-  const lastWeight = lastSets[0].weight;            // 1st working set is the canonical "main" weight
+  const lastWeight = lastSets[0].weight;
   const lastBands  = lastSets[0].bands;
   const mid = Math.ceil((lo + hi) / 2);
+  const isInSession = source === 'in-session';
 
-  // For last-session anchor: pull THIS set's specific reps from last week.
-  // For in-session anchor: no per-set history (this set hasn't been done yet
-  // in this session) — fall through to the worst-based default.
+  // Per-set baseline: ALWAYS pull last session's reps for THIS specific set
+  // (regardless of in-session/last-session source). That's the LAST chip on
+  // the reps picker, so factoring it in keeps the banner honest.
   let thisSetLastReps = null;
-  if (source === 'last-session' && typeof setKey === 'number') {
+  if (typeof setKey === 'number' && state.lastSession) {
     const data = state.lastSession[`${name}|working|${setKey + 1}`];
     if (data) {
       const r = parseInt(data.reps);
       if (!isNaN(r) && r > 0) thisSetLastReps = r;
     }
   }
-  // Rep target for add-rep mode: at minimum push past the worst set, but if
-  // THIS set already cleared more reps last time, push past THAT instead.
-  // Capped at hi so we don't over-recommend within the prescribed range.
   const _addRep = () => {
     const baseline = Math.max(worst.reps, thisSetLastReps || 0);
     return Math.min(hi, baseline + 1);
   };
   const _addRepReason = (suffix = '') => {
+    // Spell out exactly what target we're pushing past so the chip math
+    // checks out (no more "+1 rep" labels when the actual delta is +2).
+    const target = _addRep();
+    const baseline = Math.max(worst.reps, thisSetLastReps || 0);
     if (thisSetLastReps != null && thisSetLastReps > worst.reps) {
-      return `Push past your set ${setKey + 1} last time (${thisSetLastReps})${suffix}`;
+      return `🔥 Last week you hit ${thisSetLastReps} on this set — push to ${target}${suffix}`;
     }
-    return `Push past ${worst.reps}${suffix}`;
+    if (isInSession && worst.reps > (thisSetLastReps || 0)) {
+      return `💪 Already at ${worst.reps} this session — keep ${target}${suffix}`;
+    }
+    return `💪 Push past ${baseline}${suffix}`;
+  };
+  // In-session graduate guard: don't bump load mid-workout off ONE strong
+  // set. Wait until ALL sets are logged so next session's last-session
+  // anchor can graduate cleanly.
+  const _canGraduate = !isInSession;
+  // When in-session worst >= hi, fall through to a 'match' suggestion
+  // (cap at hi) — celebrate the strong set, hold the load.
+  const matchVibe = () => {
+    const lines = [
+      `🔥 Locked in — match ${worst.reps}`,
+      `💪 Same energy — hit ${worst.reps} again`,
+      `⚡ Riding it — repeat ${worst.reps}`,
+    ];
+    return lines[setKey % lines.length] || lines[0];
   };
 
   // ---------- Bodyweight: only rep progression matters ----------
   if (isBW) {
-    if (worst.reps >= hi) return { weight: null, bands: null, reps: hi + 2, reason: `Crushed ${hi} clean — push past it`, mode: 'graduate', source };
+    if (worst.reps >= hi && _canGraduate) return { weight: null, bands: null, reps: hi + 2, reason: `🔥 Crushed ${hi} clean — push past it`, mode: 'graduate', source };
+    if (worst.reps >= hi)  return { weight: null, bands: null, reps: hi, reason: matchVibe(), mode: 'match', source };
     if (worst.reps >= mid) return { weight: null, bands: null, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
     if (worst.reps >= lo)  return { weight: null, bands: null, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
-    return { weight: null, bands: null, reps: lo, reason: `Aim for ${lo} clean reps`, mode: 'regress', source };
+    return { weight: null, bands: null, reps: lo, reason: `Reset — aim for ${lo} clean reps`, mode: 'regress', source };
   }
 
   // ---------- Assist (pull-ups): progress = LESS assist ----------
   if (isAssist) {
-    if (worst.reps >= hi && lastBands && lastBands.length > 0) {
+    if (worst.reps >= hi && _canGraduate && lastBands && lastBands.length > 0) {
       const lighter = _lighterAssist(lastBands);
       const droppedSum = lastBands.reduce((a,b)=>a+b,0) - (lighter ? lighter.reduce((a,b)=>a+b,0) : 0);
-      return { weight: null, bands: lighter || [], reps: lo, reason: `Hit ${worst.reps} clean — drop ${droppedSum}lb assist`, mode: 'graduate', source };
+      return { weight: null, bands: lighter || [], reps: lo, reason: `🔥 Hit ${worst.reps} clean — drop ${droppedSum}lb assist`, mode: 'graduate', source };
     }
+    if (worst.reps >= hi)  return { weight: null, bands: lastBands, reps: hi, reason: matchVibe(), mode: 'match', source };
     if (worst.reps >= mid) return { weight: null, bands: lastBands, reps: _addRep(), reason: _addRepReason(' at same assist'), mode: 'add-rep', source };
     if (worst.reps >= lo)  return { weight: null, bands: lastBands, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
-    return { weight: null, bands: lastBands, reps: lo, reason: `Aim for ${lo} clean reps`, mode: 'regress', source };
+    return { weight: null, bands: lastBands, reps: lo, reason: `Reset — aim for ${lo} clean reps`, mode: 'regress', source };
   }
 
   // ---------- Band-only (RDL, pushdowns): progress = heavier band stack ----------
   if (isBand) {
-    if (worst.reps >= hi) {
+    if (worst.reps >= hi && _canGraduate) {
       const heavier = _heavierBandStack(lastBands || []);
       if (heavier) {
         const addedSum = heavier.reduce((a,b)=>a+b,0) - (lastBands || []).reduce((a,b)=>a+b,0);
-        return { weight: null, bands: heavier, reps: lo, reason: `Crushed ${worst.reps} — stack +${addedSum}lb band`, mode: 'graduate', source };
+        return { weight: null, bands: heavier, reps: lo, reason: `🔥 Crushed ${worst.reps} — stack +${addedSum}lb band`, mode: 'graduate', source };
       }
     }
+    if (worst.reps >= hi)  return { weight: null, bands: lastBands, reps: hi, reason: matchVibe(), mode: 'match', source };
     if (worst.reps >= mid) return { weight: null, bands: lastBands, reps: _addRep(), reason: _addRepReason(' at same bands'), mode: 'add-rep', source };
     if (worst.reps >= lo)  return { weight: null, bands: lastBands, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
     return { weight: null, bands: lastBands, reps: lo, reason: `Hold and aim for ${lo}`, mode: 'regress', source };
@@ -2661,18 +2678,19 @@ function getProgressionSuggestion(exIdx, setKey) {
   // ---------- bandAddon (squats): combined = DB + bands. ----------
   if (isBandAddon) {
     const bandSum = (lastBands || []).reduce((a,b)=>a+b,0);
-    const lastDB = (lastWeight || 0) - bandSum;        // recover DB-only
-    if (worst.reps >= hi) {
+    const lastDB = (lastWeight || 0) - bandSum;
+    if (worst.reps >= hi && _canGraduate) {
       const nextDB = _nextWeightStep(lastDB, effective);
       if (nextDB) {
-        return { weight: nextDB, bands: lastBands || [], reps: lo, reason: `Crushed ${worst.reps} at ${lastWeight}lb — bump DB to ${nextDB}`, mode: 'graduate', source };
+        return { weight: nextDB, bands: lastBands || [], reps: lo, reason: `🔥 Crushed ${worst.reps} at ${lastWeight}lb — bump DB to ${nextDB}`, mode: 'graduate', source };
       }
       const heavier = _heavierBandStack(lastBands || []);
       if (heavier) {
         const addedSum = heavier.reduce((a,b)=>a+b,0) - bandSum;
-        return { weight: lastDB || null, bands: heavier, reps: lo, reason: `DB ladder maxed — add +${addedSum}lb band`, mode: 'graduate', source };
+        return { weight: lastDB || null, bands: heavier, reps: lo, reason: `🔥 DB maxed — add +${addedSum}lb band`, mode: 'graduate', source };
       }
     }
+    if (worst.reps >= hi)  return { weight: lastDB || null, bands: lastBands, reps: hi, reason: matchVibe(), mode: 'match', source };
     if (worst.reps >= mid) return { weight: lastDB || null, bands: lastBands, reps: _addRep(), reason: _addRepReason(' at same load'), mode: 'add-rep', source };
     if (worst.reps >= lo)  return { weight: lastDB || null, bands: lastBands, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
     return { weight: lastDB || null, bands: lastBands, reps: lo, reason: `Hold and aim for ${lo}`, mode: 'regress', source };
@@ -2680,11 +2698,12 @@ function getProgressionSuggestion(exIdx, setKey) {
 
   // ---------- Plain dumbbell: progress = heavier weight at top of range ----------
   if (lastWeight == null) return null;
-  if (worst.reps >= hi) {
+  if (worst.reps >= hi && _canGraduate) {
     const next = _nextWeightStep(lastWeight, effective);
-    if (next) return { weight: next, bands: null, reps: lo, reason: `Crushed ${worst.reps} at ${lastWeight}lb — bump to ${next}`, mode: 'graduate', source };
-    return { weight: lastWeight, bands: null, reps: hi + 2, reason: `Top of ladder — push reps past ${hi}`, mode: 'add-rep', source };
+    if (next) return { weight: next, bands: null, reps: lo, reason: `🔥 Crushed ${worst.reps} at ${lastWeight}lb — bump to ${next}`, mode: 'graduate', source };
+    return { weight: lastWeight, bands: null, reps: hi + 2, reason: `🔥 Top of ladder — push reps past ${hi}`, mode: 'add-rep', source };
   }
+  if (worst.reps >= hi)  return { weight: lastWeight, bands: null, reps: hi, reason: matchVibe(), mode: 'match', source };
   if (worst.reps >= mid) return { weight: lastWeight, bands: null, reps: _addRep(), reason: _addRepReason(` at ${lastWeight}lb`), mode: 'add-rep', source };
   if (worst.reps >= lo)  return { weight: lastWeight, bands: null, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
   return { weight: lastWeight, bands: null, reps: lo, reason: `Hold and aim for ${lo} clean`, mode: 'regress', source };
@@ -3489,9 +3508,10 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     const wArg = suggestion.weight != null ? suggestion.weight : 'null';
     const modeBadge = ({
       'graduate': { color: '#16a34a', label: 'level up' },
-      'add-rep':  { color: '#d97706', label: 'add a rep' },
+      'add-rep':  { color: '#d97706', label: 'push reps' },
+      'match':    { color: '#0891b2', label: 'match it' },
       'hold':     { color: '#6b7280', label: 'hold' },
-      'regress':  { color: '#9ca3af', label: 'push to range' },
+      'regress':  { color: '#9ca3af', label: 'rebuild' },
     }[suggestion.mode] || { color: '#d97706', label: suggestion.mode });
     suggestionBanner = `
       <div style="margin:0 0 8px 26px;padding:7px 10px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fcd34d;border-radius:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
