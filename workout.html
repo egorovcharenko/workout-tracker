@@ -2589,33 +2589,58 @@ function getProgressionSuggestion(exIdx, setKey) {
   if (lastSets.length === 0) return null;
 
   const [lo, hi] = parseRepRange(effective.reps);
-  // Use the WORST (lowest reps) set as the bottleneck — progress only when
-  // the weakest set comfortably hits the target. This avoids pushing weight
-  // up just because set 1 was easy.
+  // Use the WORST (lowest reps) set as the bottleneck for the MODE decision
+  // (graduate / hold / regress) — progress weight only when the weakest set
+  // hits target. But the per-set REP target needs to honor what THIS specific
+  // set already did, so a strong set 1 doesn't get a TRY=10 chip when it
+  // hit 11 last time just because a later set fell off.
   const worst = lastSets.reduce((a, s) => s.reps < a.reps ? s : a, lastSets[0]);
   const lastWeight = lastSets[0].weight;            // 1st working set is the canonical "main" weight
   const lastBands  = lastSets[0].bands;
   const mid = Math.ceil((lo + hi) / 2);
 
+  // For last-session anchor: pull THIS set's specific reps from last week.
+  // For in-session anchor: no per-set history (this set hasn't been done yet
+  // in this session) — fall through to the worst-based default.
+  let thisSetLastReps = null;
+  if (source === 'last-session' && typeof setKey === 'number') {
+    const data = state.lastSession[`${name}|working|${setKey + 1}`];
+    if (data) {
+      const r = parseInt(data.reps);
+      if (!isNaN(r) && r > 0) thisSetLastReps = r;
+    }
+  }
+  // Rep target for add-rep mode: at minimum push past the worst set, but if
+  // THIS set already cleared more reps last time, push past THAT instead.
+  // Capped at hi so we don't over-recommend within the prescribed range.
+  const _addRep = () => {
+    const baseline = Math.max(worst.reps, thisSetLastReps || 0);
+    return Math.min(hi, baseline + 1);
+  };
+  const _addRepReason = (suffix = '') => {
+    if (thisSetLastReps != null && thisSetLastReps > worst.reps) {
+      return `Push past your set ${setKey + 1} last time (${thisSetLastReps})${suffix}`;
+    }
+    return `Push past ${worst.reps}${suffix}`;
+  };
+
   // ---------- Bodyweight: only rep progression matters ----------
   if (isBW) {
     if (worst.reps >= hi) return { weight: null, bands: null, reps: hi + 2, reason: `Crushed ${hi} clean — push past it`, mode: 'graduate', source };
-    if (worst.reps >= mid) return { weight: null, bands: null, reps: worst.reps + 1, reason: `Add 1 rep over last (${worst.reps})`, mode: 'add-rep', source };
-    if (worst.reps >= lo)  return { weight: null, bands: null, reps: worst.reps + 1, reason: `Push past ${worst.reps}`, mode: 'add-rep', source };
+    if (worst.reps >= mid) return { weight: null, bands: null, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
+    if (worst.reps >= lo)  return { weight: null, bands: null, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
     return { weight: null, bands: null, reps: lo, reason: `Aim for ${lo} clean reps`, mode: 'regress', source };
   }
 
   // ---------- Assist (pull-ups): progress = LESS assist ----------
-  // The metric is "weakest reps at this assist". When you hit top of range
-  // on the worst set, drop the smallest band so next time is harder.
   if (isAssist) {
     if (worst.reps >= hi && lastBands && lastBands.length > 0) {
       const lighter = _lighterAssist(lastBands);
       const droppedSum = lastBands.reduce((a,b)=>a+b,0) - (lighter ? lighter.reduce((a,b)=>a+b,0) : 0);
       return { weight: null, bands: lighter || [], reps: lo, reason: `Hit ${worst.reps} clean — drop ${droppedSum}lb assist`, mode: 'graduate', source };
     }
-    if (worst.reps >= mid) return { weight: null, bands: lastBands, reps: worst.reps + 1, reason: `Match same assist, +1 rep`, mode: 'add-rep', source };
-    if (worst.reps >= lo)  return { weight: null, bands: lastBands, reps: worst.reps + 1, reason: `Push past ${worst.reps}`, mode: 'add-rep', source };
+    if (worst.reps >= mid) return { weight: null, bands: lastBands, reps: _addRep(), reason: _addRepReason(' at same assist'), mode: 'add-rep', source };
+    if (worst.reps >= lo)  return { weight: null, bands: lastBands, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
     return { weight: null, bands: lastBands, reps: lo, reason: `Aim for ${lo} clean reps`, mode: 'regress', source };
   }
 
@@ -2628,15 +2653,12 @@ function getProgressionSuggestion(exIdx, setKey) {
         return { weight: null, bands: heavier, reps: lo, reason: `Crushed ${worst.reps} — stack +${addedSum}lb band`, mode: 'graduate', source };
       }
     }
-    if (worst.reps >= mid) return { weight: null, bands: lastBands, reps: worst.reps + 1, reason: `Same bands, +1 rep`, mode: 'add-rep', source };
-    if (worst.reps >= lo)  return { weight: null, bands: lastBands, reps: worst.reps + 1, reason: `Push past ${worst.reps}`, mode: 'add-rep', source };
+    if (worst.reps >= mid) return { weight: null, bands: lastBands, reps: _addRep(), reason: _addRepReason(' at same bands'), mode: 'add-rep', source };
+    if (worst.reps >= lo)  return { weight: null, bands: lastBands, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
     return { weight: null, bands: lastBands, reps: lo, reason: `Hold and aim for ${lo}`, mode: 'regress', source };
   }
 
   // ---------- bandAddon (squats): combined = DB + bands. ----------
-  // Last weight_lb is COMBINED. Progress: bump DB by one ladder step at the
-  // same band selection. If DB ladder is maxed, tack on the smallest unused
-  // band instead.
   if (isBandAddon) {
     const bandSum = (lastBands || []).reduce((a,b)=>a+b,0);
     const lastDB = (lastWeight || 0) - bandSum;        // recover DB-only
@@ -2651,8 +2673,8 @@ function getProgressionSuggestion(exIdx, setKey) {
         return { weight: lastDB || null, bands: heavier, reps: lo, reason: `DB ladder maxed — add +${addedSum}lb band`, mode: 'graduate', source };
       }
     }
-    if (worst.reps >= mid) return { weight: lastDB || null, bands: lastBands, reps: worst.reps + 1, reason: `Same load, +1 rep`, mode: 'add-rep', source };
-    if (worst.reps >= lo)  return { weight: lastDB || null, bands: lastBands, reps: worst.reps + 1, reason: `Push past ${worst.reps}`, mode: 'add-rep', source };
+    if (worst.reps >= mid) return { weight: lastDB || null, bands: lastBands, reps: _addRep(), reason: _addRepReason(' at same load'), mode: 'add-rep', source };
+    if (worst.reps >= lo)  return { weight: lastDB || null, bands: lastBands, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
     return { weight: lastDB || null, bands: lastBands, reps: lo, reason: `Hold and aim for ${lo}`, mode: 'regress', source };
   }
 
@@ -2663,8 +2685,8 @@ function getProgressionSuggestion(exIdx, setKey) {
     if (next) return { weight: next, bands: null, reps: lo, reason: `Crushed ${worst.reps} at ${lastWeight}lb — bump to ${next}`, mode: 'graduate', source };
     return { weight: lastWeight, bands: null, reps: hi + 2, reason: `Top of ladder — push reps past ${hi}`, mode: 'add-rep', source };
   }
-  if (worst.reps >= mid) return { weight: lastWeight, bands: null, reps: worst.reps + 1, reason: `Same weight, +1 rep over last`, mode: 'add-rep', source };
-  if (worst.reps >= lo)  return { weight: lastWeight, bands: null, reps: worst.reps + 1, reason: `Push past ${worst.reps}`, mode: 'add-rep', source };
+  if (worst.reps >= mid) return { weight: lastWeight, bands: null, reps: _addRep(), reason: _addRepReason(` at ${lastWeight}lb`), mode: 'add-rep', source };
+  if (worst.reps >= lo)  return { weight: lastWeight, bands: null, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
   return { weight: lastWeight, bands: null, reps: lo, reason: `Hold and aim for ${lo} clean`, mode: 'regress', source };
 }
 
