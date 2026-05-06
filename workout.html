@@ -3177,16 +3177,20 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
 
   // Active set (isNext) — show weight/band + reps pickers
   const nextAccent = 'border-left:4px solid #3b82f6;padding-left:10px;background:#eff6ff;margin:-2px -4px;padding-top:12px;padding-bottom:12px;padding-right:8px;border-radius:0 8px 8px 0;box-shadow:0 1px 4px rgba(59,130,246,0.15);overflow:hidden;';
-  // Auto-progression suggestion: fires only on the FIRST working set of the
-  // active exercise, before any pick has been made. Subsequent sets default
-  // to "match what you just did" (handled by getHintWeight from in-session
-  // prior set) so the suggestion would just be noise there.
+  // Auto-progression suggestion: fires on every working set (not warmup),
+  // anchored to last session's data. The banner shows on the first working
+  // set only — for subsequent sets, the TRY chips alone are enough since
+  // the user has already seen the rationale once. Hidden if the user has
+  // already picked a weight or bands explicitly for this set.
   const isFirstWorking = (typeof setKey === 'number' && setKey === 0);
   const userPickedWeight = (state.weights[`${exIdx}-${setKey}`] != null);
   const explicitBands = !!(state.bands && state.bands[`${exIdx}-${setKey}-bands`] && state.bands[`${exIdx}-${setKey}-bands`].length);
-  const suggestion = (!isWarmup && isFirstWorking && !userPickedWeight && !explicitBands)
+  const suggestion = (!isWarmup && !userPickedWeight && !explicitBands)
     ? getProgressionSuggestion(exIdx, setKey)
     : null;
+  // Show the verbose banner once per exercise (set 1) so the rationale lands
+  // exactly when needed. Sets 2+ keep just the chips.
+  const showSuggestionBanner = !!suggestion && isFirstWorking;
   let weightDisplay = '';
   if (isBW) {
     // no weight for bodyweight exercises
@@ -3421,7 +3425,7 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
   // both the suggested weight and bands at once. Tap a single chip if you
   // want only one of the two.
   let suggestionBanner = '';
-  if (suggestion) {
+  if (showSuggestionBanner) {
     const labelParts = [];
     if (suggestion.weight != null) labelParts.push(`${suggestion.weight}lb`);
     if (suggestion.bands && suggestion.bands.length) labelParts.push(`+ ${suggestion.bands.reduce((a,b)=>a+b,0)}lb band`);
