@@ -840,47 +840,65 @@ function localDate() { const d = new Date(); return `${d.getFullYear()}-${String
 
 // API — auto-save on every set toggle
 let saveTimeout = null;
+// Single-in-flight guard. Without this, if a second autoSave call lands
+// before the first POST's response comes back, both fire with session_id=null
+// and the server creates TWO session rows. Re-saves while a save is in-flight
+// queue at most one follow-up that runs once the first finishes (and now
+// has a sessionId, so it updates instead of inserting a duplicate).
+let savingInFlight = false;
+let savePending = false;
 
 async function autoSave() {
-  const w = state.workout;
-  const sets = [];
-  w.exercises.forEach((ex, exIdx) => {
-    if (state.completed[`${exIdx}-warmup`]) {
-      const bands = getBandSelection(exIdx, "warmup");
-      sets.push({ exercise: ex.name, set_type: "warmup", set_number: 0, reps: String(state.reps[`${exIdx}-warmup`] || ex.reps), weight_lb: getEffectiveWeight(exIdx, "warmup"), bands_json: bands.length ? JSON.stringify(bands) : null });
-    }
-    for (let i = 0; i < getSetCount(exIdx); i++) {
-      if (state.completed[`${exIdx}-${i}`]) {
-        const subEx = getSubExercise(exIdx, i);
-        const exName = subEx ? subEx.name : ex.name;
-        const exReps = subEx ? subEx.reps : ex.reps;
-        const bands = getBandSelection(exIdx, i);
-        sets.push({ exercise: exName, set_type: "working", set_number: i + 1, reps: String(state.reps[`${exIdx}-${i}`] || exReps), weight_lb: getEffectiveWeight(exIdx, i), bands_json: bands.length ? JSON.stringify(bands) : null });
-      }
-    }
-  });
-  if (sets.length === 0) return;
-  const body = {
-    workout: w.name,
-    date: localDate(),
-    duration_sec: state.elapsed,
-    session_id: state.sessionId || null,
-    // Send the wall-clock anchor on the FIRST save (no sessionId yet) so
-    // the server can persist it as started_at. Backend ignores this on
-    // updates.
-    started_at: state.timerStartedAt ? new Date(state.timerStartedAt).toISOString() : null,
-    sets
-  };
+  if (savingInFlight) {
+    savePending = true;
+    return;
+  }
+  savingInFlight = true;
   try {
-    const res = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await res.json();
-    if (data.ok) {
-      state.sessionId = data.id;
-      state.lastSaved = Date.now();
-      console.log(`[AUTO-SAVE] Session #${data.id} — ${sets.length} sets`);
+    const w = state.workout;
+    const sets = [];
+    w.exercises.forEach((ex, exIdx) => {
+      if (state.completed[`${exIdx}-warmup`]) {
+        const bands = getBandSelection(exIdx, "warmup");
+        sets.push({ exercise: ex.name, set_type: "warmup", set_number: 0, reps: String(state.reps[`${exIdx}-warmup`] || ex.reps), weight_lb: getEffectiveWeight(exIdx, "warmup"), bands_json: bands.length ? JSON.stringify(bands) : null });
+      }
+      for (let i = 0; i < getSetCount(exIdx); i++) {
+        if (state.completed[`${exIdx}-${i}`]) {
+          const subEx = getSubExercise(exIdx, i);
+          const exName = subEx ? subEx.name : ex.name;
+          const exReps = subEx ? subEx.reps : ex.reps;
+          const bands = getBandSelection(exIdx, i);
+          sets.push({ exercise: exName, set_type: "working", set_number: i + 1, reps: String(state.reps[`${exIdx}-${i}`] || exReps), weight_lb: getEffectiveWeight(exIdx, i), bands_json: bands.length ? JSON.stringify(bands) : null });
+        }
+      }
+    });
+    if (sets.length === 0) return;
+    const body = {
+      workout: w.name,
+      date: localDate(),
+      duration_sec: state.elapsed,
+      session_id: state.sessionId || null,
+      started_at: state.timerStartedAt ? new Date(state.timerStartedAt).toISOString() : null,
+      sets
+    };
+    try {
+      const res = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (data.ok) {
+        state.sessionId = data.id;
+        state.lastSaved = Date.now();
+        console.log(`[AUTO-SAVE] Session #${data.id} — ${sets.length} sets`);
+      }
+    } catch (e) {
+      console.error("[AUTO-SAVE] Error:", e);
     }
-  } catch (e) {
-    console.error("[AUTO-SAVE] Error:", e);
+  } finally {
+    savingInFlight = false;
+    if (savePending) {
+      savePending = false;
+      // Run queued save with the freshly-set sessionId so it UPDATEs.
+      autoSave();
+    }
   }
 }
 
