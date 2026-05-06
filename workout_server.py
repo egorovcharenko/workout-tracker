@@ -342,10 +342,10 @@ def delete_session(session_id):
     c.execute("DELETE FROM sets WHERE session_id = ?", (session_id,))
     c.execute("DELETE FROM motivations WHERE session_id = ?", (session_id,))
     c.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
-    deleted = c.rowcount
     conn.commit()
     conn.close()
-    return deleted
+    # _PGCursor doesn't proxy rowcount; just return the id we tried to delete.
+    return session_id
 
 
 def get_history(limit=20):
@@ -1053,13 +1053,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/session/"):
             try:
                 sess_id = int(parsed.path.rsplit("/", 1)[-1])
-                deleted = delete_session(sess_id)
-                print(f"  [SESSION] Deleted #{sess_id} (rows={deleted})")
+                delete_session(sess_id)
+                print(f"  [SESSION] Deleted #{sess_id}")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
-                self.wfile.write(json.dumps({"ok": True, "id": sess_id, "deleted": deleted}).encode())
+                self.wfile.write(json.dumps({"ok": True, "id": sess_id}).encode())
             except Exception as e:
                 self.send_response(400)
                 self.send_header("Content-Type", "application/json")
