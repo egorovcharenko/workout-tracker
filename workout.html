@@ -2382,8 +2382,11 @@ function isExerciseFullyDone(exIdx) {
   if (!ex) return false;
   const isSuperset = !!ex.supersetExercises;
   const warmupDone = !!state.completed[`${exIdx}-warmup`];
+  const warmupOff = !!state.warmupOff?.[exIdx];
   const setCount = getSetCount(exIdx);
-  if (!(isSuperset || warmupDone)) return false;
+  // An exercise can finish when: it's a superset (no warmup concept), warmup
+  // was logged, OR warmup is explicitly off (noWarmup or user-toggled).
+  if (!(isSuperset || warmupDone || warmupOff)) return false;
   for (let i = 0; i < setCount; i++) {
     if (!state.completed[`${exIdx}-${i}`]) return false;
   }
@@ -3620,8 +3623,9 @@ function renderWorkout() {
   let exerciseCards = w.exercises.map((ex, exIdx) => {
     const isSuperset = !!ex.supersetExercises;
     const warmupDone = !!state.completed[`${exIdx}-warmup`];
+    const warmupOff = !!state.warmupOff?.[exIdx];
     const setCount = getSetCount(exIdx);
-    const exDone = (isSuperset || warmupDone) && Array.from({length:setCount}).every((_,i) => state.completed[`${exIdx}-${i}`]);
+    const exDone = (isSuperset || warmupDone || warmupOff) && Array.from({length:setCount}).every((_,i) => state.completed[`${exIdx}-${i}`]);
     // Triggers fire from logReps()/toggleWarmup() on user action — never on
     // page reload. requestMotivation is still called from those entrypoints
     // when an exercise transitions to fully-done.
@@ -3635,7 +3639,7 @@ function renderWorkout() {
       </div>` : '';
     const gifVisible = state.showGif[exIdx];
 
-    const warmupOff = state.warmupOff?.[exIdx];
+    // warmupOff already declared above for the exDone gate — reuse.
     const warmupIsNext = !warmupOff && nextSet && nextSet.exIdx === exIdx && nextSet.setKey === "warmup";
     let setsHTML = '';
     if (!isSuperset) {
