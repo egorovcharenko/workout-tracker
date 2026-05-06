@@ -3273,32 +3273,44 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
   // it differs from the LAST chip; if both target the same weight, TRY wins
   // (it's the actionable signal).
   const suggestedWeight = suggestion?.weight ?? null;
+  // Tiny legend that explains the LAST / TRY chips. Only render once both
+  // chips have a chance of appearing; if there's no suggestion it shrinks
+  // to just "last".
+  const _legend = (() => {
+    const parts = [];
+    if (wHint != null) parts.push(`<span style="color:#3b82f6;font-weight:700">last</span> = previous session`);
+    if (suggestion) parts.push(`<span style="color:#d97706;font-weight:700">try</span> = recommended`);
+    return parts.length ? `<span style="opacity:0.55;font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">· ${parts.join(' · ')}</span>` : '';
+  })();
   const dbPickerHTML = `
     <div style="margin-bottom:6px">
-      <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb)</div>
+      <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb) ${_legend}</div>
       <div class="scroll-row" style="display:flex;gap:4px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
         ${[...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b).map(lb => {
           const isSelected = w === lb;
           const isTry = suggestedWeight === lb && !isSelected;
           const isHinted = !isTry && w == null && wHint === lb;
           if (isTry) {
-            const tip = (suggestion?.reason || '').replace(/"/g, '&quot;');
+            const tip = `Recommended: ${lb}lb — ${(suggestion?.reason || '').replace(/"/g, '&quot;')}`;
             return `
               <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0" title="${tip}">
                 <span style="font-size:8px;color:#d97706;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">try</span>
                 <button class="weight-btn" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);color:#92400e;border:2px dashed #d97706;min-width:44px;padding:6px 12px;font-size:14px;font-weight:700;border-radius:8px;box-shadow:0 2px 8px rgba(217,119,6,0.25)"
                   data-scroll-target
+                  title="${tip}"
                   onclick="state.weights['${exIdx}-${setKey}']=${lb};triggerSave();render()">
                   ${lb}
                 </button>
               </div>`;
           }
           if (isHinted) {
+            const tip = `Last session: ${lb}lb at this set`;
             return `
-              <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0" title="${tip}">
                 <span style="font-size:8px;color:#3b82f6;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">last</span>
                 <button class="weight-btn" style="background:white;color:#3b82f6;border:2px dashed #3b82f6;min-width:44px;padding:6px 12px;font-size:14px;font-weight:700;border-radius:8px;box-shadow:0 2px 8px rgba(59,130,246,0.2)"
                   data-scroll-target
+                  title="${tip}"
                   onclick="state.weights['${exIdx}-${setKey}']=${lb};triggerSave();render()">
                   ${lb}
                 </button>
@@ -3423,7 +3435,7 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       'graduate': { color: '#16a34a', label: 'level up' },
       'add-rep':  { color: '#d97706', label: 'add a rep' },
       'hold':     { color: '#6b7280', label: 'hold' },
-      'regress':  { color: '#9ca3af', label: 'rebuild' },
+      'regress':  { color: '#9ca3af', label: 'push to range' },
     }[suggestion.mode] || { color: '#d97706', label: suggestion.mode });
     suggestionBanner = `
       <div style="margin:0 0 8px 26px;padding:7px 10px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fcd34d;border-radius:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -3446,30 +3458,38 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       ${suggestionBanner}
       ${resistanceHTML}
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e5e7eb">
-        <div style="font-size:10px;color:#16a34a;font-weight:600;margin-bottom:5px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Reps done — tap to log</div>
+        <div style="font-size:10px;color:#16a34a;font-weight:600;margin-bottom:5px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Reps done — tap to log ${(() => {
+          const _lr = getLastReps(exIdx, setKey);
+          const parts = [];
+          if (_lr != null) parts.push(`<span style="color:#16a34a;font-weight:700">last</span> = previous session`);
+          if (suggestion?.reps != null) parts.push(`<span style="color:#d97706;font-weight:700">try</span> = recommended`);
+          return parts.length ? `<span style="opacity:0.55;font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">· ${parts.join(' · ')}</span>` : '';
+        })()}</div>
         <div class="scroll-row" style="display:flex;gap:5px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
           ${(() => { const lastR = getLastReps(exIdx, setKey); const [lo,hi] = parseRepRange(targetReps); return getRepsOptions(targetReps).map(r => {
             const isLast = lastR === r;
             const isTry = suggestedReps === r && !isLast;
             if (isTry) {
-              const tip = (suggestion?.reason || '').replace(/"/g, '&quot;');
+              const tip = `Recommended target: ${r} reps — ${(suggestion?.reason || '').replace(/"/g, '&quot;')}`;
               return `
                 <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0" title="${tip}">
                   <span style="font-size:8px;color:#d97706;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">try</span>
                   <button class="reps-btn" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);color:#92400e;border:2px dashed #d97706;width:44px;height:44px;font-size:15px;font-weight:700;box-shadow:0 2px 8px rgba(217,119,6,0.25)"
                     data-scroll-target
+                    title="${tip}"
                     onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup},event)">
                     ${r}
                   </button>
                 </div>`;
             }
             if (isLast) {
-              // Prominent "last time" reps chip — bigger with caption above
+              const tip = `Last session: ${r} reps at this set`;
               return `
-                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0" title="${tip}">
                   <span style="font-size:8px;color:#16a34a;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">last</span>
                   <button class="reps-btn" style="background:white;color:#16a34a;border:2px dashed #16a34a;width:44px;height:44px;font-size:15px;font-weight:700;box-shadow:0 2px 8px rgba(22,163,74,0.22)"
                     data-scroll-target
+                    title="${tip}"
                     onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup},event)">
                     ${r}
                   </button>
