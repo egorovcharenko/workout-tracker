@@ -186,7 +186,7 @@ const WORKOUTS = [
     main: true,
     duration: "~40 min",
     exercises: [
-      { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4", rest: 120 },
+      { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep. Optional: stand on bands for extra resistance.", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, rest: 120 },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", superset: false, video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
       { name: "Assisted Pull-Ups", sets: 3, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", superset: false, video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120 },
       { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", superset: false, video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
@@ -691,6 +691,19 @@ function getHintWeight(exIdx, setKey) {
   return null;
 }
 
+// For DB-pickers in bandAddon mode: previous session stored a COMBINED
+// weight in weight_lb, plus the bands list in bands_json. Subtract the
+// suggested band sum to recover the dumbbell-only hint.
+function getHintDBWeight(exIdx, setKey) {
+  const ex = state.workout.exercises[exIdx];
+  if (!ex?.bandAddon) return getHintWeight(exIdx, setKey);
+  const combined = getHintWeight(exIdx, setKey);
+  if (combined == null) return null;
+  const bands = getBandSelection(exIdx, setKey);
+  const bandSum = bands.reduce((a, b) => a + b, 0);
+  return Math.max(0, combined - bandSum);
+}
+
 // For saving: use explicit weight, or fall back to hint
 function getEffectiveWeight(exIdx, setKey) {
   const ex = state.workout.exercises[exIdx];
@@ -705,6 +718,16 @@ function getEffectiveWeight(exIdx, setKey) {
     if (bands.length === 0) return null;
     const bw = state.bodyweight || 175;
     return Math.max(0, bw - bands.reduce((a, b) => a + b, 0));
+  }
+  // bandAddon (e.g. Goblet/Bulgarian Split Squat): combined load = DB + sum(bands).
+  // state.weights stores DB-only; bands tracked separately in state.bands.
+  if (ex?.bandAddon) {
+    const dbExplicit = getSetWeight(exIdx, setKey);
+    const db = dbExplicit != null ? dbExplicit : (getHintDBWeight(exIdx, setKey) || 0);
+    const bands = getBandSelection(exIdx, setKey);
+    const bandSum = bands.reduce((a, b) => a + b, 0);
+    if ((db || 0) === 0 && bandSum === 0) return null;
+    return (db || 0) + bandSum;
   }
   return getSetWeight(exIdx, setKey) || getHintWeight(exIdx, setKey);
 }
@@ -769,8 +792,8 @@ const SWAP_GROUPS = [
     { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "8-12", notes: "Hinge at hips, slight knee bend", superset: false, video: "https://www.youtube.com/shorts/cGMaBqaExBo", rest: 120 },
   ],
   [
-    { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4", extraWeights: [55, 60], rest: 120 },
-    { name: "Bulgarian Split Squat", sets: 3, reps: "8-10", notes: "Rear foot on bench, DB in each hand", superset: false, video: "https://www.youtube.com/shorts/2C-uNgKwPLE", rest: 120 },
+    { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep. Optional: stand on bands for extra resistance.", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, extraWeights: [55, 60], rest: 120 },
+    { name: "Bulgarian Split Squat", sets: 3, reps: "8-10", notes: "Rear foot on bench, DB in each hand. Optional: stand on bands for extra resistance.", superset: false, video: "https://www.youtube.com/shorts/2C-uNgKwPLE", bandAddon: true, rest: 120 },
   ],
 ];
 function getSwapOptions(exerciseName) {
@@ -2821,7 +2844,9 @@ function getBandSelection(exIdx, setKey) {
   const ex = state.workout.exercises[exIdx];
   const subEx = getSubExercise(exIdx, setKey);
   const effectiveEx = subEx ? { ...ex, ...subEx } : ex;
-  if (effectiveEx.equipment !== 'band') return [];
+  // Auto-suggest applies to anything that uses bands: equipment="band" (assist
+  // and band-only) or bandAddon (squats with optional resistance bands).
+  if (effectiveEx.equipment !== 'band' && !effectiveEx.bandAddon) return [];
   if (!state.lastSession) return [];
   const exName = subEx ? subEx.name : ex.name;
   const setType = setKey === "warmup" ? "warmup" : "working";
@@ -2858,10 +2883,14 @@ function toggleBand(exIdx, setKey, bandLb) {
   state.bands[k] = current;
   const ex = state.workout.exercises[exIdx];
   const sum = current.reduce((a, b) => a + b, 0);
-  // For assist exercises (pull-ups), bands SUBTRACT from bodyweight; for
-  // resistance bands (RDL, pushdowns), bands ARE the load.
+  // Three modes:
+  //   • assist (pull-ups): bands SUBTRACT from bodyweight → store BW−sum
+  //   • bandAddon (squats): DB + bands are independent → leave state.weights alone
+  //   • band-only (RDL, pushdowns): bands ARE the load → store sum
   if (ex?.assist) {
     state.weights[`${exIdx}-${setKey}`] = sum > 0 ? Math.max(0, (state.bodyweight || 175) - sum) : null;
+  } else if (ex?.bandAddon) {
+    // intentionally leave state.weights[k] (DB) untouched
   } else {
     state.weights[`${exIdx}-${setKey}`] = sum || null;
   }
@@ -2880,6 +2909,8 @@ function applyBandSelection(exIdx, setKey, bandsCSV) {
   const sum = bands.reduce((a, b) => a + b, 0);
   if (ex?.assist) {
     state.weights[`${exIdx}-${setKey}`] = sum > 0 ? Math.max(0, (state.bodyweight || 175) - sum) : null;
+  } else if (ex?.bandAddon) {
+    // bandAddon: DB and bands are independent — don't touch state.weights
   } else {
     state.weights[`${exIdx}-${setKey}`] = sum || null;
   }
@@ -2893,14 +2924,17 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
   const effectiveEx = subEx ? { ...ex, ...subEx } : ex;
   const isAssist = effectiveEx.assist === true;
   const isBand = effectiveEx.equipment === "band" && !isAssist;
+  const isBandAddon = effectiveEx.bandAddon === true;
   const isBW = effectiveEx.bodyweight;
   const w = getSetWeight(exIdx, setKey);
-  const wHint = w == null ? getHintWeight(exIdx, setKey) : null;
+  // For bandAddon, w is DB-only — picker hint should show DB-only too.
+  const wHint = w == null ? (isBandAddon ? getHintDBWeight(exIdx, setKey) : getHintWeight(exIdx, setKey)) : null;
   const loggedReps = state.reps[`${exIdx}-${setKey}`];
   const labelColor = isWarmup ? '#d97706' : '#6b7280';
   const doneColor = isWarmup ? '#f59e0b' : '#22c55e';
   const selectedBands = getBandSelection(exIdx, setKey);
   const assistSum = isAssist ? selectedBands.reduce((a,b) => a+b, 0) : 0;
+  const addonBandSum = isBandAddon ? selectedBands.reduce((a,b) => a+b, 0) : 0;
 
   if (isDone && loggedReps) {
     let bandSummary;
@@ -2914,6 +2948,19 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       bandSummary = `<span style="font-size:12px;font-family:monospace;color:#0891b2">@ ${eff}lb${assistSum > 0 ? ` <span style="opacity:0.7">(BW −${assistSum})</span>` : ''}${gripTag}</span>`;
     } else if (isBand && selectedBands.length > 0) {
       bandSummary = `<span style="font-size:12px;font-family:monospace;color:#7c3aed">@ ${selectedBands.reduce((a,b)=>a+b,0)}lb bands</span>`;
+    } else if (isBandAddon) {
+      // "@ 75lb (35 DB + 40 band)"  ·  bands-only:  "@ 40lb (band)"  ·  DB-only: "@ 35lb"
+      const db = w || 0;
+      const total = db + addonBandSum;
+      if (total === 0) {
+        bandSummary = '';
+      } else if (addonBandSum > 0 && db > 0) {
+        bandSummary = `<span style="font-size:12px;font-family:monospace;color:#7c3aed">@ ${total}lb <span style="opacity:0.7">(${db} DB + ${addonBandSum} band)</span></span>`;
+      } else if (addonBandSum > 0) {
+        bandSummary = `<span style="font-size:12px;font-family:monospace;color:#7c3aed">@ ${addonBandSum}lb <span style="opacity:0.7">(band)</span></span>`;
+      } else {
+        bandSummary = `<span style="font-size:12px;font-family:monospace;color:#2563eb">@ ${db}lb</span>`;
+      }
     } else {
       bandSummary = w ? `<span style="font-size:12px;font-family:monospace;color:#2563eb">@ ${w}lb</span>` : '';
     }
@@ -2946,6 +2993,11 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       const total = selectedBands.reduce((a, b) => a + b, 0);
       if (total > 0) hintText = `<span style="${hintStyle}">${total}lb</span>`;
       else if (wHint) hintText = `<span style="${hintStyle}">${wHint}lb</span>`;
+    } else if (isBandAddon) {
+      // Show combined DB+band hint so it matches what the user will actually lift.
+      const db = w != null ? w : (wHint || 0);
+      const total = (db || 0) + addonBandSum;
+      if (total > 0) hintText = `<span style="${hintStyle}">${total}lb</span>`;
     } else if (w) {
       hintText = `<span style="${hintStyle}">${w}lb</span>`;
     } else if (wHint) {
@@ -2984,6 +3036,22 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       weightDisplay = isExplicit
         ? `<span style="font-size:12px;font-family:monospace;color:#7c3aed">${total}lb bands</span>`
         : `<span style="font-size:11px;font-family:monospace;color:#c084fc;border-bottom:1px dashed #c084fc">${total}lb bands?</span>`;
+    }
+  } else if (isBandAddon) {
+    // bandAddon header: "75lb (35 + 40 band)" — combined load with a breakdown.
+    const db = w != null ? w : (wHint || 0);
+    const total = (db || 0) + addonBandSum;
+    const bandsKey = `${exIdx}-${setKey}-bands`;
+    const isExplicit = !!(state.bands && state.bands[bandsKey] && state.bands[bandsKey].length);
+    const dbExplicit = w != null;
+    const fullyExplicit = dbExplicit && (addonBandSum === 0 || isExplicit);
+    if (total > 0) {
+      const breakdown = (addonBandSum > 0 && (db || 0) > 0)
+        ? ` <span style="opacity:0.7">(${db} + ${addonBandSum} band)</span>`
+        : (addonBandSum > 0 ? ` <span style="opacity:0.7">(band)</span>` : '');
+      weightDisplay = fullyExplicit
+        ? `<span style="font-size:12px;font-family:monospace;color:#7c3aed">${total}lb${breakdown}</span>`
+        : `<span style="font-size:11px;font-family:monospace;color:#c084fc;border-bottom:1px dashed #c084fc">${total}lb?${breakdown}</span>`;
     }
   } else if (w) {
     weightDisplay = `<span style="font-size:12px;font-family:monospace;color:#2563eb">${w}lb / ${lbToKg(w)}kg</span>`;
@@ -3029,36 +3097,53 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       </div>
     </div>` : '';
 
-  let resistanceHTML;
-  if (isBW) {
-    resistanceHTML = '';
-  } else if (isBand || isAssist) {
-    // Is the current band selection a live user pick, or an auto-suggestion
-    // pulled from the last session's bands_json? Suggestions render dashed
-    // to match the weight-hint style, so it's clear nothing is locked in yet.
+  // Build the dumbbell-weight picker as a reusable string so bandAddon
+  // exercises can show it ABOVE the band picker (DB + bands → combined).
+  const dbPickerHTML = `
+    <div style="margin-bottom:6px">
+      <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb)</div>
+      <div class="scroll-row" style="display:flex;gap:4px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
+        ${[...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b).map(lb => {
+          const isSelected = w === lb;
+          const isHinted = w == null && wHint === lb;
+          if (isHinted) {
+            return `
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
+                <span style="font-size:8px;color:#3b82f6;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">last</span>
+                <button class="weight-btn" style="background:white;color:#3b82f6;border:2px dashed #3b82f6;min-width:44px;padding:6px 12px;font-size:14px;font-weight:700;border-radius:8px;box-shadow:0 2px 8px rgba(59,130,246,0.2)"
+                  data-scroll-target
+                  onclick="state.weights['${exIdx}-${setKey}']=${lb};triggerSave();render()">
+                  ${lb}
+                </button>
+              </div>`;
+          }
+          return `
+            <button class="weight-btn" style="${weightBtnStyle(lb, isSelected, false)};flex-shrink:0"
+              ${isSelected ? 'data-scroll-target' : ''}
+              onclick="state.weights['${exIdx}-${setKey}']=${isSelected?'null':lb};triggerSave();render()">
+              ${lb}
+            </button>`;
+        }).join("")}
+      </div>
+    </div>`;
+
+  // Build the band picker for assist / band-only / bandAddon. Same buttons,
+  // but section label and accent colors vary by mode.
+  function buildBandPickerHTML(mode) {
+    // mode: 'assist' | 'band' | 'addon'
     const bandsKey = `${exIdx}-${setKey}-bands`;
     const isExplicit = !!(state.bands && state.bands[bandsKey] && state.bands[bandsKey].length);
-    // When 2+ bands are auto-suggested, show a single "use last" pill that
-    // visually connects the suggested bands and commits them in one tap.
     const showCombo = !isExplicit && selectedBands.length >= 2;
     const comboTotal = showCombo ? selectedBands.reduce((a,b)=>a+b,0) : 0;
     const suggestedIdx = showCombo ? BANDS.map((b,i) => selectedBands.includes(b.lb) ? i : -1).filter(i => i >= 0) : [];
     const firstSel = suggestedIdx.length ? suggestedIdx[0] : -1;
     const lastSel = suggestedIdx.length ? suggestedIdx[suggestedIdx.length - 1] : -1;
     const comboCSV = selectedBands.join(',');
-    // Section label + colors differ for assist (cyan/teal) vs resistance (purple)
-    const sectionLabel = isAssist ? 'Assist Band' : 'Band';
-    const sectionColor = isAssist ? '#0891b2' : '#7c3aed';
-    const pillUseText = isAssist ? 'use last assist' : 'use last';
-    // bodyweightPill + gripToggle are computed earlier (above the if/else)
-    // so they can also render in the dumbbell branch when an exercise has
-    // grips declared but uses dumbbells (e.g. bicep curls).
-    // Build the connector row that visually ties the suggested band columns
-    // together. Sits BELOW the buttons so the reading order is: buttons →
-    // bracket connecting them → pill to apply. End-caps extend UP toward the
-    // button bottoms so the bracket appears anchored to those columns.
-    const gradStart = isAssist ? '#22d3ee' : '#a855f7';
-    const gradEnd = isAssist ? '#0891b2' : '#7c3aed';
+    const sectionLabel = mode === 'assist' ? 'Assist Band' : mode === 'addon' ? '+ Band Boost' : 'Band';
+    const sectionColor = mode === 'assist' ? '#0891b2' : '#7c3aed';
+    const pillUseText = mode === 'assist' ? 'use last assist' : mode === 'addon' ? 'use last bands' : 'use last';
+    const gradStart = mode === 'assist' ? '#22d3ee' : '#a855f7';
+    const gradEnd = mode === 'assist' ? '#0891b2' : '#7c3aed';
     const connectorRow = showCombo ? `
       <div onclick="applyBandSelection(${exIdx},'${setKey}','${comboCSV}')" style="display:flex;gap:3px;padding-left:26px;cursor:pointer;margin-top:4px;position:relative;height:14px;align-items:flex-start">
         ${BANDS.map((b, i) => {
@@ -3073,22 +3158,18 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       </div>` : '';
     const usePill = showCombo ? `
       <div onclick="applyBandSelection(${exIdx},'${setKey}','${comboCSV}')" style="margin:4px 0 0;padding-left:26px;cursor:pointer">
-        <div style="display:inline-flex;align-items:center;gap:8px;background:${isAssist ? 'linear-gradient(135deg,#ecfeff,#cffafe)' : 'linear-gradient(135deg,#f3e8ff,#ede9fe)'};border:1px dashed ${isAssist ? '#0891b2' : '#a855f7'};color:${isAssist ? '#155e75' : '#6b21a8'};font-weight:700;font-size:12px;padding:5px 12px;border-radius:999px;box-shadow:0 1px 4px ${isAssist ? 'rgba(8,145,178,0.18)' : 'rgba(124,58,237,0.18)'}">
+        <div style="display:inline-flex;align-items:center;gap:8px;background:${mode === 'assist' ? 'linear-gradient(135deg,#ecfeff,#cffafe)' : 'linear-gradient(135deg,#f3e8ff,#ede9fe)'};border:1px dashed ${mode === 'assist' ? '#0891b2' : '#a855f7'};color:${mode === 'assist' ? '#155e75' : '#6b21a8'};font-weight:700;font-size:12px;padding:5px 12px;border-radius:999px;box-shadow:0 1px 4px ${mode === 'assist' ? 'rgba(8,145,178,0.18)' : 'rgba(124,58,237,0.18)'}">
           <span style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;opacity:0.8">${pillUseText}</span>
           <span style="font-family:monospace;font-size:13px">${comboTotal}lb</span>
           <span style="font-size:11px;opacity:0.7">tap to apply</span>
         </div>
       </div>` : '';
-    resistanceHTML = `
-      ${bodyweightPill}
-      ${gripToggle}
+    return `
       <div style="margin-bottom:6px">
-        <div style="font-size:10px;color:${sectionColor};font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">${sectionLabel}</div>
+        <div style="font-size:10px;color:${sectionColor};font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">${sectionLabel}${mode === 'addon' ? ' <span style="opacity:0.5;font-weight:400;text-transform:none;letter-spacing:0">· optional</span>' : ''}</div>
         <div class="scroll-row" style="display:flex;gap:3px;padding-left:26px;padding-bottom:0;align-items:flex-end">
           ${BANDS.map(b => {
             const sel = selectedBands.includes(b.lb);
-            // Per-band "LAST" chip is suppressed when the combo pill is showing
-            // (the pill already calls out the suggestion at the row level).
             if (sel && !isExplicit && !showCombo) {
               return `
                 <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
@@ -3102,7 +3183,6 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
             if (sel && isExplicit) {
               style = `background:${b.color};color:${b.text};outline:2px solid ${b.color};box-shadow:0 1px 3px rgba(0,0,0,0.2);`;
             } else if (sel && showCombo) {
-              // dashed-suggestion look so it's clear bands aren't locked in yet
               style = `background:white;color:${b.color};border:2px dashed ${b.color};box-shadow:0 1px 3px ${b.color}22;`;
             } else {
               style = `background:white;color:${b.color};border:2px solid ${b.color};opacity:0.7;`;
@@ -3115,38 +3195,26 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
         ${connectorRow}
         ${usePill}
       </div>`;
+  }
+
+  let resistanceHTML;
+  if (isBW) {
+    resistanceHTML = '';
+  } else if (isBand || isAssist) {
+    resistanceHTML = `
+      ${bodyweightPill}
+      ${gripToggle}
+      ${buildBandPickerHTML(isAssist ? 'assist' : 'band')}`;
+  } else if (isBandAddon) {
+    // bandAddon (squats): DB picker on top, then optional band picker stacked below.
+    resistanceHTML = `
+      ${gripToggle}
+      ${dbPickerHTML}
+      ${buildBandPickerHTML('addon')}`;
   } else {
     resistanceHTML = `
       ${gripToggle}
-      <div style="margin-bottom:6px">
-        <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb)</div>
-        <div class="scroll-row" style="display:flex;gap:4px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
-          ${[...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b).map(lb => {
-            const isSelected = w === lb;
-            const isHinted = w == null && wHint === lb;
-            if (isHinted) {
-              // Prominent "last time" chip — bigger, with caption ABOVE so
-              // chip bottoms stay aligned with neighbors (parent row uses
-              // align-items:flex-end).
-              return `
-                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
-                  <span style="font-size:8px;color:#3b82f6;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">last</span>
-                  <button class="weight-btn" style="background:white;color:#3b82f6;border:2px dashed #3b82f6;min-width:44px;padding:6px 12px;font-size:14px;font-weight:700;border-radius:8px;box-shadow:0 2px 8px rgba(59,130,246,0.2)"
-                    data-scroll-target
-                    onclick="state.weights['${exIdx}-${setKey}']=${lb};triggerSave();render()">
-                    ${lb}
-                  </button>
-                </div>`;
-            }
-            return `
-              <button class="weight-btn" style="${weightBtnStyle(lb, isSelected, false)};flex-shrink:0"
-                ${isSelected ? 'data-scroll-target' : ''}
-                onclick="state.weights['${exIdx}-${setKey}']=${isSelected?'null':lb};triggerSave();render()">
-                ${lb}
-              </button>`;
-          }).join("")}
-        </div>
-      </div>`;
+      ${dbPickerHTML}`;
   }
 
   return `
