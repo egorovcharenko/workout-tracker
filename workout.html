@@ -2478,6 +2478,166 @@ function parseRepRange(repsStr) {
   return [8, 12]; // default hypertrophy range
 }
 
+// Pull a sub-exercise (or top-level exercise) name + range from an exIdx/setKey
+// pair. Used by progression so supersets get suggestions per sub-exercise.
+function _exerciseAt(exIdx, setKey) {
+  const ex = state.workout?.exercises?.[exIdx];
+  if (!ex) return null;
+  const subEx = (typeof setKey === 'number') ? getSubExercise(exIdx, setKey) : null;
+  const effective = subEx ? { ...ex, ...subEx } : ex;
+  return { ex, subEx, effective, name: subEx ? subEx.name : ex.name };
+}
+
+// Step UP one notch in the dumbbell weight ladder for a given exercise.
+function _nextWeightStep(currentLb, effectiveEx) {
+  const ladder = [...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b);
+  const next = ladder.find(w => w > currentLb);
+  return next ?? null;
+}
+
+// Step DOWN one notch (used to suggest LESS assist for assisted exercises).
+function _prevWeightStep(currentLb, effectiveEx) {
+  const ladder = [...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b);
+  let prev = null;
+  for (const w of ladder) { if (w < currentLb) prev = w; else break; }
+  return prev;
+}
+
+// Smallest assist-band reduction: drop the smallest band from the current set.
+// Used by assist-band exercises to progress (less assist = more BW load).
+function _lighterAssist(currentBands) {
+  if (!currentBands || currentBands.length === 0) return null;
+  const sorted = currentBands.slice().sort((a,b) => a-b);
+  // Drop the smallest band — gentlest reduction.
+  return sorted.slice(1);
+}
+
+// Smallest band-only progression: add the next-lightest band that isn't
+// already in use. Falls back to "stack another small band" if all are picked.
+function _heavierBandStack(currentBands) {
+  const used = new Set(currentBands || []);
+  const lightestUnused = BANDS.find(b => !used.has(b.lb));
+  if (lightestUnused) return [...(currentBands || []), lightestUnused.lb];
+  return null;
+}
+
+// Progression suggestion for an exercise based on last-session performance.
+// Returns null if there's no prior data or the exercise can't be progressed
+// (e.g. bodyweight exercises return a rep-only suggestion).
+//
+// Output:
+//   { weight: number|null,            // suggested weight chip to highlight (DB only for bandAddon)
+//     bands:  number[]|null,          // suggested band combo (assist / bandAddon / band-only)
+//     reps:   number,                 // suggested rep target chip to highlight
+//     reason: string,                 // short explanation for the tooltip
+//     mode:   'graduate'|'add-rep'|'hold'|'regress'  // which strategy fired
+//   }
+function getProgressionSuggestion(exIdx, setKey) {
+  if (!state.lastSession || !state.workout) return null;
+  const refs = _exerciseAt(exIdx, setKey);
+  if (!refs) return null;
+  const { effective, name } = refs;
+  const isBW = !!effective.bodyweight;
+  const isAssist = effective.assist === true;
+  const isBand = effective.equipment === 'band' && !isAssist;
+  const isBandAddon = effective.bandAddon === true;
+
+  // Find this exercise's working sets in the last session. Each lookup key
+  // is `${name}|working|${n}` — pull n=1..6 (covers superset rounds too).
+  const lastSets = [];
+  for (let n = 1; n <= 6; n++) {
+    const data = state.lastSession[`${name}|working|${n}`];
+    if (!data) continue;
+    const reps = parseInt(data.reps);
+    if (isNaN(reps) || reps <= 0) continue;
+    lastSets.push({
+      weight: data.weight_lb ?? null,
+      reps,
+      bands: data.bands_json ? (() => { try { return JSON.parse(data.bands_json); } catch { return null; } })() : null,
+    });
+  }
+  if (lastSets.length === 0) return null;
+
+  const [lo, hi] = parseRepRange(effective.reps);
+  // Use the WORST (lowest reps) set as the bottleneck — progress only when
+  // the weakest set comfortably hits the target. This avoids pushing weight
+  // up just because set 1 was easy.
+  const worst = lastSets.reduce((a, s) => s.reps < a.reps ? s : a, lastSets[0]);
+  const lastWeight = lastSets[0].weight;            // 1st working set is the canonical "main" weight
+  const lastBands  = lastSets[0].bands;
+  const mid = Math.ceil((lo + hi) / 2);
+
+  // ---------- Bodyweight: only rep progression matters ----------
+  if (isBW) {
+    if (worst.reps >= hi) return { weight: null, bands: null, reps: hi + 2, reason: `Crushed ${hi} clean — push past it`, mode: 'graduate' };
+    if (worst.reps >= mid) return { weight: null, bands: null, reps: worst.reps + 1, reason: `Add 1 rep over last (${worst.reps})`, mode: 'add-rep' };
+    if (worst.reps >= lo)  return { weight: null, bands: null, reps: worst.reps + 1, reason: `Push past ${worst.reps}`, mode: 'add-rep' };
+    return { weight: null, bands: null, reps: lo, reason: `Aim for ${lo} clean reps`, mode: 'regress' };
+  }
+
+  // ---------- Assist (pull-ups): progress = LESS assist ----------
+  // The metric is "weakest reps at this assist". When you hit top of range
+  // on the worst set, drop the smallest band so next time is harder.
+  if (isAssist) {
+    if (worst.reps >= hi && lastBands && lastBands.length > 0) {
+      const lighter = _lighterAssist(lastBands);
+      const droppedSum = lastBands.reduce((a,b)=>a+b,0) - (lighter ? lighter.reduce((a,b)=>a+b,0) : 0);
+      return { weight: null, bands: lighter || [], reps: lo, reason: `Hit ${worst.reps} clean — drop ${droppedSum}lb assist`, mode: 'graduate' };
+    }
+    if (worst.reps >= mid) return { weight: null, bands: lastBands, reps: worst.reps + 1, reason: `Match same assist, +1 rep`, mode: 'add-rep' };
+    if (worst.reps >= lo)  return { weight: null, bands: lastBands, reps: worst.reps + 1, reason: `Push past ${worst.reps}`, mode: 'add-rep' };
+    return { weight: null, bands: lastBands, reps: lo, reason: `Aim for ${lo} clean reps`, mode: 'regress' };
+  }
+
+  // ---------- Band-only (RDL, pushdowns): progress = heavier band stack ----------
+  if (isBand) {
+    if (worst.reps >= hi) {
+      const heavier = _heavierBandStack(lastBands || []);
+      if (heavier) {
+        const addedSum = heavier.reduce((a,b)=>a+b,0) - (lastBands || []).reduce((a,b)=>a+b,0);
+        return { weight: null, bands: heavier, reps: lo, reason: `Crushed ${worst.reps} — stack +${addedSum}lb band`, mode: 'graduate' };
+      }
+    }
+    if (worst.reps >= mid) return { weight: null, bands: lastBands, reps: worst.reps + 1, reason: `Same bands, +1 rep`, mode: 'add-rep' };
+    if (worst.reps >= lo)  return { weight: null, bands: lastBands, reps: worst.reps + 1, reason: `Push past ${worst.reps}`, mode: 'add-rep' };
+    return { weight: null, bands: lastBands, reps: lo, reason: `Hold and aim for ${lo}`, mode: 'regress' };
+  }
+
+  // ---------- bandAddon (squats): combined = DB + bands. ----------
+  // Last weight_lb is COMBINED. Progress: bump DB by one ladder step at the
+  // same band selection. If DB ladder is maxed, tack on the smallest unused
+  // band instead.
+  if (isBandAddon) {
+    const bandSum = (lastBands || []).reduce((a,b)=>a+b,0);
+    const lastDB = (lastWeight || 0) - bandSum;        // recover DB-only
+    if (worst.reps >= hi) {
+      const nextDB = _nextWeightStep(lastDB, effective);
+      if (nextDB) {
+        return { weight: nextDB, bands: lastBands || [], reps: lo, reason: `Crushed ${worst.reps} at ${lastWeight}lb — bump DB to ${nextDB}`, mode: 'graduate' };
+      }
+      const heavier = _heavierBandStack(lastBands || []);
+      if (heavier) {
+        const addedSum = heavier.reduce((a,b)=>a+b,0) - bandSum;
+        return { weight: lastDB || null, bands: heavier, reps: lo, reason: `DB ladder maxed — add +${addedSum}lb band`, mode: 'graduate' };
+      }
+    }
+    if (worst.reps >= mid) return { weight: lastDB || null, bands: lastBands, reps: worst.reps + 1, reason: `Same load, +1 rep`, mode: 'add-rep' };
+    if (worst.reps >= lo)  return { weight: lastDB || null, bands: lastBands, reps: worst.reps + 1, reason: `Push past ${worst.reps}`, mode: 'add-rep' };
+    return { weight: lastDB || null, bands: lastBands, reps: lo, reason: `Hold and aim for ${lo}`, mode: 'regress' };
+  }
+
+  // ---------- Plain dumbbell: progress = heavier weight at top of range ----------
+  if (lastWeight == null) return null;
+  if (worst.reps >= hi) {
+    const next = _nextWeightStep(lastWeight, effective);
+    if (next) return { weight: next, bands: null, reps: lo, reason: `Crushed ${worst.reps} at ${lastWeight}lb — bump to ${next}`, mode: 'graduate' };
+    return { weight: lastWeight, bands: null, reps: hi + 2, reason: `Top of ladder — push reps past ${hi}`, mode: 'add-rep' };
+  }
+  if (worst.reps >= mid) return { weight: lastWeight, bands: null, reps: worst.reps + 1, reason: `Same weight, +1 rep over last`, mode: 'add-rep' };
+  if (worst.reps >= lo)  return { weight: lastWeight, bands: null, reps: worst.reps + 1, reason: `Push past ${worst.reps}`, mode: 'add-rep' };
+  return { weight: lastWeight, bands: null, reps: lo, reason: `Hold and aim for ${lo} clean`, mode: 'regress' };
+}
+
 function getLastReps(exIdx, setKey) {
   // Check last session data for this exercise/set
   if (!state.lastSession) return null;
@@ -3017,6 +3177,16 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
 
   // Active set (isNext) — show weight/band + reps pickers
   const nextAccent = 'border-left:4px solid #3b82f6;padding-left:10px;background:#eff6ff;margin:-2px -4px;padding-top:12px;padding-bottom:12px;padding-right:8px;border-radius:0 8px 8px 0;box-shadow:0 1px 4px rgba(59,130,246,0.15);overflow:hidden;';
+  // Auto-progression suggestion: fires only on the FIRST working set of the
+  // active exercise, before any pick has been made. Subsequent sets default
+  // to "match what you just did" (handled by getHintWeight from in-session
+  // prior set) so the suggestion would just be noise there.
+  const isFirstWorking = (typeof setKey === 'number' && setKey === 0);
+  const userPickedWeight = (state.weights[`${exIdx}-${setKey}`] != null);
+  const explicitBands = !!(state.bands && state.bands[`${exIdx}-${setKey}-bands`] && state.bands[`${exIdx}-${setKey}-bands`].length);
+  const suggestion = (!isWarmup && isFirstWorking && !userPickedWeight && !explicitBands)
+    ? getProgressionSuggestion(exIdx, setKey)
+    : null;
   let weightDisplay = '';
   if (isBW) {
     // no weight for bodyweight exercises
@@ -3099,13 +3269,30 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
 
   // Build the dumbbell-weight picker as a reusable string so bandAddon
   // exercises can show it ABOVE the band picker (DB + bands → combined).
+  // The TRY chip (amber dashed) marks the auto-progression suggestion when
+  // it differs from the LAST chip; if both target the same weight, TRY wins
+  // (it's the actionable signal).
+  const suggestedWeight = suggestion?.weight ?? null;
   const dbPickerHTML = `
     <div style="margin-bottom:6px">
       <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb)</div>
       <div class="scroll-row" style="display:flex;gap:4px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
         ${[...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b).map(lb => {
           const isSelected = w === lb;
-          const isHinted = w == null && wHint === lb;
+          const isTry = suggestedWeight === lb && !isSelected;
+          const isHinted = !isTry && w == null && wHint === lb;
+          if (isTry) {
+            const tip = (suggestion?.reason || '').replace(/"/g, '&quot;');
+            return `
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0" title="${tip}">
+                <span style="font-size:8px;color:#d97706;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">try</span>
+                <button class="weight-btn" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);color:#92400e;border:2px dashed #d97706;min-width:44px;padding:6px 12px;font-size:14px;font-weight:700;border-radius:8px;box-shadow:0 2px 8px rgba(217,119,6,0.25)"
+                  data-scroll-target
+                  onclick="state.weights['${exIdx}-${setKey}']=${lb};triggerSave();render()">
+                  ${lb}
+                </button>
+              </div>`;
+          }
           if (isHinted) {
             return `
               <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
@@ -3217,6 +3404,38 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       ${dbPickerHTML}`;
   }
 
+  // Auto-progression banner — sits above the resistance picker, recaps the
+  // suggestion in plain English, and offers a one-tap "Apply" that commits
+  // both the suggested weight and bands at once. Tap a single chip if you
+  // want only one of the two.
+  let suggestionBanner = '';
+  if (suggestion) {
+    const labelParts = [];
+    if (suggestion.weight != null) labelParts.push(`${suggestion.weight}lb`);
+    if (suggestion.bands && suggestion.bands.length) labelParts.push(`+ ${suggestion.bands.reduce((a,b)=>a+b,0)}lb band`);
+    if (suggestion.bands && suggestion.bands.length === 0 && isAssist) labelParts.push('no assist');
+    labelParts.push(`× ${suggestion.reps}`);
+    const summary = labelParts.join(' ');
+    const reason = (suggestion.reason || '').replace(/"/g, '&quot;');
+    const bandsArg = suggestion.bands ? JSON.stringify(suggestion.bands).replace(/"/g, '&quot;') : 'null';
+    const wArg = suggestion.weight != null ? suggestion.weight : 'null';
+    const modeBadge = ({
+      'graduate': { color: '#16a34a', label: 'level up' },
+      'add-rep':  { color: '#d97706', label: 'add a rep' },
+      'hold':     { color: '#6b7280', label: 'hold' },
+      'regress':  { color: '#9ca3af', label: 'rebuild' },
+    }[suggestion.mode] || { color: '#d97706', label: suggestion.mode });
+    suggestionBanner = `
+      <div style="margin:0 0 8px 26px;padding:7px 10px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fcd34d;border-radius:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:13px">💡</span>
+        <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:white;background:${modeBadge.color};padding:2px 6px;border-radius:4px">${modeBadge.label}</span>
+        <span style="font-size:12px;color:#92400e;font-weight:600;font-family:monospace">${summary}</span>
+        <span style="font-size:11px;color:#a16207;flex:1;min-width:120px">${reason}</span>
+        <button onclick='applySuggestion(${exIdx},${JSON.stringify(setKey)},${wArg},${bandsArg},${suggestion.reps})' style="background:#d97706;color:white;border:none;font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;cursor:pointer;flex-shrink:0">Apply</button>
+      </div>`;
+  }
+  const suggestedReps = suggestion?.reps ?? null;
+
   return `
     <div style="border-bottom:1px solid #f0f0f0;padding:10px 0;${nextAccent}">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
@@ -3224,12 +3443,26 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
         <span style="font-size:12px;color:#9ca3af">${targetReps} reps</span>
         ${weightDisplay ? `<span style="margin-left:auto">${weightDisplay}</span>` : ''}
       </div>
+      ${suggestionBanner}
       ${resistanceHTML}
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e5e7eb">
         <div style="font-size:10px;color:#16a34a;font-weight:600;margin-bottom:5px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Reps done — tap to log</div>
         <div class="scroll-row" style="display:flex;gap:5px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
           ${(() => { const lastR = getLastReps(exIdx, setKey); const [lo,hi] = parseRepRange(targetReps); return getRepsOptions(targetReps).map(r => {
             const isLast = lastR === r;
+            const isTry = suggestedReps === r && !isLast;
+            if (isTry) {
+              const tip = (suggestion?.reason || '').replace(/"/g, '&quot;');
+              return `
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0" title="${tip}">
+                  <span style="font-size:8px;color:#d97706;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">try</span>
+                  <button class="reps-btn" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);color:#92400e;border:2px dashed #d97706;width:44px;height:44px;font-size:15px;font-weight:700;box-shadow:0 2px 8px rgba(217,119,6,0.25)"
+                    data-scroll-target
+                    onclick="logReps(${exIdx},'${setKey}',${r},${isWarmup},event)">
+                    ${r}
+                  </button>
+                </div>`;
+            }
             if (isLast) {
               // Prominent "last time" reps chip — bigger with caption above
               return `
@@ -3252,6 +3485,31 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       </div>
     </div>
   `;
+}
+
+// One-tap commit for a progression suggestion: sets the DB weight and the
+// band selection at once. Reps are still logged manually so you confirm the
+// rep count after the set, not before.
+function applySuggestion(exIdx, setKey, weight, bands, _reps) {
+  const k = `${exIdx}-${setKey}`;
+  const ex = state.workout.exercises[exIdx];
+  if (weight != null) state.weights[k] = weight;
+  if (Array.isArray(bands)) {
+    if (!state.bands) state.bands = {};
+    state.bands[`${k}-bands`] = bands.slice();
+    // For assist, recompute effective load (BW − bandSum) into state.weights so
+    // the existing render path picks it up.
+    if (ex?.assist) {
+      const sum = bands.reduce((a,b) => a+b, 0);
+      state.weights[k] = sum > 0 ? Math.max(0, (state.bodyweight || 175) - sum) : null;
+    } else if (ex?.equipment === 'band' && !ex?.bandAddon) {
+      const sum = bands.reduce((a,b) => a+b, 0);
+      state.weights[k] = sum || null;
+    }
+    // bandAddon: leave state.weights as the picked DB; combined is computed at save.
+  }
+  triggerSave();
+  render();
 }
 
 function renderWorkout() {
