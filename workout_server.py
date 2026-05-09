@@ -301,7 +301,27 @@ def save_session(data):
     session_id = data.get("session_id")
 
     if session_id:
-        # Update existing session
+        # Cross-day stale-tab guard: if a browser tab from a previous day still
+        # has state.sessionId in memory, its autoSave will hit this UPDATE branch
+        # and the DELETE FROM sets below would wipe the older session's data
+        # and replace it with today's partial state. Verify the existing row's
+        # date matches the payload's date before allowing the destructive
+        # UPDATE; otherwise fall through to INSERT (treat as a fresh session).
+        c.execute("SELECT date FROM sessions WHERE id = ?", (session_id,))
+        row = c.fetchone()
+        existing_date = row["date"] if row else None
+        payload_date = data.get("date")
+        if existing_date and payload_date and existing_date != payload_date:
+            print(f"  [SAVE] REJECTED stale-tab UPDATE: session {session_id} dated {existing_date} but payload dated {payload_date}. Treating as new session.")
+            session_id = None
+        elif not row:
+            # The id we were given doesn't exist anymore (e.g. user deleted it).
+            # Don't error — fall through to INSERT.
+            print(f"  [SAVE] session_id {session_id} not found, creating new session")
+            session_id = None
+
+    if session_id:
+        # Update existing session (date validated above)
         c.execute(
             "UPDATE sessions SET duration_sec = ?, notes = ? WHERE id = ?",
             (data.get("duration_sec", 0), data.get("notes", ""), session_id),
