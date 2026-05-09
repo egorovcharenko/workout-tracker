@@ -867,7 +867,7 @@ async function autoSave() {
     w.exercises.forEach((ex, exIdx) => {
       if (state.completed[`${exIdx}-warmup`]) {
         const bands = getBandSelection(exIdx, "warmup");
-        sets.push({ exercise: ex.name, set_type: "warmup", set_number: 0, reps: String(state.reps[`${exIdx}-warmup`] || ex.reps), weight_lb: getEffectiveWeight(exIdx, "warmup"), bands_json: bands.length ? JSON.stringify(bands) : null });
+        sets.push({ exercise: ex.name, set_type: "warmup", set_number: 0, reps: String(state.reps[`${exIdx}-warmup`] || ex.reps), weight_lb: getEffectiveWeight(exIdx, "warmup"), bands_json: bands.length ? JSON.stringify(bands) : null, grip: (state.grip || {})[`${exIdx}-warmup`] || null });
       }
       for (let i = 0; i < getSetCount(exIdx); i++) {
         if (state.completed[`${exIdx}-${i}`]) {
@@ -875,7 +875,7 @@ async function autoSave() {
           const exName = subEx ? subEx.name : ex.name;
           const exReps = subEx ? subEx.reps : ex.reps;
           const bands = getBandSelection(exIdx, i);
-          sets.push({ exercise: exName, set_type: "working", set_number: i + 1, reps: String(state.reps[`${exIdx}-${i}`] || exReps), weight_lb: getEffectiveWeight(exIdx, i), bands_json: bands.length ? JSON.stringify(bands) : null });
+          sets.push({ exercise: exName, set_type: "working", set_number: i + 1, reps: String(state.reps[`${exIdx}-${i}`] || exReps), weight_lb: getEffectiveWeight(exIdx, i), bands_json: bands.length ? JSON.stringify(bands) : null, grip: (state.grip || {})[`${exIdx}-${i}`] || null });
         }
       }
     });
@@ -1023,6 +1023,13 @@ async function loadSessionData(workoutName) {
           } else {
             state.weights[key] = s.weight_lb;
           }
+        }
+        // Per-set grip (e.g. neutral/chinup/pullup for pull-ups). Restoring
+        // here so reloads preserve what was tapped, plus the picker can show
+        // "last grip" hints from previous sessions.
+        if (s.grip) {
+          if (!state.grip) state.grip = {};
+          state.grip[key] = s.grip;
         }
         if (s.set_type === "working") {
           maxSetNum[exIdx] = Math.max(maxSetNum[exIdx] || 0, setNum);
@@ -1190,8 +1197,15 @@ function tickRest() {
     _persistRestState();
     // Natural completion → flash the screen + brief "GO!" cue.
     if (wasResting) flashRestDone();
+    render();  // full render only on transition (off → on or on → off)
+    return;
   }
-  render();
+  // Per-second tick during active rest: patch the timer DOM in place. Skipping
+  // the full render() preserves focus on textareas (e.g. exercise notes editor)
+  // and inputs.
+  if (!_patchRestTimer()) {
+    render();  // fallback if the rest-timer node hasn't been mounted yet
+  }
 }
 function flashRestDone() {
   const layer = ensureCelebrationLayer();
@@ -2483,17 +2497,37 @@ function renderRestSeparator() {
   const color = isLow ? "#ef4444" : "#3b82f6";
   const bg = isLow ? "#fef2f2" : "#eff6ff";
   const border = isLow ? "#fecaca" : "#bfdbfe";
+  // ids so the per-second tick can mutate text/width directly without a full
+  // re-render (which destroys textarea focus on note edits).
   return `
-    <div style="margin:8px 0;border-radius:8px;overflow:hidden;border:1px solid ${border};background:${bg}">
+    <div id="rest-timer" style="margin:8px 0;border-radius:8px;overflow:hidden;border:1px solid ${border};background:${bg}">
       <div style="position:relative;height:50px;background:#e5e7eb;border-radius:8px;overflow:hidden">
-        <div style="height:100%;width:${pct}%;background:${color};transition:width 1s linear;opacity:0.2;border-radius:8px"></div>
+        <div id="rest-timer-bar" style="height:100%;width:${pct}%;background:${color};transition:width 1s linear;opacity:0.2;border-radius:8px"></div>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 14px">
-          <span style="font-size:20px;font-weight:700;color:${color};font-variant-numeric:tabular-nums">rest &middot; ${state.restLeft}s</span>
+          <span id="rest-timer-text" style="font-size:20px;font-weight:700;color:${color};font-variant-numeric:tabular-nums">rest &middot; ${state.restLeft}s</span>
           <button onclick="skipRest()" style="font-size:12px;color:#6b7280;background:white;border:1px solid #e5e7eb;border-radius:6px;padding:4px 14px;cursor:pointer">skip →</button>
         </div>
       </div>
     </div>
   `;
+}
+
+// Surgically update the rest timer's text + progress bar without a render().
+// Called from tickRest so an open textarea (note editor) doesn't lose focus
+// every second when the DOM is rebuilt.
+function _patchRestTimer() {
+  const text = document.getElementById('rest-timer-text');
+  const bar = document.getElementById('rest-timer-bar');
+  if (!text || !bar) return false;
+  const dur = state.restDur || state.workout.rest || 60;
+  const pct = Math.max(0, Math.min(100, ((dur - state.restLeft) / dur) * 100));
+  const isLow = state.restLeft <= 10;
+  const color = isLow ? "#ef4444" : "#3b82f6";
+  text.textContent = `rest · ${state.restLeft}s`;
+  text.style.color = color;
+  bar.style.width = `${pct}%`;
+  bar.style.background = color;
+  return true;
 }
 
 function getRepsOptions(targetReps) {
@@ -2635,15 +2669,20 @@ function getProgressionSuggestion(exIdx, setKey) {
   if (lastSets.length === 0) return null;
 
   const [lo, hi] = parseRepRange(effective.reps);
-  const worst = lastSets.reduce((a, s) => s.reps < a.reps ? s : a, lastSets[0]);
   const lastWeight = lastSets[0].weight;
   const lastBands  = lastSets[0].bands;
-  const mid = Math.ceil((lo + hi) / 2);
   const isInSession = source === 'in-session';
 
-  // Per-set baseline: ALWAYS pull last session's reps for THIS specific set
-  // (regardless of in-session/last-session source). That's the LAST chip on
-  // the reps picker, so factoring it in keeps the banner honest.
+  // ── PROGRESSION POLICY (max +1 rep, or +1 weight step at top of range): ──
+  //   • Reps target = +1 over THIS set's last performance, capped at hi.
+  //   • Weight goes up by 1 step ONLY when last session's WORST set hit hi
+  //     (true double-progression — wait until ALL sets are at top before
+  //     adding load). Never graduates from in-session data alone.
+  //   • No regress mode (would jump 8 → 10 = +2). Just +1 from where you were.
+  //   • Per-set baseline: set 2's TRY uses set 2's last reps, not set 1's.
+  //     Set 2 is naturally weaker than set 1; conflating would be unrealistic.
+
+  // THIS set's last performance (per-set, from last session).
   let thisSetLastReps = null;
   if (typeof setKey === 'number' && state.lastSession) {
     const data = state.lastSession[`${name}|working|${setKey + 1}`];
@@ -2652,83 +2691,74 @@ function getProgressionSuggestion(exIdx, setKey) {
       if (!isNaN(r) && r > 0) thisSetLastReps = r;
     }
   }
-  const _addRep = () => {
-    const baseline = Math.max(worst.reps, thisSetLastReps || 0);
-    return Math.min(hi, baseline + 1);
-  };
-  const _addRepReason = (suffix = '') => {
-    // Spell out exactly what target we're pushing past so the chip math
-    // checks out (no more "+1 rep" labels when the actual delta is +2).
-    const target = _addRep();
-    const baseline = Math.max(worst.reps, thisSetLastReps || 0);
-    if (thisSetLastReps != null && thisSetLastReps > worst.reps) {
-      return `🔥 Last week you hit ${thisSetLastReps} on this set — push to ${target}${suffix}`;
+  // LAST session's worst set (for graduate gate). Only counts the previous
+  // workout's logged sets — not in-session, since in-session is incomplete.
+  let lastWeekWorst = null;
+  if (state.lastSession) {
+    for (let n = 1; n <= 6; n++) {
+      const d = state.lastSession[`${name}|working|${n}`];
+      if (!d) continue;
+      const r = parseInt(d.reps);
+      if (isNaN(r) || r <= 0) continue;
+      if (lastWeekWorst === null || r < lastWeekWorst) lastWeekWorst = r;
     }
-    if (isInSession && worst.reps > (thisSetLastReps || 0)) {
-      return `💪 Already at ${worst.reps} this session — keep ${target}${suffix}`;
-    }
-    return `💪 Push past ${baseline}${suffix}`;
+  }
+
+  // Per-set rep target: STRICTLY +1 over THIS set's last reps, capped at hi.
+  const _repTarget = () => {
+    if (thisSetLastReps != null) return Math.min(hi, thisSetLastReps + 1);
+    return lo;
   };
-  // In-session graduate guard: don't bump load mid-workout off ONE strong
-  // set. Wait until ALL sets are logged so next session's last-session
-  // anchor can graduate cleanly.
-  const _canGraduate = !isInSession;
-  // When in-session worst >= hi, fall through to a 'match' suggestion
-  // (cap at hi) — celebrate the strong set, hold the load.
-  const matchVibe = () => {
-    const lines = [
-      `🔥 Locked in — match ${worst.reps}`,
-      `💪 Same energy — hit ${worst.reps} again`,
-      `⚡ Riding it — repeat ${worst.reps}`,
-    ];
-    return lines[setKey % lines.length] || lines[0];
+  const _repReason = (suffix = '') => {
+    if (thisSetLastReps == null) return `Aim for ${lo} clean reps${suffix}`;
+    if (thisSetLastReps >= hi) return `🔥 Locked in — match your ${thisSetLastReps}${suffix}`;
+    return `💪 Last time set ${setKey + 1} was ${thisSetLastReps} — push to ${thisSetLastReps + 1}${suffix}`;
   };
+  const _mode = () => {
+    if (thisSetLastReps != null && thisSetLastReps >= hi) return 'match';
+    return 'add-rep';
+  };
+
+  // Graduate gate: +1 weight step ONLY when last session's worst set was at
+  // the top of the range (and we're not in-session — need a full prior session).
+  const canGraduate = !isInSession && lastWeekWorst != null && lastWeekWorst >= hi;
 
   // ---------- Bodyweight: only rep progression matters ----------
   if (isBW) {
-    if (worst.reps >= hi && _canGraduate) return { weight: null, bands: null, reps: hi + 2, reason: `🔥 Crushed ${hi} clean — push past it`, mode: 'graduate', source };
-    if (worst.reps >= hi)  return { weight: null, bands: null, reps: hi, reason: matchVibe(), mode: 'match', source };
-    if (worst.reps >= mid) return { weight: null, bands: null, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
-    if (worst.reps >= lo)  return { weight: null, bands: null, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
-    return { weight: null, bands: null, reps: lo, reason: `Reset — aim for ${lo} clean reps`, mode: 'regress', source };
+    if (canGraduate) return { weight: null, bands: null, reps: hi + 1, reason: `🔥 Crushed ${hi} clean across all sets — push to ${hi + 1}`, mode: 'graduate', source };
+    return { weight: null, bands: null, reps: _repTarget(), reason: _repReason(), mode: _mode(), source };
   }
 
-  // ---------- Assist (pull-ups): progress = LESS assist ----------
+  // ---------- Assist (pull-ups): graduate = LESS assist ----------
   if (isAssist) {
-    if (worst.reps >= hi && _canGraduate && lastBands && lastBands.length > 0) {
+    if (canGraduate && lastBands && lastBands.length > 0) {
       const lighter = _lighterAssist(lastBands);
       const droppedSum = lastBands.reduce((a,b)=>a+b,0) - (lighter ? lighter.reduce((a,b)=>a+b,0) : 0);
-      return { weight: null, bands: lighter || [], reps: lo, reason: `🔥 Hit ${worst.reps} clean — drop ${droppedSum}lb assist`, mode: 'graduate', source };
+      return { weight: null, bands: lighter || [], reps: lo, reason: `🔥 Hit ${hi} across all sets — drop ${droppedSum}lb assist`, mode: 'graduate', source };
     }
-    if (worst.reps >= hi)  return { weight: null, bands: lastBands, reps: hi, reason: matchVibe(), mode: 'match', source };
-    if (worst.reps >= mid) return { weight: null, bands: lastBands, reps: _addRep(), reason: _addRepReason(' at same assist'), mode: 'add-rep', source };
-    if (worst.reps >= lo)  return { weight: null, bands: lastBands, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
-    return { weight: null, bands: lastBands, reps: lo, reason: `Reset — aim for ${lo} clean reps`, mode: 'regress', source };
+    return { weight: null, bands: lastBands, reps: _repTarget(), reason: _repReason(' at same assist'), mode: _mode(), source };
   }
 
-  // ---------- Band-only (RDL, pushdowns): progress = heavier band stack ----------
+  // ---------- Band-only (RDL, pushdowns): graduate = heavier band stack ----------
   if (isBand) {
-    if (worst.reps >= hi && _canGraduate) {
+    if (canGraduate) {
       const heavier = _heavierBandStack(lastBands || []);
       if (heavier) {
         const addedSum = heavier.reduce((a,b)=>a+b,0) - (lastBands || []).reduce((a,b)=>a+b,0);
-        return { weight: null, bands: heavier, reps: lo, reason: `🔥 Crushed ${worst.reps} — stack +${addedSum}lb band`, mode: 'graduate', source };
+        return { weight: null, bands: heavier, reps: lo, reason: `🔥 Crushed ${hi} across all sets — stack +${addedSum}lb band`, mode: 'graduate', source };
       }
     }
-    if (worst.reps >= hi)  return { weight: null, bands: lastBands, reps: hi, reason: matchVibe(), mode: 'match', source };
-    if (worst.reps >= mid) return { weight: null, bands: lastBands, reps: _addRep(), reason: _addRepReason(' at same bands'), mode: 'add-rep', source };
-    if (worst.reps >= lo)  return { weight: null, bands: lastBands, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
-    return { weight: null, bands: lastBands, reps: lo, reason: `Hold and aim for ${lo}`, mode: 'regress', source };
+    return { weight: null, bands: lastBands, reps: _repTarget(), reason: _repReason(' at same bands'), mode: _mode(), source };
   }
 
   // ---------- bandAddon (squats): combined = DB + bands. ----------
   if (isBandAddon) {
     const bandSum = (lastBands || []).reduce((a,b)=>a+b,0);
     const lastDB = (lastWeight || 0) - bandSum;
-    if (worst.reps >= hi && _canGraduate) {
+    if (canGraduate) {
       const nextDB = _nextWeightStep(lastDB, effective);
       if (nextDB) {
-        return { weight: nextDB, bands: lastBands || [], reps: lo, reason: `🔥 Crushed ${worst.reps} at ${lastWeight}lb — bump DB to ${nextDB}`, mode: 'graduate', source };
+        return { weight: nextDB, bands: lastBands || [], reps: lo, reason: `🔥 Crushed ${hi} at ${lastWeight}lb — bump DB to ${nextDB}`, mode: 'graduate', source };
       }
       const heavier = _heavierBandStack(lastBands || []);
       if (heavier) {
@@ -2736,23 +2766,17 @@ function getProgressionSuggestion(exIdx, setKey) {
         return { weight: lastDB || null, bands: heavier, reps: lo, reason: `🔥 DB maxed — add +${addedSum}lb band`, mode: 'graduate', source };
       }
     }
-    if (worst.reps >= hi)  return { weight: lastDB || null, bands: lastBands, reps: hi, reason: matchVibe(), mode: 'match', source };
-    if (worst.reps >= mid) return { weight: lastDB || null, bands: lastBands, reps: _addRep(), reason: _addRepReason(' at same load'), mode: 'add-rep', source };
-    if (worst.reps >= lo)  return { weight: lastDB || null, bands: lastBands, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
-    return { weight: lastDB || null, bands: lastBands, reps: lo, reason: `Hold and aim for ${lo}`, mode: 'regress', source };
+    return { weight: lastDB || null, bands: lastBands, reps: _repTarget(), reason: _repReason(' at same load'), mode: _mode(), source };
   }
 
-  // ---------- Plain dumbbell: progress = heavier weight at top of range ----------
+  // ---------- Plain dumbbell: graduate = heavier weight ----------
   if (lastWeight == null) return null;
-  if (worst.reps >= hi && _canGraduate) {
+  if (canGraduate) {
     const next = _nextWeightStep(lastWeight, effective);
-    if (next) return { weight: next, bands: null, reps: lo, reason: `🔥 Crushed ${worst.reps} at ${lastWeight}lb — bump to ${next}`, mode: 'graduate', source };
-    return { weight: lastWeight, bands: null, reps: hi + 2, reason: `🔥 Top of ladder — push reps past ${hi}`, mode: 'add-rep', source };
+    if (next) return { weight: next, bands: null, reps: lo, reason: `🔥 Crushed ${hi} at ${lastWeight}lb — bump to ${next}`, mode: 'graduate', source };
+    return { weight: lastWeight, bands: null, reps: hi + 1, reason: `🔥 Top of ladder — push past ${hi}`, mode: 'add-rep', source };
   }
-  if (worst.reps >= hi)  return { weight: lastWeight, bands: null, reps: hi, reason: matchVibe(), mode: 'match', source };
-  if (worst.reps >= mid) return { weight: lastWeight, bands: null, reps: _addRep(), reason: _addRepReason(` at ${lastWeight}lb`), mode: 'add-rep', source };
-  if (worst.reps >= lo)  return { weight: lastWeight, bands: null, reps: _addRep(), reason: _addRepReason(), mode: 'add-rep', source };
-  return { weight: lastWeight, bands: null, reps: lo, reason: `Hold and aim for ${lo} clean`, mode: 'regress', source };
+  return { weight: lastWeight, bands: null, reps: _repTarget(), reason: _repReason(` at ${lastWeight}lb`), mode: _mode(), source };
 }
 
 function getLastReps(exIdx, setKey) {
@@ -3380,29 +3404,73 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       </button>
     </div>` : '';
   // Grip toggle: shows for any exercise with `grips: [...]` declared.
-  // Assist exercises use cyan tint; everything else uses indigo so the
-  // toggle stays visually distinct from the band/weight pickers.
+  // Assist exercises use cyan tint; everything else uses indigo.
   const gripOpts = getGripOptions(effectiveEx);
   const hasGripToggle = gripOpts.length > 0;
   const currentGrip = hasGripToggle ? getGrip(exIdx, setKey) : null;
+  // Find this exercise's grip from last session (prefer THIS set's last,
+  // fall back to working set 1's grip if this specific set wasn't logged).
+  let lastSessionGrip = null;
+  if (hasGripToggle && state.lastSession) {
+    const setNum = setKey === 'warmup' ? 0 : setKey + 1;
+    const setType = setKey === 'warmup' ? 'warmup' : 'working';
+    const tryKeys = [`${effectiveEx.name}|${setType}|${setNum}`, `${effectiveEx.name}|working|1`];
+    for (const k of tryKeys) {
+      const d = state.lastSession[k];
+      if (d?.grip) { lastSessionGrip = d.grip; break; }
+    }
+  }
+  // Per-workout rotation: cycle to the NEXT grip after last session's pick.
+  // Goal — over multiple weeks, you naturally hit each variation evenly,
+  // sparing tendons from the same angle every workout. Only suggests when
+  // we have a last-session grip to rotate from.
+  let rotatedGrip = null;
+  if (hasGripToggle && lastSessionGrip) {
+    const ids = gripOpts.map(g => g.id);
+    const idx = ids.indexOf(lastSessionGrip);
+    if (idx >= 0) rotatedGrip = ids[(idx + 1) % ids.length];
+  } else if (hasGripToggle && !lastSessionGrip) {
+    // First time — suggest the first grip in the declared order.
+    rotatedGrip = gripOpts[0].id;
+  }
   const gripAccent = isAssist
     ? { label: '#0891b2', selBg: '#0891b2', idleBorder: '#a5f3fc', idleColor: '#0e7490', glow: 'rgba(8,145,178,0.3)' }
     : { label: '#6366f1', selBg: '#6366f1', idleBorder: '#c7d2fe', idleColor: '#4338ca', glow: 'rgba(99,102,241,0.3)' };
+  const gripLegendParts = [];
+  if (lastSessionGrip) gripLegendParts.push(`<span style="color:${gripAccent.label};font-weight:700">last</span> last week`);
+  if (rotatedGrip && rotatedGrip !== currentGrip) gripLegendParts.push(`<span style="color:#d97706;font-weight:700">try</span> rotate this week`);
+  const gripLegend = gripLegendParts.length
+    ? `<span style="opacity:0.55;font-weight:400;text-transform:none;letter-spacing:0;font-size:9px"> · ${gripLegendParts.join(' · ')}</span>`
+    : ` <span style="opacity:0.5;font-weight:400;text-transform:none;letter-spacing:0">· hover for details</span>`;
   const gripToggle = hasGripToggle ? `
     <div style="padding-left:26px;margin-bottom:6px">
-      <div style="font-size:10px;color:${gripAccent.label};font-weight:600;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.03em">Grip <span style="opacity:0.5;font-weight:400;text-transform:none;letter-spacing:0">· hover for details</span></div>
-      <div style="display:flex;gap:4px;flex-wrap:wrap">
+      <div style="font-size:10px;color:${gripAccent.label};font-weight:600;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.03em">Grip${gripLegend}</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:flex-end">
         ${gripOpts.map(g => {
           const sel = currentGrip === g.id;
-          const style = sel
-            ? `background:${gripAccent.selBg};color:white;border:1px solid ${gripAccent.selBg};box-shadow:0 1px 3px ${gripAccent.glow}`
-            : `background:white;color:${gripAccent.idleColor};border:1px solid ${gripAccent.idleBorder};opacity:0.85`;
-          // Tooltip via title attribute — works on desktop hover and iOS long-press.
+          const isLast = !sel && lastSessionGrip === g.id;
+          const isRot  = !sel && !isLast && rotatedGrip === g.id && currentGrip == null;
           const tip = (g.desc || '').replace(/"/g, '&quot;');
-          return `<button title="${tip}" onclick="selectGrip(${exIdx},'${setKey}','${g.id}')" style="${style};font-size:11px;font-weight:600;padding:5px 11px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
+          let style;
+          let caption = '';
+          if (sel) {
+            style = `background:${gripAccent.selBg};color:white;border:1px solid ${gripAccent.selBg};box-shadow:0 1px 3px ${gripAccent.glow}`;
+          } else if (isRot) {
+            style = `background:linear-gradient(135deg,#fffbeb,#fef3c7);color:#92400e;border:2px dashed #d97706;box-shadow:0 1px 4px rgba(217,119,6,0.2)`;
+            caption = `<span style="font-size:8px;color:#d97706;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">try</span>`;
+          } else if (isLast) {
+            style = `background:white;color:${gripAccent.idleColor};border:2px dashed ${gripAccent.label};opacity:0.9`;
+            caption = `<span style="font-size:8px;color:${gripAccent.label};letter-spacing:0.08em;text-transform:uppercase;font-weight:700;line-height:1">last</span>`;
+          } else {
+            style = `background:white;color:${gripAccent.idleColor};border:1px solid ${gripAccent.idleBorder};opacity:0.7`;
+          }
+          const btn = `<button title="${tip}" onclick="selectGrip(${exIdx},'${setKey}','${g.id}')" style="${style};font-size:11px;font-weight:600;padding:5px 11px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
             <span style="font-size:13px;font-family:monospace;line-height:1">${g.icon}</span>
             <span>${g.label}</span>
           </button>`;
+          return caption
+            ? `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">${caption}${btn}</div>`
+            : btn;
         }).join('')}
       </div>
     </div>` : '';

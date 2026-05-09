@@ -84,6 +84,7 @@ def get_db():
             completed INTEGER DEFAULT 1
         )''')
         conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS bands_json TEXT")
+        conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS grip TEXT")
         conn.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMP")
         conn.execute('''CREATE TABLE IF NOT EXISTS motivations (
             id SERIAL PRIMARY KEY,
@@ -147,6 +148,11 @@ def get_db():
     )''')
     try:
         conn.execute("ALTER TABLE sets ADD COLUMN bands_json TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE sets ADD COLUMN grip TEXT")
         conn.commit()
     except sqlite3.OperationalError:
         pass
@@ -342,8 +348,8 @@ def save_session(data):
 
     for s in data.get("sets", []):
         c.execute(
-            "INSERT INTO sets (session_id, exercise, set_type, set_number, reps, weight_lb, bands_json, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (session_id, s["exercise"], s["set_type"], s.get("set_number", 0), s.get("reps", ""), s.get("weight_lb"), s.get("bands_json"), 1),
+            "INSERT INTO sets (session_id, exercise, set_type, set_number, reps, weight_lb, bands_json, grip, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (session_id, s["exercise"], s["set_type"], s.get("set_number", 0), s.get("reps", ""), s.get("weight_lb"), s.get("bands_json"), s.get("grip"), 1),
         )
     conn.commit()
     conn.close()
@@ -415,11 +421,11 @@ def get_last_session(workout_name):
     if not row:
         conn.close()
         return {}
-    c.execute("SELECT exercise, set_type, set_number, weight_lb, reps, bands_json FROM sets WHERE session_id = ?", (row["id"],))
+    c.execute("SELECT exercise, set_type, set_number, weight_lb, reps, bands_json, grip FROM sets WHERE session_id = ?", (row["id"],))
     data = {}
     for r in c.fetchall():
         key = f"{r['exercise']}|{r['set_type']}|{r['set_number']}"
-        data[key] = {"weight_lb": r["weight_lb"], "reps": r["reps"], "bands_json": r["bands_json"]}
+        data[key] = {"weight_lb": r["weight_lb"], "reps": r["reps"], "bands_json": r["bands_json"], "grip": r["grip"]}
     conn.close()
     return data
 
@@ -430,7 +436,7 @@ def get_exercise_hints():
     c = conn.cursor()
     # For each exercise+set_type+set_number combo, get the most recent entry
     c.execute('''
-        SELECT s2.exercise, s2.set_type, s2.set_number, s2.weight_lb, s2.reps, s2.bands_json
+        SELECT s2.exercise, s2.set_type, s2.set_number, s2.weight_lb, s2.reps, s2.bands_json, s2.grip
         FROM sets s2
         INNER JOIN sessions sess ON sess.id = s2.session_id
         WHERE s2.id IN (
@@ -444,7 +450,7 @@ def get_exercise_hints():
     data = {}
     for r in c.fetchall():
         key = f"{r['exercise']}|{r['set_type']}|{r['set_number']}"
-        data[key] = {"weight_lb": r["weight_lb"], "reps": r["reps"], "bands_json": r["bands_json"]}
+        data[key] = {"weight_lb": r["weight_lb"], "reps": r["reps"], "bands_json": r["bands_json"], "grip": r["grip"]}
     conn.close()
     return data
 
@@ -587,7 +593,7 @@ def get_today_session(workout_name, today=None):
         "started_at": started_at_str,
         "sets": [],
     }
-    c.execute("SELECT exercise, set_type, set_number, weight_lb, reps, bands_json FROM sets WHERE session_id = ? ORDER BY id", (row["id"],))
+    c.execute("SELECT exercise, set_type, set_number, weight_lb, reps, bands_json, grip FROM sets WHERE session_id = ? ORDER BY id", (row["id"],))
     session["sets"] = [dict(r) for r in c.fetchall()]
     conn.close()
     return session
