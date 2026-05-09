@@ -2864,21 +2864,38 @@ function logReps(exIdx, setKey, reps, isWarmup, ev) {
   }
   if (!state.running) startTimer();
   // Rest timer:
+  //  - after warmup: FULL duration (need real rest before working sets begin)
   //  - after working sets: full duration (per-exercise override or workout default)
-  //  - after warmup: half duration (shorter breather before working sets begin)
   //  - skipped between superset sub-exercises within the same round
+  //  - skipped after the last working set of an exercise IF the next exercise
+  //    starts with a warmup — warmup is meant to be light, so resting right
+  //    before it is wasted time. Rest comes AFTER the warmup instead.
   {
     const ex = state.workout.exercises[exIdx];
     const baseRest = ex.rest || state.workout.rest || 0;
     let restDur = 0;
     if (isWarmup) {
-      restDur = Math.round(baseRest / 2);
+      // Full rest after warmup (was half — too short for the actual working set).
+      restDur = baseRest;
     } else {
       let skipRestBetween = false;
       if (ex.supersetExercises && typeof sk === "number") {
         const subIdx = sk % ex.supersetExercises.length;
         // Skip rest if not the last sub-exercise in a round
         if (subIdx < ex.supersetExercises.length - 1) skipRestBetween = true;
+      }
+      // Skip rest before next exercise's warmup. Looks at the NEXT
+      // exercise: if it has a warmup that hasn't been turned off and isn't a
+      // superset (which doesn't have warmups), no rest before it.
+      const setCount = getSetCount(exIdx);
+      const isLastWorkingOfExercise = (typeof sk === 'number' && sk === setCount - 1);
+      if (isLastWorkingOfExercise) {
+        const nextEx = state.workout.exercises[exIdx + 1];
+        const nextHasWarmup = nextEx
+          && !nextEx.supersetExercises
+          && !state.warmupOff?.[exIdx + 1]
+          && !state.completed[`${exIdx + 1}-warmup`];
+        if (nextHasWarmup) skipRestBetween = true;
       }
       if (!skipRestBetween) restDur = baseRest;
     }
