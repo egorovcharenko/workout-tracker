@@ -345,6 +345,9 @@ let state = {
   running: false,
   resting: false,
   restLeft: 0,
+  // Rest-timer pause: when true, tickRest stops decrementing. The remaining
+  // seconds are held in state.restLeft and restEndAt is rebased on resume.
+  restPaused: false,
   showGif: {},
   lastSession: {},
   reps: {},
@@ -1198,6 +1201,7 @@ function startRest(duration) {
   if (restInterval) { clearInterval(restInterval); restInterval = null; }
   if (!duration || duration <= 0) return;
   state.resting = true;
+  state.restPaused = false;
   state.restDur = duration;
   state.restEndAt = Date.now() + duration * 1000;
   state.restLeft = duration;
@@ -1206,6 +1210,12 @@ function startRest(duration) {
 }
 function tickRest() {
   if (!state.resting || !state.restEndAt) return;
+  if (state.restPaused) {
+    // While paused: keep restLeft as a frozen value, don't drain. We still
+    // patch the DOM so the "REST · PAUSED" label re-renders if needed.
+    if (!_patchRestTimer()) render();
+    return;
+  }
   const left = Math.max(0, Math.ceil((state.restEndAt - Date.now()) / 1000));
   const wasResting = state.resting;
   state.restLeft = left;
@@ -1259,7 +1269,41 @@ function flashRestDone() {
 function skipRest() {
   clearInterval(restInterval); restInterval = null;
   state.resting = false; state.restLeft = 0; state.restEndAt = 0;
+  state.restPaused = false;
+  _persistRestState();
   render();
+}
+// Pause / resume the rest countdown. When pausing we freeze restLeft and clear
+// restEndAt; when resuming we rebase endAt = now + restLeft * 1000 so tickRest
+// keeps draining naturally.
+function togglePauseRest() {
+  if (!state.resting) return;
+  if (state.restPaused) {
+    state.restPaused = false;
+    state.restEndAt = Date.now() + state.restLeft * 1000;
+  } else {
+    state.restPaused = true;
+    state.restLeft = Math.max(0, Math.ceil((state.restEndAt - Date.now()) / 1000));
+    state.restEndAt = 0;
+  }
+  _persistRestState();
+  render();
+}
+// Bump the remaining rest time by `secs` seconds. Updates restEndAt while
+// running, or restLeft directly while paused. restDur grows with the bump
+// so the progress-bar denominator stays sensible (otherwise +15 to a 60s
+// timer with 5s left would show 100% fill immediately on resume).
+function addRestSeconds(secs) {
+  if (!state.resting) return;
+  if (state.restPaused) {
+    state.restLeft = Math.max(0, state.restLeft + secs);
+  } else {
+    state.restEndAt = Math.max(Date.now(), state.restEndAt + secs * 1000);
+    state.restLeft = Math.max(0, Math.ceil((state.restEndAt - Date.now()) / 1000));
+  }
+  state.restDur = Math.max(state.restDur || 0, state.restLeft);
+  _persistRestState();
+  if (!_patchRestTimer()) render();
 }
 // Re-sync immediately when tab regains focus (mobile bg throttling).
 function _resyncTimers() {
@@ -2511,24 +2555,42 @@ function getNextSet() {
   return null;
 }
 
+// Rest-timer block — design-handoff style: a tinted card with a left-to-right
+// drain bar BEHIND the foreground. Foreground stacks the REST/PAUSED label
+// and a big monospace M:SS countdown on the left, +15s / pause / skip buttons
+// on the right. Three accent states:
+//   • running (work)  → blue  (#60A5FA)
+//   • paused          → amber (#FBBF24) so the pause is loud
+//   • low (≤10s left) → amber (visual cue you're nearly done)
+// Done isn't surfaced here because tickRest fires the green flash + clears
+// state.resting the moment it hits 0, which removes this block on the next
+// render. Element ids let _patchRestTimer mutate text/bar without a render.
 function renderRestSeparator() {
-  // Use the actual rest duration that was started (per-exercise override
-  // takes precedence). Fallback to workout default for legacy state.
   const dur = state.restDur || state.workout.rest || 60;
-  const pct = Math.max(0, Math.min(100, ((dur - state.restLeft) / dur) * 100));
-  const isLow = state.restLeft <= 10;
-  const color = isLow ? "#ef4444" : "#3b82f6";
-  const bg = isLow ? "#fef2f2" : "#eff6ff";
-  const border = isLow ? "#fecaca" : "#bfdbfe";
-  // ids so the per-second tick can mutate text/width directly without a full
-  // re-render (which destroys textarea focus on note edits).
+  const left = Math.max(0, state.restLeft || 0);
+  const pct = Math.max(0, Math.min(100, ((dur - left) / dur) * 100));
+  const isLow = left <= 10;
+  const paused = !!state.restPaused;
+  // Accent priorities: paused > low > running (blue).
+  const accent = paused ? "#FBBF24" : isLow ? "#FBBF24" : "#60A5FA";
+  const accentBg = paused ? "rgba(251,191,36,0.10)" : isLow ? "rgba(251,191,36,0.10)" : "rgba(96,165,250,0.10)";
+  const m = Math.floor(left / 60);
+  const s = String(left % 60).padStart(2, '0');
+  const label = paused ? "REST · PAUSED" : "REST";
+  const ghostBtn = `background:rgba(255,255,255,0.04);border:1px solid ${accent}40;color:${accent};font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;padding:6px 10px;border-radius:7px;cursor:pointer;letter-spacing:0.3px`;
+  const solidBtn = `background:${accent};border:1px solid ${accent};color:#0B0F14;font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;padding:6px 10px;border-radius:7px;cursor:pointer;letter-spacing:0.3px`;
   return `
-    <div id="rest-timer" style="margin:8px 0;border-radius:8px;overflow:hidden;border:1px solid ${border};background:${bg}">
-      <div style="position:relative;height:50px;background:#e5e7eb;border-radius:8px;overflow:hidden">
-        <div id="rest-timer-bar" style="height:100%;width:${pct}%;background:${color};transition:width 1s linear;opacity:0.2;border-radius:8px"></div>
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 14px">
-          <span id="rest-timer-text" style="font-size:20px;font-weight:700;color:${color};font-variant-numeric:tabular-nums">rest &middot; ${state.restLeft}s</span>
-          <button onclick="skipRest()" style="font-size:12px;color:#6b7280;background:white;border:1px solid #e5e7eb;border-radius:6px;padding:4px 14px;cursor:pointer">skip →</button>
+    <div id="rest-timer" data-noinvert style="margin:12px 0;border-radius:12px;border:1px solid ${accent}55;background:${accentBg};padding:12px 14px 10px;position:relative;overflow:hidden">
+      <div id="rest-timer-bar" style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:linear-gradient(90deg,${accent}30,${accent}14);transition:width 1s linear;border-radius:12px 0 0 12px"></div>
+      <div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div style="display:flex;flex-direction:column;gap:1px;min-width:0">
+          <span id="rest-timer-label" style="color:${accent};font-family:ui-monospace,Menlo,monospace;font-size:9px;font-weight:800;letter-spacing:0.8px">${label}</span>
+          <span id="rest-timer-text" style="color:#F3F4F6;font-family:ui-monospace,Menlo,monospace;font-size:28px;font-weight:800;letter-spacing:-0.5px;line-height:1.05;font-variant-numeric:tabular-nums">${m}:${s}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          <button onclick="addRestSeconds(15)" title="Add 15 seconds" style="${ghostBtn}">+15s</button>
+          <button onclick="togglePauseRest()" title="${paused ? 'Resume' : 'Pause'}" style="${ghostBtn};min-width:32px">${paused ? '▶' : '❚❚'}</button>
+          <button onclick="skipRest()" title="Skip rest" style="${solidBtn}">skip</button>
         </div>
       </div>
     </div>
@@ -2537,19 +2599,33 @@ function renderRestSeparator() {
 
 // Surgically update the rest timer's text + progress bar without a render().
 // Called from tickRest so an open textarea (note editor) doesn't lose focus
-// every second when the DOM is rebuilt.
+// every second when the DOM is rebuilt. Mirrors the renderRestSeparator
+// styling logic (accent, bar gradient, label) so a paused/low/running
+// transition looks right without a full re-render.
 function _patchRestTimer() {
   const text = document.getElementById('rest-timer-text');
   const bar = document.getElementById('rest-timer-bar');
-  if (!text || !bar) return false;
+  const label = document.getElementById('rest-timer-label');
+  const root = document.getElementById('rest-timer');
+  if (!text || !bar || !root) return false;
   const dur = state.restDur || state.workout.rest || 60;
-  const pct = Math.max(0, Math.min(100, ((dur - state.restLeft) / dur) * 100));
-  const isLow = state.restLeft <= 10;
-  const color = isLow ? "#ef4444" : "#3b82f6";
-  text.textContent = `rest · ${state.restLeft}s`;
-  text.style.color = color;
+  const left = Math.max(0, state.restLeft || 0);
+  const pct = Math.max(0, Math.min(100, ((dur - left) / dur) * 100));
+  const isLow = left <= 10;
+  const paused = !!state.restPaused;
+  const accent = paused ? "#FBBF24" : isLow ? "#FBBF24" : "#60A5FA";
+  const accentBg = paused ? "rgba(251,191,36,0.10)" : isLow ? "rgba(251,191,36,0.10)" : "rgba(96,165,250,0.10)";
+  const m = Math.floor(left / 60);
+  const s = String(left % 60).padStart(2, '0');
+  text.textContent = `${m}:${s}`;
   bar.style.width = `${pct}%`;
-  bar.style.background = color;
+  bar.style.background = `linear-gradient(90deg,${accent}30,${accent}14)`;
+  root.style.borderColor = `${accent}55`;
+  root.style.background = accentBg;
+  if (label) {
+    label.textContent = paused ? 'REST · PAUSED' : 'REST';
+    label.style.color = accent;
+  }
   return true;
 }
 
@@ -3375,8 +3451,13 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     `;
   }
 
-  // Active set (isNext) — show weight/band + reps pickers
-  const nextAccent = 'border-left:4px solid #3b82f6;padding-left:10px;background:#eff6ff;margin:-2px -4px;padding-top:12px;padding-bottom:12px;padding-right:8px;border-radius:0 8px 8px 0;box-shadow:0 1px 4px rgba(59,130,246,0.15);overflow:hidden;';
+  // Active set (isNext) — show weight/band + reps pickers. Surface is the
+  // design's "active set block": linear-gradient blue-fade with a subtle
+  // ring (1px) + soft drop-shadow glow that emphasizes which set you're
+  // currently logging without screaming. Note: under the global #app invert
+  // filter the gradient maps to a pale tint (similar effect, different hue),
+  // which still reads as "this is the focus" against the surrounding card.
+  const nextAccent = 'background:linear-gradient(180deg,#eff6ff,#f8fafc);box-shadow:0 0 0 1px rgba(96,165,250,0.35),0 8px 24px -10px rgba(59,130,246,0.32);padding:14px 12px 16px;margin:6px -4px 4px;border-radius:12px;overflow:hidden;';
   // Auto-progression suggestion: fires on every working set (not warmup),
   // anchored to last session's data. The banner shows on the first working
   // set only — for subsequent sets, the TRY chips alone are enough since
@@ -3724,12 +3805,12 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
       'regress':  { color: '#9ca3af', label: 'rebuild' },
     }[suggestion.mode] || { color: '#d97706', label: suggestion.mode });
     suggestionBanner = `
-      <div style="margin:0 0 8px 26px;padding:7px 10px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fcd34d;border-radius:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="font-size:13px">💡</span>
-        <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:white;background:${modeBadge.color};padding:2px 6px;border-radius:4px">${modeBadge.label}</span>
-        <span style="font-size:12px;color:#92400e;font-weight:600;font-family:monospace">${summary}</span>
-        <span style="font-size:11px;color:#a16207;flex:1;min-width:120px">${reason}</span>
-        <button onclick='applySuggestion(${exIdx},${JSON.stringify(setKey)},${wArg},${bandsArg},${suggestion.reps})' style="background:#d97706;color:white;border:none;font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;cursor:pointer;flex-shrink:0">Apply</button>
+      <div style="margin:0 0 10px 26px;padding:8px 12px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fcd34d;border-radius:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 1px 3px rgba(217,119,6,0.08)">
+        <span style="font-size:14px">💡</span>
+        <span style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:white;background:${modeBadge.color};padding:3px 7px;border-radius:5px;font-family:ui-monospace,Menlo,monospace">${modeBadge.label}</span>
+        <span style="font-size:13px;color:#92400e;font-weight:700;font-family:ui-monospace,Menlo,monospace;letter-spacing:-0.2px">${summary}</span>
+        <span style="font-size:11px;color:#a16207;flex:1;min-width:120px;line-height:1.4">${reason}</span>
+        <button onclick='applySuggestion(${exIdx},${JSON.stringify(setKey)},${wArg},${bandsArg},${suggestion.reps})' style="background:#d97706;color:white;border:none;font-size:11px;font-weight:700;padding:5px 12px;border-radius:7px;cursor:pointer;flex-shrink:0;letter-spacing:0.2px">Apply</button>
       </div>`;
   }
   const suggestedReps = suggestion?.reps ?? null;
