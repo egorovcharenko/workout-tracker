@@ -3562,7 +3562,12 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
   const _maxVis = _visSorted[_visSorted.length - 1];
   const _hiddenBelow = !_isExpanded && _ladder.some(lb => lb < _minVis);
   const _hiddenAbove = !_isExpanded && _ladder.some(lb => lb > _maxVis);
-  const _arrowStyle = "background:#f9fafb;color:#9ca3af;border:1px dashed #d1d5db;font-size:13px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;flex-shrink:0;align-self:center;font-family:monospace;letter-spacing:-1px";
+  // Match the regular .weight-btn dimensions so arrows sit on the same
+  // baseline as the chips. align-self:flex-end so the arrow's bottom lines
+  // up with the chip BUTTON bottoms (the parent row uses align-items:flex-end
+  // and the captioned LAST/TRY chips have their button at the bottom of
+  // their column — so flex-end is the shared baseline).
+  const _arrowStyle = "background:#f9fafb;color:#9ca3af;border:1px dashed #d1d5db;font-size:13px;font-weight:700;padding:2px 8px;border-radius:6px;cursor:pointer;flex-shrink:0;align-self:flex-end;font-family:monospace;letter-spacing:-1px;line-height:1.6";
   const dbPickerHTML = `
     <div style="margin-bottom:6px">
       <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb) ${_legend}</div>
