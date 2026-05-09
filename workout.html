@@ -721,15 +721,22 @@ function getEffectiveWeight(exIdx, setKey) {
   }
   // bandAddon (e.g. Goblet/Bulgarian Split Squat): combined load = DB + sum(bands).
   // state.weights stores DB-only; bands tracked separately in state.bands.
+  // IMPORTANT: do NOT fall back to the hint at save time. Hints are
+  // predictions, not facts — silently saving them caused historical
+  // sessions to compound wrong values across weeks. If the user didn't
+  // pick a DB, fall back to band-only load (or null if neither).
   if (ex?.bandAddon) {
     const dbExplicit = getSetWeight(exIdx, setKey);
-    const db = dbExplicit != null ? dbExplicit : (getHintDBWeight(exIdx, setKey) || 0);
     const bands = getBandSelection(exIdx, setKey);
     const bandSum = bands.reduce((a, b) => a + b, 0);
-    if ((db || 0) === 0 && bandSum === 0) return null;
-    return (db || 0) + bandSum;
+    if (dbExplicit == null) {
+      return bandSum > 0 ? bandSum : null;
+    }
+    return dbExplicit + bandSum;
   }
-  return getSetWeight(exIdx, setKey) || getHintWeight(exIdx, setKey);
+  // Plain dumbbell: explicit pick only. No hint fallback (would silently
+  // bake yesterday's prediction into today's record).
+  return getSetWeight(exIdx, setKey);
 }
 
 function getSetCount(exIdx) {
@@ -2763,6 +2770,25 @@ function getLastReps(exIdx, setKey) {
 function logReps(exIdx, setKey, reps, isWarmup, ev) {
   // setKey comes as string from onclick — parse to number for working sets
   const sk = (setKey === "warmup") ? "warmup" : parseInt(setKey);
+  // Auto-commit any visible "LAST" hint as an explicit pick BEFORE the save
+  // so saved data matches what was on screen. Previously the save layer
+  // silently fell back to the hint, which was invisible to the user — they'd
+  // see "60 LAST" but not realize 60 was about to be persisted, leading to
+  // historical sets being filled with predictions instead of measurements.
+  // Now whatever shows on the chip becomes state and is visibly committed.
+  const k = `${exIdx}-${sk}`;
+  const ex = state.workout.exercises[exIdx];
+  if (ex && !ex.bodyweight && state.weights[k] == null) {
+    if (ex.bandAddon) {
+      const hintDB = getHintDBWeight(exIdx, sk);
+      if (hintDB != null) state.weights[k] = hintDB;
+    } else if (!ex.assist && !(ex.equipment === 'band')) {
+      const hint = getHintWeight(exIdx, sk);
+      if (hint != null) state.weights[k] = hint;
+    }
+    // assist & band-only exercises derive weight from band selection at save
+    // time (BW − sum or sum), so no hint needs committing here.
+  }
   // Capture clicked button rect BEFORE render() replaces the DOM, so the
   // set-completion animation can be anchored where the user just tapped.
   let _setRect = null;

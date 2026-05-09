@@ -350,6 +350,21 @@ def save_session(data):
     return session_id
 
 
+def update_set_value(session_id, exercise, set_type, set_number, weight_lb, bands_json):
+    """Surgically update one set's weight_lb and bands_json. Used for repairing
+    historical sets when a stale-tab autoSave corrupted them. Doesn't touch
+    reps — those are usually fine; the corruption is only in the load values."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "UPDATE sets SET weight_lb = ?, bands_json = ? "
+        "WHERE session_id = ? AND exercise = ? AND set_type = ? AND set_number = ?",
+        (weight_lb, bands_json, session_id, exercise, set_type, set_number),
+    )
+    conn.commit()
+    conn.close()
+
+
 def delete_session(session_id):
     """Hard-delete a session row plus its sets and motivations.
 
@@ -1017,6 +1032,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"ok": True}).encode())
             except Exception as e:
                 print(f"  [EX-NOTES] Error: {e}")
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+            return
+        # POST /api/update-set — surgical UPDATE for repairing historical sets
+        # corrupted by the stale-tab autoSave bug (now guarded against).
+        # Body: { session_id, exercise, set_type, set_number, weight_lb, bands_json }
+        if self.path == "/api/update-set":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body = json.loads(self.rfile.read(length))
+                update_set_value(
+                    body["session_id"], body["exercise"], body["set_type"],
+                    body.get("set_number", 0), body.get("weight_lb"), body.get("bands_json"),
+                )
+                print(f"  [UPDATE-SET] s{body['session_id']} {body['exercise']} {body['set_type']}#{body.get('set_number',0)} → {body.get('weight_lb')}lb {body.get('bands_json')}")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True}).encode())
+            except Exception as e:
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
