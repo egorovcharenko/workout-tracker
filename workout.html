@@ -995,16 +995,34 @@ async function loadSessionData(workoutName) {
         const sk = s.set_type === "warmup" ? "warmup" : setNum - 1;
         const key = `${exIdx}-${sk}`;
         state.completed[key] = true;
-        if (s.weight_lb) state.weights[key] = s.weight_lb;
         if (s.reps) state.reps[key] = parseInt(s.reps) || 0;
+        // Parse bands first so weight reconciliation below can use them.
+        let _bands = null;
         if (s.bands_json) {
           try {
-            const bands = JSON.parse(s.bands_json);
-            if (Array.isArray(bands) && bands.length > 0) {
+            const parsed = JSON.parse(s.bands_json);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              _bands = parsed;
               if (!state.bands) state.bands = {};
-              state.bands[`${key}-bands`] = bands;
+              state.bands[`${key}-bands`] = parsed;
             }
           } catch(e) {}
+        }
+        // Storage convention recap (matches getEffectiveWeight at save time):
+        //   • plain DB:  weight_lb = DB, state.weights stores DB
+        //   • assist:    weight_lb = BW − bandSum, state.weights stores effective
+        //   • band-only: weight_lb = bandSum, state.weights stores bandSum
+        //   • bandAddon: weight_lb = DB + bandSum, state.weights MUST store
+        //                DB-ONLY (otherwise bandSum gets added a second time
+        //                at render → "75 + 15 = 90" corruption on reload)
+        if (s.weight_lb) {
+          const exHere = state.workout?.exercises?.[exIdx];
+          if (exHere?.bandAddon && _bands) {
+            const bandSum = _bands.reduce((a, b) => a + b, 0);
+            state.weights[key] = Math.max(0, s.weight_lb - bandSum);
+          } else {
+            state.weights[key] = s.weight_lb;
+          }
         }
         if (s.set_type === "working") {
           maxSetNum[exIdx] = Math.max(maxSetNum[exIdx] || 0, setNum);
