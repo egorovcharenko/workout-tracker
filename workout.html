@@ -341,6 +341,9 @@ let state = {
   showGif: {},
   lastSession: {},
   reps: {},
+  // Per-set state for whether the weight picker is expanded to show the
+  // full ladder. Empty default = each picker shows only working ±1 step.
+  expandedPicker: {},
   history: [],
   saved: false,
   sessionId: null,
@@ -3515,11 +3518,36 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     if (suggestion) parts.push(`<span style="color:#d97706;font-weight:700">try</span> = recommended`);
     return parts.length ? `<span style="opacity:0.55;font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">· ${parts.join(' · ')}</span>` : '';
   })();
+  // De-clutter: by default show only the WORKING weight ± 1 ladder step
+  // (so a typical 45lb working weight renders 40·45·50 instead of all 12).
+  // We always also include the LAST chip, the TRY chip, and the currently
+  // selected chip — so the user never has to expand to see those signals.
+  // Tap "more" to spread out and expose the full ladder.
+  const _ladder = [...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b);
+  const _expandedKey = `${exIdx}-${setKey}`;
+  const _isExpanded = !!(state.expandedPicker && state.expandedPicker[_expandedKey]);
+  // The "anchor" weight = whatever the user is most likely to pick. Pref order:
+  // currently-selected > suggested > last-session hint > middle of ladder.
+  const _anchor = w != null ? w : (suggestedWeight ?? wHint ?? _ladder[Math.floor(_ladder.length / 2)]);
+  const _anchorIdx = _ladder.indexOf(_anchor);
+  const _visibleSet = new Set();
+  if (_anchorIdx >= 0) {
+    if (_ladder[_anchorIdx - 1] != null) _visibleSet.add(_ladder[_anchorIdx - 1]);
+    _visibleSet.add(_ladder[_anchorIdx]);
+    if (_ladder[_anchorIdx + 1] != null) _visibleSet.add(_ladder[_anchorIdx + 1]);
+  }
+  // Always keep the special chips visible regardless of position.
+  if (w != null) _visibleSet.add(w);
+  if (suggestedWeight != null) _visibleSet.add(suggestedWeight);
+  if (wHint != null) _visibleSet.add(wHint);
+  const _isVisible = (lb) => _isExpanded || _visibleSet.has(lb);
+  const _hiddenCount = _ladder.filter(lb => !_visibleSet.has(lb)).length;
   const dbPickerHTML = `
     <div style="margin-bottom:6px">
       <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb) ${_legend}</div>
       <div class="scroll-row" style="display:flex;gap:4px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
-        ${[...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b).map(lb => {
+        ${_ladder.map(lb => {
+          if (!_isVisible(lb)) return '';
           const isSelected = w === lb;
           const isTry = suggestedWeight === lb && !isSelected;
           const isHinted = !isTry && w == null && wHint === lb;
@@ -3556,6 +3584,10 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
               ${lb}
             </button>`;
         }).join("")}
+        ${_hiddenCount > 0 ? `
+          <button onclick="togglePickerExpanded('${_expandedKey}')" title="${_isExpanded ? 'Collapse to working range' : 'Show all weights'}" style="background:#f9fafb;color:#6b7280;border:1px dashed #d1d5db;font-size:11px;font-weight:600;padding:6px 10px;border-radius:8px;cursor:pointer;flex-shrink:0;align-self:center">
+            ${_isExpanded ? '↤ less' : `…more (${_hiddenCount})`}
+          </button>` : ''}
       </div>
     </div>`;
 
@@ -3744,6 +3776,15 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
 // One-tap commit for a progression suggestion: sets the DB weight and the
 // band selection at once. Reps are still logged manually so you confirm the
 // rep count after the set, not before.
+// Toggle the weight picker between collapsed (working ± 1 step) and expanded
+// (full ladder) per active set. Lives in state.expandedPicker so a render
+// preserves the choice; resets naturally when the workout reloads.
+function togglePickerExpanded(key) {
+  if (!state.expandedPicker) state.expandedPicker = {};
+  state.expandedPicker[key] = !state.expandedPicker[key];
+  render();
+}
+
 function applySuggestion(exIdx, setKey, weight, bands, _reps) {
   const k = `${exIdx}-${setKey}`;
   const ex = state.workout.exercises[exIdx];
