@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Workout · v2</title>
+<!--
+  Parallel implementation of the workout-session screen following
+  ~/Downloads/design_handoff_workout_session/. React + Babel via CDN so the
+  whole thing stays a single file with no build step (matches the prototype's
+  approach, easy to deploy on Vercel through workout_server.py).
+
+  Shares the backend with v1 (workout.html). Saves go through /api/save with
+  the same payload shape, including the interleaved set_number convention for
+  supersets so switching between v1 and v2 mid-workout stays consistent.
+
+  v2 deliberately ships smaller than v1: no auto-progression suggestions, no
+  exercise notes editor, no stats/history/calendar pages. Those will be ported
+  once the core logger reaches parity.
+-->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.5/babel.min.js"></script>
+<style>
+  /* Reset + dark theme — these tokens come from the design handoff README. */
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body, #root {
+    margin: 0; padding: 0;
+    height: 100%;
+    background: #0B0F14;
+    color: #E5E7EB;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    overscroll-behavior-y: none;
+  }
+  body { color-scheme: dark; }
+  button { font-family: inherit; }
+  /* Hide native scrollbars on horizontal scrollers */
+  .scroll-row::-webkit-scrollbar { display: none; }
+  .scroll-row { scrollbar-width: none; }
+  /* Edge-fade nudge animations (rep strip) */
+  @keyframes repNudgeR { 0%, 80%, 100% { transform: translateY(-50%); } 88% { transform: translate(3px, -50%); } 94% { transform: translate(-1px, -50%); } }
+  @keyframes repNudgeL { 0%, 80%, 100% { transform: translateY(-50%); } 88% { transform: translate(-3px, -50%); } 94% { transform: translate(1px, -50%); } }
+  /* Rest-done halo (matches v1's flashRestDone) */
+  @keyframes rest-done-flash {
+    0% { opacity: 0; }
+    8% { opacity: 1; }
+    25% { opacity: 0.55; }
+    40% { opacity: 1; }
+    60% { opacity: 0.55; }
+    75% { opacity: 1; }
+    92% { opacity: 0.45; }
+    100% { opacity: 0; }
+  }
+  /* Logged-rep micro-pulse */
+  @keyframes set-pulse {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workout templates — kept in sync with v1's WORKOUTS so /api/save data flows
+// across both screens. New shape additions live here first, get ported to v1
+// when they stabilize.
+// ─────────────────────────────────────────────────────────────────────────────
+const WORKOUTS = [
+  {
+    id: "full-body",
+    name: "Full Body",
+    main: true,
+    duration: "~40 min",
+    rest: 75,
+    warmup: "Light goblet squats and arm circles to warm up",
+    exercises: [
+      { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, rest: 120 },
+      { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
+      { name: "Assisted Pull-Ups", sets: 3, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
+      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
+      { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
+      { name: "Seated Overhead Press", sets: 2, reps: "8-10", notes: "Seated, controlled", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
+      { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
+        supersetExercises: [
+          { name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
+          { name: "Dumbbell Hammer Curls", reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Hammer grip default · toggle for variants", grips: ['hammer', 'supinated', 'reverse'] },
+        ]},
+    ],
+  },
+];
+
+const BANDS = [
+  { name: "Yellow", lb: 5 },
+  { name: "Green",  lb: 15 },
+  { name: "Red",    lb: 20 },
+  { name: "Blue",   lb: 30 },
+  { name: "Black",  lb: 35 },
+];
+const BAND_VALUES = BANDS.map(b => b.lb);
+
+const GRIP_LABELS = {
+  neutral:   { label: "Neutral",   hint: "parallel" },
+  chinup:    { label: "Chin-up",   hint: "underhand" },
+  pullup:    { label: "Pull-up",   hint: "overhand" },
+  hammer:    { label: "Hammer",    hint: "neutral" },
+  supinated: { label: "Supinated", hint: "underhand" },
+  reverse:   { label: "Reverse",   hint: "overhand" },
+};
+
+// Design tokens — single source so a future tweak flows through the tree.
+const T = {
+  page:       "#0B0F14",
+  cardBg:     "rgba(17,24,39,0.45)",
+  cardBorder: "rgba(255,255,255,0.04)",
+  text:       "#E5E7EB",
+  strong:     "#F3F4F6",
+  muted:      "#9CA3AF",
+  faint:      "#6B7280",
+  disabled:   "#4B5563",
+  accent:     "#3B82F6",
+  accentLight:"#60A5FA",
+  amber:      "#FBBF24",
+  amberMid:   "#D97706",
+  amberMuted: "#D6B68A",
+  bands:      "#C084FC",
+  bandsText:  "#E9D5FF",
+  green:      "#34D399",
+  red:        "#F87171",
+  inv:        "#0B0F14",
+  mono:       "ui-monospace, Menlo, monospace",
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Backend client. All endpoints already exist in workout_server.py.
+// ─────────────────────────────────────────────────────────────────────────────
+const localDate = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+
+const api = {
+  todaySession: (workout) => fetch(`/api/today-session?workout=${encodeURIComponent(workout)}`).then(r => r.json()),
+  lastSession:  (workout) => fetch(`/api/last-session?workout=${encodeURIComponent(workout)}`).then(r => r.json()),
+  save: (body) => fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
+  motivate: (body) => fetch("/api/motivate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
+  motivations: (sid) => fetch(`/api/motivations?session_id=${sid}`).then(r => r.json()),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Data adapters — convert WORKOUTS template + last-session + today-session
+// into the design's `exercises[]` shape. Done once on mount; subsequent state
+// edits mutate this in-memory tree.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// v1's superset save format: each sub-exercise's set_number is an interleaved
+// position. Round 0 sub 0 → 1, round 0 sub 1 → 2, round 1 sub 0 → 3, etc.
+// We use the same formula so /api/save data round-trips through v1.
+const interleavedSetNumber = (round, subIdx, subCount) => round * subCount + subIdx + 1;
+
+// Each design Exercise is one row in the UI. A superset exercise from the
+// template becomes N flattened design Exercises sharing a `superset` letter.
+function flattenTemplate(workout, lastSessionMap) {
+  const out = [];
+  let supersetLetter = 'A';
+  workout.exercises.forEach((ex, exIdx) => {
+    if (ex.supersetExercises) {
+      const subs = ex.supersetExercises;
+      const letter = supersetLetter;
+      supersetLetter = String.fromCharCode(supersetLetter.charCodeAt(0) + 1);
+      const rounds = ex.sets || 3;
+      subs.forEach((sub, subIdx) => {
+        const sets = [];
+        for (let r = 0; r < rounds; r++) {
+          const setNumber = interleavedSetNumber(r, subIdx, subs.length);
+          const last = lastSessionMap[`${sub.name}|working|${setNumber}`];
+          sets.push(buildSet({
+            kind: "work", idx: r + 1,
+            template: sub,
+            last,
+            setNumber,
+            saveExerciseName: sub.name,
+          }));
+        }
+        out.push({
+          id: `${exIdx}-${subIdx}`,
+          templateExIdx: exIdx,
+          subIdx,
+          name: sub.name,
+          mode: undefined,
+          superset: letter,
+          supersetPos: subIdx + 1,
+          repRange: sub.reps,
+          note: sub.notes || ex.notes || "",
+          rest: ex.rest || 60,
+          grips: sub.grips ? sub.grips.map(g => ({ id: g, ...GRIP_LABELS[g] })) : null,
+          isBandsOnly: sub.equipment === "band" && !sub.bandAddon,
+          bandAddon: !!sub.bandAddon,
+          assist: !!sub.assist,
+          sets,
+        });
+      });
+    } else {
+      const sets = [];
+      const isAssist = !!ex.assist;
+      const isBandOnly = ex.equipment === "band" && !ex.bandAddon && !isAssist;
+      // warmup unless explicitly disabled
+      if (!ex.noWarmup) {
+        const last = lastSessionMap[`${ex.name}|warmup|0`];
+        sets.push(buildSet({
+          kind: "warmup", idx: "W",
+          template: ex,
+          last,
+          setNumber: 0,
+          saveExerciseName: ex.name,
+          isAssist, isBandOnly,
+        }));
+      }
+      for (let i = 0; i < (ex.sets || 3); i++) {
+        const setNumber = i + 1;
+        const last = lastSessionMap[`${ex.name}|working|${setNumber}`];
+        sets.push(buildSet({
+          kind: "work", idx: i + 1,
+          template: ex,
+          last,
+          setNumber,
+          saveExerciseName: ex.name,
+          isAssist, isBandOnly,
+        }));
+      }
+      out.push({
+        id: String(exIdx),
+        templateExIdx: exIdx,
+        subIdx: null,
+        name: ex.name,
+        mode: isAssist ? "bodyweight" : undefined,
+        superset: ex.superset || null,
+        supersetPos: null,
+        repRange: ex.reps,
+        note: ex.notes || "",
+        rest: ex.rest || 60,
+        grips: ex.grips ? ex.grips.map(g => ({ id: g, ...GRIP_LABELS[g] })) : null,
+        isBandsOnly: isBandOnly,
+        bandAddon: !!ex.bandAddon,
+        assist: isAssist,
+        sets,
+      });
+    }
+  });
+  return out;
+}
+
+// Single set initializer. `last` is the dict from /api/last-session for this
+// exercise|set_type|set_number, or undefined.
+function buildSet({ kind, idx, template, last, setNumber, saveExerciseName, isAssist, isBandOnly }) {
+  const set = {
+    kind, idx,
+    setNumber,
+    saveExerciseName,
+    completed: false,
+    active: false,
+    reps: null,
+  };
+  // Last-session reference values (drive the LAST pill + use-last shortcuts)
+  if (last) {
+    set.lastReps = parseInt(last.reps) || null;
+    set.lastBands = last.bands_json ? safeJSON(last.bands_json) : [];
+    set.lastGrip = last.grip || null;
+    if (template.assist) {
+      // Assist: weight_lb is the net (BW − bands). Bodyweight is implied.
+      set.lastBodyweight = (last.weight_lb || 0) + (set.lastBands || []).reduce((a, b) => a + b, 0);
+    } else {
+      set.lastWeight = last.weight_lb || 0;
+    }
+  } else {
+    set.lastBands = [];
+  }
+  // Initial value: prefill from last so the user usually only adjusts reps.
+  if (template.assist) {
+    set.bodyweight = set.lastBodyweight || 175;
+    set.bands = (set.lastBands || []).slice();
+    set.grip = set.lastGrip || (template.grips ? template.grips[0] : null);
+  } else if (isBandOnly) {
+    set.weight = 0;
+    set.bands = (set.lastBands || []).slice();
+    set.bandsOnly = true;
+  } else {
+    set.weight = set.lastWeight || 0;
+    set.bands = template.bandAddon ? (set.lastBands || []).slice() : [];
+    if (template.grips) set.grip = set.lastGrip || template.grips[0];
+  }
+  return set;
+}
+
+const safeJSON = (s) => { try { return JSON.parse(s); } catch (_) { return []; } };
+
+// Apply today-session sets onto the freshly-built exercises[] (mark completed,
+// restore actual reps/weight/bands the user already logged this session).
+function hydrateToday(exercises, todaySets) {
+  if (!todaySets || !todaySets.length) return exercises;
+  // Index design exercises by name+setNumber for O(N) hydration.
+  const map = new Map();
+  exercises.forEach((ex, eIdx) => {
+    ex.sets.forEach((s, sIdx) => {
+      const key = `${s.saveExerciseName}|${s.kind === "warmup" ? "warmup" : "working"}|${s.setNumber}`;
+      map.set(key, { eIdx, sIdx });
+    });
+  });
+  const next = exercises.map(ex => ({ ...ex, sets: ex.sets.map(s => ({ ...s })) }));
+  todaySets.forEach(row => {
+    const key = `${row.exercise}|${row.set_type}|${row.set_number}`;
+    const ref = map.get(key);
+    if (!ref) return;
+    const set = next[ref.eIdx].sets[ref.sIdx];
+    set.reps = parseInt(row.reps) || null;
+    set.completed = true;
+    const bands = row.bands_json ? safeJSON(row.bands_json) : [];
+    set.bands = bands;
+    if (next[ref.eIdx].assist) {
+      set.bodyweight = (row.weight_lb || 0) + bands.reduce((a, b) => a + b, 0);
+    } else {
+      set.weight = row.weight_lb || 0;
+    }
+    if (row.grip) set.grip = row.grip;
+  });
+  // First non-completed set across the whole workout becomes active.
+  let activated = false;
+  for (const ex of next) {
+    for (const s of ex.sets) {
+      if (!s.completed && !activated) { s.active = true; activated = true; }
+    }
+  }
+  return next;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Save: serialize state into the v1-compatible shape and POST. Single-in-flight
+// + queue pattern guards against autoSave race (matches v1 exactly).
+// ─────────────────────────────────────────────────────────────────────────────
+function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed) {
+  const sets = [];
+  exercises.forEach(ex => {
+    ex.sets.forEach(s => {
+      if (!s.completed) return;
+      const isAssist = ex.assist;
+      const bands = s.bands || [];
+      let weight_lb;
+      if (isAssist) {
+        // Save the NET load (BW − assist) so /api/last-session round-trips.
+        const bandSum = bands.reduce((a, b) => a + b, 0);
+        weight_lb = Math.max(0, (s.bodyweight || 0) - bandSum);
+      } else if (ex.isBandsOnly) {
+        weight_lb = bands.reduce((a, b) => a + b, 0);
+      } else {
+        weight_lb = s.weight || 0;
+      }
+      sets.push({
+        exercise: s.saveExerciseName,
+        set_type: s.kind === "warmup" ? "warmup" : "working",
+        set_number: s.setNumber,
+        reps: String(s.reps || ""),
+        weight_lb,
+        bands_json: bands.length ? JSON.stringify(bands) : null,
+        grip: s.grip || null,
+      });
+    });
+  });
+  return {
+    workout: workoutName,
+    date: localDate(),
+    duration_sec: elapsed,
+    session_id: sessionId || null,
+    started_at: startedAt ? new Date(startedAt).toISOString() : null,
+    sets,
+  };
+}
+
+let _saveInFlight = false;
+let _savePending = null;
+async function autoSavePayload(payload, onResolved) {
+  if (_saveInFlight) {
+    _savePending = { payload, onResolved };
+    return;
+  }
+  _saveInFlight = true;
+  try {
+    const res = await api.save(payload);
+    if (res.ok) onResolved(res.id);
+  } catch (e) {
+    console.error("[V2-SAVE] error:", e);
+  } finally {
+    _saveInFlight = false;
+    if (_savePending) {
+      const next = _savePending; _savePending = null;
+      autoSavePayload(next.payload, next.onResolved);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI primitives
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Header — back link, set count, elapsed timer, animated progress bar.
+function Header({ done, total, elapsedSec }) {
+  const pct = total ? (done / total) * 100 : 0;
+  const m = Math.floor(elapsedSec / 60);
+  const s = String(elapsedSec % 60).padStart(2, "0");
+  return (
+    <div style={{ background: T.page, padding: "14px 18px 14px", position: "sticky", top: 0, zIndex: 5 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <a href="/" style={{ color: T.accent, fontSize: 16, fontWeight: 600, textDecoration: "none" }}>← Back</a>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <a href="/" style={{ color: T.faint, fontFamily: T.mono, fontSize: 11, fontWeight: 600, textDecoration: "none", border: `1px solid ${T.cardBorder}`, padding: "2px 7px", borderRadius: 5 }} title="Switch to v1">v1</a>
+          <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 12, fontWeight: 600 }}>{done}/{total}</span>
+          <span style={{ color: elapsedSec > 0 ? T.green : T.faint, fontFamily: T.mono, fontWeight: 700, fontSize: 15 }}>{m}:{s}</span>
+        </div>
+      </div>
+      <div style={{ height: 3, background: "rgba(255,255,255,0.05)", borderRadius: 99, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: T.accent, borderRadius: 99, transition: "width 240ms ease" }} />
+      </div>
+    </div>
+  );
+}
+
+function WarmupCallout({ text }) {
+  return (
+    <div style={{
+      margin: "10px 16px 12px",
+      padding: "10px 12px",
+      borderRadius: 10,
+      border: "1px solid rgba(217,119,6,0.3)",
+      background: "rgba(217,119,6,0.04)",
+      display: "flex", gap: 9, alignItems: "center",
+    }}>
+      <span style={{ fontSize: 13 }}>🔥</span>
+      <div style={{ fontSize: 13, lineHeight: 1.35, color: T.amberMuted }}>
+        <strong style={{ color: T.amber, fontWeight: 700 }}>Warm-up · </strong>
+        {text}
+      </div>
+    </div>
+  );
+}
+
+// 52×52 / 40×40 stepper button. transform:scale on press for tactile feedback.
+function StepperBtn({ children, onClick, big, dim }) {
+  const press = (e, val) => { e.currentTarget.style.transform = val; };
+  return (
+    <button
+      onClick={onClick}
+      onMouseDown={e => press(e, "scale(0.92)")}
+      onMouseUp={e => press(e, "scale(1)")}
+      onMouseLeave={e => press(e, "scale(1)")}
+      onTouchStart={e => press(e, "scale(0.92)")}
+      onTouchEnd={e => press(e, "scale(1)")}
+      style={{
+        width: big ? 52 : 40, height: big ? 52 : 40, borderRadius: 12,
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        color: dim ? T.faint : "#D1D5DB",
+        fontFamily: T.mono, fontWeight: 600, fontSize: big ? 22 : 14,
+        cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexShrink: 0, lineHeight: 1,
+        transition: "transform 80ms ease, background 120ms ease",
+      }}
+    >{children}</button>
+  );
+}
+
+function WeightStepper({ value, last, pr, onPick, label }) {
+  const v = value ?? last ?? 0;
+  const step = (delta) => onPick(Math.max(0, Math.round((v + delta) * 10) / 10));
+  const atLast = last != null && v === last;
+  const diff = last != null ? v - last : 0;
+  return (
+    <div style={{ marginTop: 14 }}>
+      {label && (
+        <div style={{ marginBottom: 6, color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>
+          {label}
+        </div>
+      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <StepperBtn onClick={() => step(-5)} big>−</StepperBtn>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+            <span style={{ color: T.strong, fontFamily: T.mono, fontSize: 36, fontWeight: 800, letterSpacing: -1, lineHeight: 1 }}>{v}</span>
+            <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 14, fontWeight: 600 }}>lb</span>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", fontFamily: T.mono, fontSize: 11, color: T.faint }}>
+            {last != null && (
+              <button onClick={() => onPick(last)} style={{
+                background: atLast ? "rgba(96,165,250,0.10)" : "transparent",
+                border: atLast ? `1px solid rgba(96,165,250,0.3)` : "1px dashed rgba(255,255,255,0.1)",
+                color: atLast ? T.accentLight : T.faint,
+                fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+                padding: "3px 7px", borderRadius: 5, cursor: "pointer",
+              }}>LAST {last}</button>
+            )}
+            {!atLast && diff !== 0 && (
+              <span style={{ color: diff > 0 ? T.green : T.red, fontWeight: 700 }}>
+                {diff > 0 ? "+" : ""}{diff}
+              </span>
+            )}
+            {pr != null && <span>· PR {pr}</span>}
+          </div>
+        </div>
+        <StepperBtn onClick={() => step(5)} big>+</StepperBtn>
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 8 }}>
+        <StepperBtn onClick={() => step(-2.5)} dim>−2.5</StepperBtn>
+        <StepperBtn onClick={() => step(2.5)} dim>+2.5</StepperBtn>
+      </div>
+    </div>
+  );
+}
+
+function GripSelector({ grips, selected, last, onPick }) {
+  if (!grips || grips.length === 0) return null;
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>GRIP</span>
+        {last && last !== selected && (
+          <button onClick={() => onPick(last)} style={{ background: "transparent", border: 0, color: T.accentLight, fontFamily: T.mono, fontSize: 11, fontWeight: 700, padding: 0, cursor: "pointer" }}>
+            use last: {last}
+          </button>
+        )}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${grips.length}, 1fr)`, gap: 6 }}>
+        {grips.map(g => {
+          const sel = g.id === selected;
+          const wasLast = g.id === last;
+          return (
+            <button key={g.id} onClick={() => onPick(g.id)} style={{
+              position: "relative",
+              background: sel ? "rgba(96,165,250,0.18)" : "rgba(255,255,255,0.03)",
+              border: sel ? `1px solid ${T.accentLight}` : "1px solid rgba(255,255,255,0.08)",
+              color: sel ? "#DBEAFE" : T.muted,
+              padding: "9px 4px 8px", borderRadius: 8, cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+              transition: "all 120ms ease",
+            }}>
+              {wasLast && (
+                <span style={{ position: "absolute", top: 4, left: 5, width: 5, height: 5, borderRadius: "50%", background: T.accentLight }} />
+              )}
+              <span style={{ fontSize: 13, fontWeight: 700 }}>{g.label}</span>
+              <span style={{ fontSize: 9, color: sel ? T.muted : T.faint, fontFamily: T.mono, letterSpacing: 0.4, textTransform: "uppercase" }}>{g.hint}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Bands grid — 5 chips, multi-select. Header shows label + use-last + clear.
+function BandsGrid({ bands, lastBands, onToggle, onClear, isAssist }) {
+  const total = bands.reduce((a, b) => a + b, 0);
+  const lastTotal = lastBands.reduce((a, b) => a + b, 0);
+  const showUseLast = lastBands.length > 0 && !(lastBands.length === bands.length && lastBands.every(b => bands.includes(b)));
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>
+          {isAssist ? "ASSISTANCE" : "BANDS"} <span style={{ color: T.faint, fontWeight: 500 }}>· tap to add</span>
+        </span>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          {showUseLast && (
+            <button onClick={() => onToggle("__use_last__")} style={{ background: "transparent", border: 0, color: T.bands, fontFamily: T.mono, fontSize: 11, fontWeight: 700, padding: 0, cursor: "pointer" }}>
+              use last: {lastBands.join("+")}
+            </button>
+          )}
+          {bands.length > 0 && (
+            <button onClick={onClear} style={{ background: "transparent", border: 0, color: T.faint, fontSize: 11, padding: 0, cursor: "pointer" }}>clear</button>
+          )}
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
+        {BAND_VALUES.map(v => {
+          const sel = bands.includes(v);
+          const wasLast = lastBands.includes(v);
+          return (
+            <button key={v} onClick={() => onToggle(v)} style={{
+              position: "relative",
+              background: sel ? "rgba(192,132,252,0.18)" : "rgba(255,255,255,0.03)",
+              border: sel ? `1px solid ${T.bands}` : "1px solid rgba(255,255,255,0.08)",
+              color: sel ? T.bandsText : T.muted,
+              fontFamily: T.mono, fontWeight: 700, fontSize: 13,
+              padding: "9px 0", borderRadius: 8, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "all 120ms ease",
+            }}>
+              {wasLast && (
+                <span style={{ position: "absolute", top: 4, left: 5, width: 5, height: 5, borderRadius: "50%", background: T.bands }} />
+              )}
+              {v}
+            </button>
+          );
+        })}
+      </div>
+      {bands.length > 0 && (
+        <div style={{ marginTop: 8, color: T.bands, fontFamily: T.mono, fontSize: 11, opacity: 0.85 }}>
+          {bands.join(" + ")} = {isAssist ? "−" : "+"}{total}lb
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Single rep cell. States: idle/in-range/last/logged.
+function RepCell({ n, inRange, isLast, isLogged, onClick }) {
+  let bg = "transparent";
+  let color = inRange ? "#D1D5DB" : T.faint;
+  let border = "1px solid transparent";
+  if (inRange) {
+    bg = "rgba(34,197,94,0.05)";
+    border = "1px solid rgba(34,197,94,0.18)";
+  }
+  if (isLast) {
+    border = "1.5px solid rgba(34,197,94,0.55)";
+    color = "#86EFAC";
+  }
+  if (isLogged) {
+    bg = "#22C55E";
+    border = "1px solid #22C55E";
+    color = T.inv;
+  }
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        position: "relative", width: 38, height: 44, borderRadius: 9,
+        background: bg, border, color,
+        fontFamily: T.mono, fontWeight: isLogged || isLast ? 800 : 600, fontSize: 14,
+        cursor: "pointer", flexShrink: 0,
+        transition: "transform 80ms ease, background 120ms ease",
+        animation: isLogged ? "set-pulse 320ms ease-out" : "none",
+      }}
+      onMouseDown={e => (e.currentTarget.style.transform = "scale(0.92)")}
+      onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+      onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+    >
+      {isLast && !isLogged && (
+        <span style={{ position: "absolute", top: 4, left: 5, width: 5, height: 5, borderRadius: "50%", background: "#22C55E" }} />
+      )}
+      {n}
+    </button>
+  );
+}
+
+function RepStrip({ min = 1, max = 20, range, last, logged, onLog }) {
+  const [lo, hi] = range || [];
+  const ref = useRef(null);
+  const [edges, setEdges] = useState({ left: false, right: true });
+  const updateEdges = () => {
+    const el = ref.current; if (!el) return;
+    const left = el.scrollLeft > 4;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setEdges(p => (p.left === left && p.right === right ? p : { left, right }));
+  };
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const target = el.querySelector(`[data-n="${logged ?? last ?? lo ?? min}"]`);
+    if (target) {
+      const left = target.offsetLeft - el.clientWidth / 2 + target.clientWidth / 2;
+      el.scrollTo({ left, behavior: "instant" });
+    }
+    updateEdges();
+  }, []);
+  const fadePx = 28;
+  const maskParts = [
+    edges.left ? `transparent 0, black ${fadePx}px` : `black 0`,
+    edges.right ? `black calc(100% - ${fadePx}px), transparent 100%` : `black 100%`,
+  ];
+  const maskImage = `linear-gradient(to right, ${maskParts.join(", ")})`;
+  return (
+    <div style={{ position: "relative", marginTop: 6 }}>
+      <div
+        ref={ref}
+        onScroll={updateEdges}
+        className="scroll-row"
+        style={{
+          display: "flex", gap: 5, overflowX: "auto",
+          padding: "8px 4px 6px",
+          WebkitOverflowScrolling: "touch",
+          WebkitMaskImage: maskImage, maskImage,
+        }}
+      >
+        {Array.from({ length: max - min + 1 }, (_, i) => min + i).map(n => {
+          const inRange = lo != null && n >= lo && n <= hi;
+          return (
+            <div key={n} data-n={n}>
+              <RepCell n={n} inRange={inRange} isLast={last === n && logged !== n} isLogged={logged === n} onClick={() => onLog(n)} />
+            </div>
+          );
+        })}
+      </div>
+      <div aria-hidden style={{
+        position: "absolute", left: 2, top: "50%", transform: "translateY(-50%)",
+        width: 22, height: 22, borderRadius: 11,
+        background: "rgba(17,24,39,0.92)", border: "1px solid #374151",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "#D1D5DB", fontSize: 14, fontWeight: 800, fontFamily: T.mono, lineHeight: 1,
+        opacity: edges.left ? 1 : 0, transition: "opacity 160ms ease",
+        pointerEvents: "none", animation: edges.left ? "repNudgeL 2.4s ease-in-out infinite" : "none",
+      }}>‹</div>
+      <div aria-hidden style={{
+        position: "absolute", right: 2, top: "50%", transform: "translateY(-50%)",
+        width: 22, height: 22, borderRadius: 11,
+        background: "rgba(17,24,39,0.92)", border: "1px solid #374151",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "#D1D5DB", fontSize: 14, fontWeight: 800, fontFamily: T.mono, lineHeight: 1,
+        opacity: edges.right ? 1 : 0, transition: "opacity 160ms ease",
+        pointerEvents: "none", animation: edges.right ? "repNudgeR 2.4s ease-in-out infinite" : "none",
+      }}>›</div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ActiveSetBlock — the controls for the currently-being-logged set.
+// ─────────────────────────────────────────────────────────────────────────────
+function ActiveSetBlock({ exercise, set, totalWork, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onApplyLast }) {
+  const isBW = exercise.mode === "bodyweight";
+  const bands = set.bands || [];
+  const lastBands = set.lastBands || [];
+  const baseW = isBW ? (set.bodyweight || 0) : set.weight;
+  const lastBaseW = isBW ? (set.lastBodyweight || 0) : (set.lastWeight || 0);
+  const bandTotal = bands.reduce((a, b) => a + b, 0);
+  const lastBandTotal = lastBands.reduce((a, b) => a + b, 0);
+  const lastTotal = isBW ? Math.max(0, lastBaseW - lastBandTotal) : (lastBaseW + lastBandTotal);
+
+  const matchesLast =
+    (set.lastReps != null) &&
+    baseW === lastBaseW &&
+    (!exercise.grips || set.grip === set.lastGrip) &&
+    bands.length === lastBands.length &&
+    bands.every(b => lastBands.includes(b));
+
+  const hasLast = set.lastWeight != null || set.lastBodyweight != null || set.lastReps != null;
+  const range = (() => {
+    const m = String(exercise.repRange || "").match(/(\d+)\D+(\d+)/);
+    return m ? [parseInt(m[1]), parseInt(m[2])] : null;
+  })();
+
+  return (
+    <div style={{
+      borderRadius: 12,
+      background: "linear-gradient(180deg, rgba(59,130,246,0.08), rgba(17,24,39,0.55))",
+      boxShadow: "0 0 0 1px rgba(96,165,250,0.35), 0 8px 24px -8px rgba(59,130,246,0.4)",
+      padding: "14px 14px 16px",
+      marginTop: 14, marginBottom: 6,
+    }}>
+      {/* header line */}
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12, gap: 10 }}>
+        {set.kind === "warmup" ? (
+          <span style={{ color: T.amber, fontWeight: 700, fontSize: 17, letterSpacing: -0.2 }}>Warm-up</span>
+        ) : (
+          <span style={{ color: T.strong, fontWeight: 700, fontSize: 17, letterSpacing: -0.2 }}>
+            Set <span style={{ fontFamily: T.mono }}>{set.idx}</span>
+            {totalWork > 0 && <span style={{ color: T.faint, fontWeight: 500 }}> of {totalWork}</span>}
+          </span>
+        )}
+      </div>
+
+      {/* last-session pill */}
+      {hasLast && (
+        <button
+          onClick={onApplyLast}
+          disabled={matchesLast}
+          style={{
+            width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+            gap: 10, padding: "9px 12px",
+            background: matchesLast ? "rgba(96,165,250,0.08)" : "rgba(59,130,246,0.06)",
+            border: matchesLast ? "1px solid rgba(96,165,250,0.35)" : "1px dashed rgba(96,165,250,0.45)",
+            borderRadius: 10,
+            cursor: matchesLast ? "default" : "pointer",
+            color: T.accentLight, marginBottom: 10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, fontFamily: T.mono, opacity: 0.75 }}>LAST</span>
+            <span style={{ fontFamily: T.mono, fontSize: 14, fontWeight: 700, color: "#DBEAFE" }}>
+              {lastBaseW || "—"}
+              {lastBands.length > 0 && (
+                <span style={{ color: T.bands }}> {isBW ? "−" : "+"} {lastBands.join("+")}</span>
+              )}
+              <span style={{ color: T.faint, fontWeight: 500 }}> × </span>
+              {set.lastReps || "—"}
+              {isBW && set.lastGrip && <span style={{ color: T.muted, fontWeight: 500 }}> · {GRIP_LABELS[set.lastGrip]?.label || set.lastGrip}</span>}
+            </span>
+            {lastBandTotal > 0 && (
+              <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 11 }}>({lastTotal}lb)</span>
+            )}
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 600, opacity: matchesLast ? 0.7 : 1 }}>
+            {matchesLast ? "✓ matched" : "use last"}
+          </span>
+        </button>
+      )}
+
+      {/* grip — bodyweight or graded exercises */}
+      {exercise.grips && (
+        <GripSelector
+          grips={exercise.grips}
+          selected={set.grip}
+          last={set.lastGrip}
+          onPick={onPickGrip}
+        />
+      )}
+
+      {/* weight / bodyweight stepper (skipped for bands-only) */}
+      {!exercise.isBandsOnly && (
+        <WeightStepper
+          value={baseW}
+          last={lastBaseW || null}
+          onPick={isBW ? onPickBodyweight : onPickWeight}
+          label={isBW ? "BODYWEIGHT" : null}
+        />
+      )}
+
+      {/* bands grid (skipped for weightOnly sets) */}
+      {(exercise.isBandsOnly || exercise.bandAddon || exercise.assist) && (
+        <BandsGrid
+          bands={bands}
+          lastBands={lastBands}
+          onToggle={onToggleBand}
+          onClear={onClearBands}
+          isAssist={exercise.assist}
+        />
+      )}
+
+      {/* reps strip */}
+      <div style={{ marginTop: 14 }}>
+        <RepStrip
+          min={1} max={20}
+          range={range}
+          last={set.lastReps}
+          logged={set.reps}
+          onLog={onLogReps}
+        />
+      </div>
+
+      {set.kind === "warmup" && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+          <button onClick={onSkipWarmup} style={{
+            background: "transparent", border: 0, color: "#A1A1AA",
+            fontFamily: "inherit", fontWeight: 500, fontSize: 13, padding: "4px 0", cursor: "pointer",
+          }}>Skip warmup →</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RestTimer — tinted card with progress fill behind, big M:SS countdown,
+// +15s / pause-resume / skip cluster on right.
+// ─────────────────────────────────────────────────────────────────────────────
+function RestTimer({ rest, onAdd, onSkip, onToggle }) {
+  const { left, total, paused, kind } = rest;
+  const m = Math.floor(left / 60);
+  const s = String(left % 60).padStart(2, "0");
+  const pct = total > 0 ? (1 - left / total) * 100 : 100;
+  const done = left === 0;
+  const accent = done ? T.green : kind === "warmup" ? T.amber : T.accentLight;
+  const accentBg = done ? "rgba(52,211,153,0.10)" : kind === "warmup" ? "rgba(251,191,36,0.10)" : "rgba(96,165,250,0.10)";
+  const ghostBtn = {
+    background: "rgba(255,255,255,0.04)",
+    border: `1px solid ${accent}40`,
+    color: accent,
+    fontFamily: T.mono, fontSize: 11, fontWeight: 700,
+    padding: "6px 10px", borderRadius: 7, cursor: "pointer", letterSpacing: 0.3,
+  };
+  return (
+    <div style={{
+      marginTop: 12, borderRadius: 12,
+      background: accentBg, border: `1px solid ${accent}55`,
+      padding: "12px 14px 10px", position: "relative", overflow: "hidden",
+    }}>
+      <div style={{
+        position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`,
+        background: `linear-gradient(90deg, ${accent}30, ${accent}14)`,
+        transition: "width 1s linear",
+      }} />
+      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+          <span style={{ color: accent, fontSize: 9, fontWeight: 800, letterSpacing: 0.8, fontFamily: T.mono }}>
+            {done ? "REST DONE" : paused ? "REST · PAUSED" : "REST"}
+          </span>
+          <span style={{ color: T.strong, fontFamily: T.mono, fontSize: 28, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.05 }}>
+            {m}:{s}
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <button onClick={() => onAdd(15)} style={ghostBtn}>+15s</button>
+          <button onClick={onToggle} style={{ ...ghostBtn, minWidth: 32 }}>{paused ? "▶" : "❚❚"}</button>
+          <button onClick={onSkip} style={{ ...ghostBtn, background: accent, color: T.inv, borderColor: accent }}>
+            {done ? "✓ next" : "skip"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ExerciseCard — title, set strip, rest timer, active set block, footer.
+// ─────────────────────────────────────────────────────────────────────────────
+function setStripLabel(s) {
+  return s.kind === "warmup" ? "WARM" : `SET ${s.idx}`;
+}
+
+function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup, motivation }) {
+  const activeIdx = exercise.sets.findIndex(s => s.active);
+  const activeSet = activeIdx >= 0 ? exercise.sets[activeIdx] : null;
+  const totalWork = exercise.sets.filter(s => s.kind === "work").length;
+  const hasWarmup = exercise.sets.some(s => s.kind === "warmup");
+  const warmupActive = exercise.sets.some(s => s.kind === "warmup" && s.active);
+  const lastWork = [...exercise.sets].reverse().find(s => s.kind === "work");
+  const canRemove = totalWork > 1 && lastWork && !lastWork.active && !lastWork.completed;
+  const allDone = !activeSet && exercise.sets.every(s => s.completed);
+
+  const renderSetCard = (s, i) => {
+    const isBW = exercise.mode === "bodyweight";
+    const isAssist = exercise.assist;
+    const isBandsOnly = exercise.isBandsOnly;
+    const baseW = isBW ? (s.bodyweight || 0) : (s.weight || 0);
+    const lastBaseW = isBW ? (s.lastBodyweight || 0) : (s.lastWeight || 0);
+    const bandSum = (s.bands || []).reduce((a, b) => a + b, 0);
+    const lastBandSum = (s.lastBands || []).reduce((a, b) => a + b, 0);
+    const totalLb = isAssist ? Math.max(0, baseW - bandSum) : (isBandsOnly ? bandSum : baseW + bandSum);
+    const prev = isAssist ? Math.max(0, lastBaseW - lastBandSum) : (isBandsOnly ? lastBandSum : lastBaseW + lastBandSum);
+    const wDelta = totalLb - prev;
+    const rDelta = s.lastReps != null && s.reps != null ? s.reps - s.lastReps : 0;
+    const isFlat = wDelta === 0 && rDelta === 0;
+    const isDown = wDelta < 0 || (wDelta === 0 && rDelta < 0);
+    const deltaColor = isFlat ? T.faint : isDown ? T.red : T.green;
+    const deltaText = !s.completed ? "" : isFlat ? "=" : wDelta !== 0 ? `${wDelta > 0 ? "+" : ""}${wDelta}` : `${rDelta > 0 ? "+" : ""}${rDelta}r`;
+    const isWarm = s.kind === "warmup";
+    const isCurrent = s.active;
+    const tappable = !isCurrent;
+    return (
+      <button key={i} onClick={tappable ? () => onReopenSet(i) : undefined} disabled={!tappable} style={{
+        padding: "8px 4px 7px", borderRadius: 9,
+        cursor: tappable ? "pointer" : "default",
+        background: isCurrent
+          ? (isWarm ? "rgba(217,119,6,0.12)" : "rgba(59,130,246,0.14)")
+          : s.completed ? "rgba(255,255,255,0.03)" : "transparent",
+        boxShadow: isCurrent
+          ? (isWarm ? "0 0 0 1.5px rgba(251,191,36,0.55), 0 4px 14px -4px rgba(217,119,6,0.45)"
+                    : "0 0 0 1.5px rgba(96,165,250,0.6), 0 4px 14px -4px rgba(59,130,246,0.5)")
+          : "none",
+        border: isCurrent ? "0" : `1px ${s.completed ? "solid" : "dashed"} rgba(255,255,255,0.05)`,
+        opacity: isCurrent ? 1 : s.completed ? 1 : 0.45,
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+        minWidth: 0, transition: "all 200ms ease",
+      }}>
+        <span style={{ color: isWarm ? T.amber : isCurrent ? T.accentLight : T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 0.7 }}>
+          {setStripLabel(s)}
+        </span>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 2, fontFamily: T.mono }}>
+          <span style={{ color: (s.completed || isCurrent) ? T.strong : T.faint, fontSize: 16, fontWeight: 700, letterSpacing: -0.3 }}>{totalLb}</span>
+          <span style={{ color: T.disabled, fontSize: 11 }}>×</span>
+          <span style={{ color: (s.completed || isCurrent) ? T.strong : T.faint, fontSize: 16, fontWeight: 700, letterSpacing: -0.3 }}>{s.reps ?? "—"}</span>
+        </div>
+        {s.completed ? (
+          <span style={{ color: deltaColor, fontFamily: T.mono, fontSize: 10, fontWeight: 700 }}>{deltaText}</span>
+        ) : isCurrent ? (
+          <span style={{ color: isWarm ? T.amber : T.accentLight, fontFamily: T.mono, fontSize: 10, fontWeight: 700 }}>● now</span>
+        ) : (
+          <span style={{ color: T.disabled, fontFamily: T.mono, fontSize: 10 }}>up next</span>
+        )}
+      </button>
+    );
+  };
+
+  const footerBtn = (label, onClick, disabled) => (
+    <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{
+      background: "transparent",
+      border: "1px solid rgba(255,255,255,0.06)",
+      color: disabled ? T.disabled : T.muted,
+      padding: "5px 10px", borderRadius: 7,
+      cursor: disabled ? "default" : "pointer",
+      fontSize: 12, fontWeight: 500,
+      opacity: disabled ? 0.5 : 1,
+    }}>{label}</button>
+  );
+
+  return (
+    <div style={{
+      margin: "0 16px 12px", padding: "14px 14px 14px",
+      background: T.cardBg,
+      border: `1px solid ${T.cardBorder}`,
+      borderRadius: 14,
+    }}>
+      {/* title */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+        <h2 style={{ margin: 0, color: T.strong, fontSize: 20, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.4 }}>
+          {supersetTag && (
+            <span style={{
+              color: T.bands, fontFamily: T.mono, fontSize: 11, fontWeight: 800, letterSpacing: 1,
+              marginRight: 8, padding: "2px 6px", borderRadius: 5,
+              background: "rgba(192,132,252,0.12)", verticalAlign: "middle",
+            }}>{supersetTag}</span>
+          )}
+          {exercise.name}
+        </h2>
+      </div>
+      {exercise.note && (
+        <p style={{ margin: "6px 0 0", color: T.muted, fontSize: 12, lineHeight: 1.4 }}>{exercise.note}</p>
+      )}
+
+      {/* set strip */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${exercise.sets.length}, minmax(0, 1fr))`,
+        gap: 6, marginTop: 12,
+      }}>
+        {exercise.sets.map(renderSetCard)}
+      </div>
+
+      {/* rest timer (above active set block) */}
+      {rest && <RestTimer rest={rest} onAdd={onRestAdd} onSkip={onRestSkip} onToggle={onRestToggle} />}
+
+      {/* active set block */}
+      {activeSet && (
+        <ActiveSetBlock
+          exercise={exercise}
+          set={activeSet}
+          totalWork={totalWork}
+          onPickWeight={(w) => onPickWeight(activeIdx, w)}
+          onPickBodyweight={(w) => onPickBodyweight(activeIdx, w)}
+          onPickGrip={(g) => onPickGrip(activeIdx, g)}
+          onToggleBand={(b) => onToggleBand(activeIdx, b)}
+          onClearBands={() => onClearBands(activeIdx)}
+          onLogReps={(r) => onLogReps(activeIdx, r)}
+          onSkipWarmup={onSkipWarmup}
+          onApplyLast={() => {
+            if (exercise.mode === "bodyweight") {
+              onPickBodyweight(activeIdx, activeSet.lastBodyweight || 175);
+              if (activeSet.lastGrip) onPickGrip(activeIdx, activeSet.lastGrip);
+            } else if (!exercise.isBandsOnly) {
+              onPickWeight(activeIdx, activeSet.lastWeight || 0);
+            }
+            onClearBands(activeIdx);
+            (activeSet.lastBands || []).forEach(b => onToggleBand(activeIdx, b));
+          }}
+        />
+      )}
+
+      {/* AI motivation chip — appears once exercise is fully done */}
+      {allDone && motivation && (
+        <div style={{
+          marginTop: 10, padding: "10px 12px",
+          background: "linear-gradient(135deg, rgba(192,132,252,0.10), rgba(96,165,250,0.10))",
+          border: "1px solid rgba(192,132,252,0.2)",
+          borderRadius: 10,
+          display: "flex", alignItems: "flex-start", gap: 9,
+        }}>
+          <span style={{ fontSize: 14, flexShrink: 0 }}>✨</span>
+          <span style={{ fontSize: 13, color: "#E9D5FF", lineHeight: 1.45, fontWeight: 500 }}>
+            {motivation === "__loading__" ? <span style={{ opacity: 0.6 }}>thinking…</span> : motivation}
+          </span>
+        </div>
+      )}
+
+      {/* footer */}
+      <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.cardBorder}`, flexWrap: "wrap" }}>
+        {footerBtn("+ set", onAddSet)}
+        {footerBtn("− set", onRemoveSet, !canRemove)}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          {hasWarmup && warmupActive && footerBtn("Skip warmup →", onSkipWarmup)}
+          {hasWarmup && !warmupActive && footerBtn("× warmup", onRemoveWarmup)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// App — top-level state machine. One source of truth for the entire screen.
+// ─────────────────────────────────────────────────────────────────────────────
+function App() {
+  // Pick the first non-hidden workout (usually "Full Body").
+  const workout = useMemo(() => WORKOUTS.find(w => !w.hidden) || WORKOUTS[0], []);
+
+  const [exercises, setExercises] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
+  const [startedAt, setStartedAt] = useState(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [rest, setRest] = useState(null);  // { total, left, eIdx, sIdx, kind, paused }
+  const [motivations, setMotivations] = useState({});  // exercise.id → message | "__loading__"
+
+  // Mount: build exercises from template + last + today.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [last, today] = await Promise.all([
+          api.lastSession(workout.name),
+          api.todaySession(workout.name),
+        ]);
+        if (cancelled) return;
+        let exs = flattenTemplate(workout, last || {});
+        if (today && today.id) {
+          exs = hydrateToday(exs, today.sets || []);
+          setSessionId(today.id);
+          if (today.started_at) {
+            const startedMs = Date.parse(today.started_at);
+            if (!isNaN(startedMs)) {
+              setStartedAt(startedMs);
+              setElapsed(Math.floor((Date.now() - startedMs) / 1000));
+              setRunning(true);
+            }
+          }
+          // Hydrate motivations for already-completed exercises.
+          try {
+            const mots = await api.motivations(today.id);
+            const m = {};
+            Object.entries(mots || {}).forEach(([exName, msg]) => {
+              const ex = exs.find(e => e.name === exName);
+              if (ex) m[ex.id] = msg;
+            });
+            setMotivations(m);
+          } catch (_) { /* non-blocking */ }
+        } else {
+          // Fresh workout: activate the first set.
+          if (exs.length && exs[0].sets.length) exs[0].sets[0].active = true;
+        }
+        setExercises(exs);
+        setLoaded(true);
+      } catch (e) {
+        console.error("[V2] mount failed:", e);
+        setLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [workout]);
+
+  // Elapsed timer. Auto-starts on first interaction; ticks every 1s.
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => {
+      if (startedAt) {
+        setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+      } else {
+        setElapsed(e => e + 1);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [running, startedAt]);
+
+  // Rest timer ticks every 1s while not paused.
+  useEffect(() => {
+    if (!rest || rest.paused) return;
+    const id = setInterval(() => {
+      setRest(r => {
+        if (!r) return r;
+        if (r.left <= 1) return { ...r, left: 0 };
+        return { ...r, left: r.left - 1 };
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [rest && rest.paused, rest === null]);
+
+  const startTimer = () => {
+    if (running) return;
+    setRunning(true);
+    if (!startedAt) setStartedAt(Date.now() - elapsed * 1000);
+  };
+
+  // Save: serialize current exercises[] and POST. Debounced 400ms after the
+  // last state edit. Single-in-flight + queue guard to prevent duplicate
+  // session inserts (race that bit v1 hard).
+  const saveDebounceRef = useRef(null);
+  const queueSave = (currentExercises, currentSessionId, currentStartedAt, currentElapsed) => {
+    clearTimeout(saveDebounceRef.current);
+    saveDebounceRef.current = setTimeout(() => {
+      const payload = serializeForSave(currentExercises, workout.name, currentSessionId, currentStartedAt, currentElapsed);
+      if (payload.sets.length === 0) return;
+      autoSavePayload(payload, (newId) => {
+        if (!currentSessionId && newId) setSessionId(newId);
+      });
+    }, 400);
+  };
+
+  // Helper: produce a new exercises[] with one set patched, return [next, didChange]
+  const patchSet = (eIdx, sIdx, patch) => {
+    const next = exercises.map((e, i) => i !== eIdx ? e : ({
+      ...e,
+      sets: e.sets.map((s, j) => j !== sIdx ? s : ({ ...s, ...patch })),
+    }));
+    return next;
+  };
+
+  const updateAndSave = (next) => {
+    setExercises(next);
+    queueSave(next, sessionId, startedAt, elapsed);
+  };
+
+  // Field handlers — narrow patches so React renders only the active branch.
+  const onPickWeight = (eIdx, sIdx, w) => { startTimer(); updateAndSave(patchSet(eIdx, sIdx, { weight: w })); };
+  const onPickBodyweight = (eIdx, sIdx, w) => { startTimer(); updateAndSave(patchSet(eIdx, sIdx, { bodyweight: w })); };
+  const onPickGrip = (eIdx, sIdx, g) => { startTimer(); updateAndSave(patchSet(eIdx, sIdx, { grip: g })); };
+
+  const onToggleBand = (eIdx, sIdx, b) => {
+    startTimer();
+    const next = exercises.map((e, i) => {
+      if (i !== eIdx) return e;
+      return {
+        ...e,
+        sets: e.sets.map((s, j) => {
+          if (j !== sIdx) return s;
+          const cur = s.bands || [];
+          let bands;
+          if (b === "__use_last__") {
+            bands = (s.lastBands || []).slice();
+          } else {
+            bands = cur.includes(b) ? cur.filter(x => x !== b) : [...cur, b].sort((a, c) => a - c);
+          }
+          return { ...s, bands };
+        }),
+      };
+    });
+    updateAndSave(next);
+  };
+
+  const onClearBands = (eIdx, sIdx) => {
+    startTimer();
+    updateAndSave(patchSet(eIdx, sIdx, { bands: [] }));
+  };
+
+  // Log reps: marks set complete, starts rest (unless superset partner has more),
+  // advances active to next set, fires motivation if exercise just finished.
+  const onLogReps = (eIdx, sIdx, r) => {
+    startTimer();
+    // Mark current set completed.
+    let next = patchSet(eIdx, sIdx, { reps: r, completed: true });
+
+    // Determine rest behavior: skip if a superset partner still has uncompleted sets.
+    const ex = next[eIdx];
+    const kind = ex.sets[sIdx].kind;
+    const inSuperset = !!ex.superset;
+    const partnerHasMore = inSuperset && next.some((e2, j) =>
+      j !== eIdx && e2.superset === ex.superset && e2.sets.some(s => !s.completed)
+    );
+    if (!partnerHasMore) {
+      const total = kind === "warmup" ? 30 : (ex.rest || 90);
+      setRest({ total, left: total, eIdx, sIdx, kind, paused: false });
+    } else {
+      setRest(null);
+    }
+
+    // Advance active. In a superset, jump to the partner's next uncompleted set
+    // before falling back to the current exercise's next.
+    setTimeout(() => {
+      setExercises(prev => {
+        const cur = prev[eIdx];
+        // Within superset: hop to partner's first uncompleted set.
+        if (cur.superset) {
+          const partnerIdx = prev.findIndex((e2, j) => j !== eIdx && e2.superset === cur.superset);
+          if (partnerIdx !== -1) {
+            const partner = prev[partnerIdx];
+            const partnerNext = partner.sets.findIndex(s => !s.completed);
+            if (partnerNext !== -1) {
+              return prev.map((e, i) => {
+                if (i === eIdx) return { ...e, sets: e.sets.map((s, j) => j === sIdx ? { ...s, active: false } : s) };
+                if (i === partnerIdx) return { ...e, sets: e.sets.map((s, j) => j === partnerNext ? { ...s, active: true } : s) };
+                return e;
+              });
+            }
+          }
+        }
+        // Otherwise: next uncompleted within this exercise, or first uncompleted
+        // in the next exercise. Clears active on the current set in either case.
+        const sameExNext = cur.sets.findIndex((s, k) => k > sIdx && !s.completed);
+        if (sameExNext !== -1) {
+          return prev.map((e, i) => i !== eIdx ? e : ({
+            ...e,
+            sets: e.sets.map((s, j) => {
+              if (j === sIdx) return { ...s, active: false };
+              if (j === sameExNext) return { ...s, active: true };
+              return s;
+            }),
+          }));
+        }
+        const nextExIdx = prev.findIndex((e, k) => k > eIdx && e.sets.some(s => !s.completed));
+        return prev.map((e, i) => {
+          if (i === eIdx) return { ...e, sets: e.sets.map((s, j) => j === sIdx ? { ...s, active: false } : s) };
+          if (i === nextExIdx) {
+            const firstUndone = e.sets.findIndex(s => !s.completed);
+            if (firstUndone === -1) return e;
+            return { ...e, sets: e.sets.map((s, j) => j === firstUndone ? { ...s, active: true } : s) };
+          }
+          return e;
+        });
+      });
+    }, 350);
+
+    // Save the just-logged set immediately (don't wait for debounce).
+    setExercises(next);
+    queueSave(next, sessionId, startedAt, elapsed);
+
+    // Fire motivation if the exercise just transitioned to fully complete.
+    const justFinishedAll = next[eIdx].sets.every(s => s.completed);
+    if (justFinishedAll && kind !== "warmup") {
+      requestMotivation(next[eIdx], sessionId);
+    }
+  };
+
+  const requestMotivation = async (exercise, sid) => {
+    setMotivations(m => ({ ...m, [exercise.id]: "__loading__" }));
+    try {
+      const current = exercise.sets.filter(s => s.kind === "work" && s.completed).map(s => ({
+        set_number: s.setNumber,
+        reps: parseInt(s.reps) || 0,
+        weight_lb: exercise.assist
+          ? Math.max(0, (s.bodyweight || 0) - (s.bands || []).reduce((a, b) => a + b, 0))
+          : exercise.isBandsOnly
+            ? (s.bands || []).reduce((a, b) => a + b, 0)
+            : (s.weight || 0),
+      }));
+      const res = await api.motivate({
+        session_id: sid,
+        exercise: exercise.name,
+        current,
+      });
+      if (res && res.message) {
+        setMotivations(m => ({ ...m, [exercise.id]: res.message }));
+      } else {
+        setMotivations(m => { const c = { ...m }; delete c[exercise.id]; return c; });
+      }
+    } catch (e) {
+      console.warn("[V2-MOTIVATE]", e);
+      setMotivations(m => { const c = { ...m }; delete c[exercise.id]; return c; });
+    }
+  };
+
+  // Reopen: clear completed on the tapped set, deactivate whatever was active,
+  // mark this one active. Reps/weight/bands are kept so the user only adjusts.
+  const onReopenSet = (eIdx, sIdx) => {
+    const next = exercises.map((e, i) => {
+      if (i !== eIdx) return e;
+      return {
+        ...e,
+        sets: e.sets.map((s, j) => {
+          if (j === sIdx) return { ...s, active: true, completed: false };
+          if (s.active) return { ...s, active: false };
+          return s;
+        }),
+      };
+    });
+    // Also deactivate active sets in OTHER exercises (supersets can leave an
+    // active in the partner; reopening should pull focus back).
+    const cleaned = next.map((e, i) => i === eIdx ? e : ({
+      ...e,
+      sets: e.sets.map(s => s.active ? { ...s, active: false } : s),
+    }));
+    updateAndSave(cleaned);
+  };
+
+  const onSkipWarmup = (eIdx) => {
+    const next = exercises.map((e, i) => {
+      if (i !== eIdx) return e;
+      const sets = e.sets.map(s => s.kind === "warmup" ? { ...s, active: false, completed: false } : s);
+      const firstWork = sets.findIndex(s => s.kind === "work" && !s.completed);
+      if (firstWork !== -1) sets[firstWork] = { ...sets[firstWork], active: true };
+      return { ...e, sets };
+    });
+    updateAndSave(next);
+  };
+
+  const onAddSet = (eIdx) => {
+    const next = exercises.map((e, i) => {
+      if (i !== eIdx) return e;
+      const lastWork = [...e.sets].reverse().find(s => s.kind === "work");
+      const newIdx = (typeof lastWork?.idx === "number" ? lastWork.idx : 0) + 1;
+      const newSetNumber = (lastWork?.setNumber || 0) + 1;
+      const newSet = {
+        kind: "work", idx: newIdx,
+        setNumber: newSetNumber,
+        saveExerciseName: lastWork?.saveExerciseName || e.name,
+        completed: false, active: false, reps: null,
+        weight: lastWork?.weight || 0,
+        bodyweight: lastWork?.bodyweight,
+        bands: lastWork?.bands ? lastWork.bands.slice() : [],
+        grip: lastWork?.grip,
+        lastWeight: null, lastBands: [], lastReps: null,
+      };
+      return { ...e, sets: [...e.sets, newSet] };
+    });
+    updateAndSave(next);
+  };
+
+  const onRemoveSet = (eIdx) => {
+    const next = exercises.map((e, i) => {
+      if (i !== eIdx) return e;
+      const workCount = e.sets.filter(s => s.kind === "work").length;
+      if (workCount <= 1) return e;
+      // Remove the trailing work set if it's neither active nor completed.
+      const lastIdx = [...e.sets].map((s, k) => ({ s, k })).reverse().find(x => x.s.kind === "work" && !x.s.active && !x.s.completed)?.k;
+      if (lastIdx == null) return e;
+      return { ...e, sets: e.sets.filter((_, j) => j !== lastIdx) };
+    });
+    updateAndSave(next);
+  };
+
+  const onRemoveWarmup = (eIdx) => {
+    const next = exercises.map((e, i) => i !== eIdx ? e : ({ ...e, sets: e.sets.filter(s => s.kind !== "warmup") }));
+    updateAndSave(next);
+  };
+
+  const restAdd = (sec) => setRest(r => r ? { ...r, left: Math.max(0, r.left + sec), total: Math.max(r.total, r.left + sec) } : r);
+  const restSkip = () => setRest(null);
+  const restToggle = () => setRest(r => r ? { ...r, paused: !r.paused } : r);
+
+  // Set counts for header.
+  const totalSets = exercises.reduce((n, e) => n + e.sets.length, 0);
+  const doneSets = exercises.reduce((n, e) => n + e.sets.filter(s => s.completed).length, 0);
+
+  if (!loaded) {
+    return (
+      <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.muted, fontFamily: T.mono, fontSize: 14 }}>
+        loading…
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ height: "100%", overflowY: "auto", paddingBottom: 60 }}>
+      <Header done={doneSets} total={totalSets} elapsedSec={elapsed} />
+      {workout.warmup && <WarmupCallout text={workout.warmup} />}
+      {exercises.map((ex, i) => {
+        const prev = i > 0 ? exercises[i - 1] : null;
+        const isFirstInSuperset = ex.superset && (!prev || prev.superset !== ex.superset);
+        const supersetTag = ex.superset ? `${ex.superset}${ex.supersetPos || ''}` : null;
+        return (
+          <React.Fragment key={ex.id}>
+            {isFirstInSuperset && (
+              <div style={{ margin: "4px 16px 6px", display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ flex: 1, height: 1, background: "rgba(192,132,252,0.18)" }} />
+                <span style={{ color: T.bands, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1.2 }}>
+                  SUPERSET {ex.superset} · NO REST
+                </span>
+                <div style={{ flex: 1, height: 1, background: "rgba(192,132,252,0.18)" }} />
+              </div>
+            )}
+            <ExerciseCard
+              exercise={ex}
+              supersetTag={supersetTag}
+              rest={rest && rest.eIdx === i ? rest : null}
+              onRestAdd={restAdd}
+              onRestSkip={restSkip}
+              onRestToggle={restToggle}
+              onPickWeight={(sIdx, w) => onPickWeight(i, sIdx, w)}
+              onPickBodyweight={(sIdx, w) => onPickBodyweight(i, sIdx, w)}
+              onPickGrip={(sIdx, g) => onPickGrip(i, sIdx, g)}
+              onToggleBand={(sIdx, b) => onToggleBand(i, sIdx, b)}
+              onClearBands={(sIdx) => onClearBands(i, sIdx)}
+              onLogReps={(sIdx, r) => onLogReps(i, sIdx, r)}
+              onSkipWarmup={() => onSkipWarmup(i)}
+              onReopenSet={(sIdx) => onReopenSet(i, sIdx)}
+              onAddSet={() => onAddSet(i)}
+              onRemoveSet={() => onRemoveSet(i)}
+              onRemoveWarmup={() => onRemoveWarmup(i)}
+              motivation={motivations[ex.id]}
+            />
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>

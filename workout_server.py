@@ -842,6 +842,7 @@ def get_motivations_for_session(session_id):
 
 # Read the HTML file
 HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workout.html")
+HTML_PATH_V2 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workout-v2.html")
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -853,6 +854,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             with open(HTML_PATH, "rb") as f:
                 self.wfile.write(f.read())
+        elif parsed.path == "/v2" or parsed.path == "/v2/" or parsed.path == "/workout-v2.html":
+            # Parallel design-handoff redesign. Same backend, separate render
+            # path. Lives at /v2 so /workout.html keeps shipping unchanged
+            # until v2 reaches feature parity.
+            try:
+                with open(HTML_PATH_V2, "rb") as f:
+                    body = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.end_headers()
+                self.wfile.write(body)
+            except FileNotFoundError:
+                self.send_response(404)
+                self.send_header("Content-Type", "text/plain")
+                self.end_headers()
+                self.wfile.write(b"workout-v2.html not found")
         elif parsed.path == "/api/history":
             params = urllib.parse.parse_qs(parsed.query)
             limit = int(params.get("limit", [20])[0])
