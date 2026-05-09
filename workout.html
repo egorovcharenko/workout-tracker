@@ -3521,15 +3521,9 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
   // it differs from the LAST chip; if both target the same weight, TRY wins
   // (it's the actionable signal).
   const suggestedWeight = suggestion?.weight ?? null;
-  // Tiny legend that explains the LAST / TRY chips. Only render once both
-  // chips have a chance of appearing; if there's no suggestion it shrinks
-  // to just "last".
-  const _legend = (() => {
-    const parts = [];
-    if (wHint != null) parts.push(`<span style="color:#3b82f6;font-weight:700">last</span> = previous session`);
-    if (suggestion) parts.push(`<span style="color:#d97706;font-weight:700">try</span> = recommended`);
-    return parts.length ? `<span style="opacity:0.55;font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">· ${parts.join(' · ')}</span>` : '';
-  })();
+  // Legend dropped — LAST/TRY captions on the chips themselves carry the
+  // meaning, and the inline tooltip on each chip explains the reason.
+  const _legend = '';
   // De-clutter: show the WORKING weight ± 1 ladder step centered on the
   // weight you're most likely to pick. Anchor priority: last session's
   // weight (the "working weight") > suggestion > current selection > middle.
@@ -3571,7 +3565,7 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
   const dbPickerHTML = `
     <div style="margin-bottom:6px">
       <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb) ${_legend}</div>
-      <div class="scroll-row" style="display:flex;gap:4px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
+      <div class="scroll-row" style="display:flex;gap:4px;padding:0 12px 4px;align-items:flex-end;justify-content:center">
         ${_hiddenBelow ? `<button onclick="togglePickerExpanded('${_expandedKey}')" title="Show lighter weights" style="${_arrowStyle}">«</button>` : ''}
         ${_ladder.map(lb => {
           if (!_isVisible(lb)) return '';
