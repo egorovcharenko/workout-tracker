@@ -3518,17 +3518,18 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     if (suggestion) parts.push(`<span style="color:#d97706;font-weight:700">try</span> = recommended`);
     return parts.length ? `<span style="opacity:0.55;font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">· ${parts.join(' · ')}</span>` : '';
   })();
-  // De-clutter: by default show only the WORKING weight ± 1 ladder step
-  // (so a typical 45lb working weight renders 40·45·50 instead of all 12).
-  // We always also include the LAST chip, the TRY chip, and the currently
-  // selected chip — so the user never has to expand to see those signals.
-  // Tap "more" to spread out and expose the full ladder.
+  // De-clutter: show the WORKING weight ± 1 ladder step centered on the
+  // weight you're most likely to pick. Anchor priority: last session's
+  // weight (the "working weight") > suggestion > current selection > middle.
+  // The special chips (LAST/TRY/selected) are always visible too — if they
+  // land outside the centered band, they expand the visible range outward
+  // but the band itself stays centered on the working weight.
   const _ladder = [...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b);
   const _expandedKey = `${exIdx}-${setKey}`;
   const _isExpanded = !!(state.expandedPicker && state.expandedPicker[_expandedKey]);
-  // The "anchor" weight = whatever the user is most likely to pick. Pref order:
-  // currently-selected > suggested > last-session hint > middle of ladder.
-  const _anchor = w != null ? w : (suggestedWeight ?? wHint ?? _ladder[Math.floor(_ladder.length / 2)]);
+  // Anchor = the working weight (last session). Falls back to suggestion,
+  // then current selection, then middle of ladder for first-ever sets.
+  const _anchor = wHint ?? suggestedWeight ?? w ?? _ladder[Math.floor(_ladder.length / 2)];
   const _anchorIdx = _ladder.indexOf(_anchor);
   const _visibleSet = new Set();
   if (_anchorIdx >= 0) {
@@ -3536,16 +3537,25 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
     _visibleSet.add(_ladder[_anchorIdx]);
     if (_ladder[_anchorIdx + 1] != null) _visibleSet.add(_ladder[_anchorIdx + 1]);
   }
-  // Always keep the special chips visible regardless of position.
+  // Special chips: keep visible regardless of where they fall.
   if (w != null) _visibleSet.add(w);
   if (suggestedWeight != null) _visibleSet.add(suggestedWeight);
   if (wHint != null) _visibleSet.add(wHint);
   const _isVisible = (lb) => _isExpanded || _visibleSet.has(lb);
-  const _hiddenCount = _ladder.filter(lb => !_visibleSet.has(lb)).length;
+  // For the «/» arrows: how many ladder weights are hidden BELOW vs ABOVE
+  // the visible band. Each arrow only renders when its side has weights to
+  // reveal, and tapping either toggles the same full-expand state.
+  const _visSorted = [..._visibleSet].sort((a,b) => a-b);
+  const _minVis = _visSorted[0];
+  const _maxVis = _visSorted[_visSorted.length - 1];
+  const _hiddenBelow = !_isExpanded && _ladder.some(lb => lb < _minVis);
+  const _hiddenAbove = !_isExpanded && _ladder.some(lb => lb > _maxVis);
+  const _arrowStyle = "background:#f9fafb;color:#9ca3af;border:1px dashed #d1d5db;font-size:13px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;flex-shrink:0;align-self:center;font-family:monospace;letter-spacing:-1px";
   const dbPickerHTML = `
     <div style="margin-bottom:6px">
       <div style="font-size:10px;color:#2563eb;font-weight:600;margin-bottom:3px;padding-left:26px;text-transform:uppercase;letter-spacing:0.03em">Weight (lb) ${_legend}</div>
       <div class="scroll-row" style="display:flex;gap:4px;padding-left:26px;padding-bottom:4px;align-items:flex-end">
+        ${_hiddenBelow ? `<button onclick="togglePickerExpanded('${_expandedKey}')" title="Show lighter weights" style="${_arrowStyle}">«</button>` : ''}
         ${_ladder.map(lb => {
           if (!_isVisible(lb)) return '';
           const isSelected = w === lb;
@@ -3584,10 +3594,8 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
               ${lb}
             </button>`;
         }).join("")}
-        ${_hiddenCount > 0 ? `
-          <button onclick="togglePickerExpanded('${_expandedKey}')" title="${_isExpanded ? 'Collapse to working range' : 'Show all weights'}" style="background:#f9fafb;color:#6b7280;border:1px dashed #d1d5db;font-size:11px;font-weight:600;padding:6px 10px;border-radius:8px;cursor:pointer;flex-shrink:0;align-self:center">
-            ${_isExpanded ? '↤ less' : `…more (${_hiddenCount})`}
-          </button>` : ''}
+        ${_hiddenAbove ? `<button onclick="togglePickerExpanded('${_expandedKey}')" title="Show heavier weights" style="${_arrowStyle}">»</button>` : ''}
+        ${_isExpanded ? `<button onclick="togglePickerExpanded('${_expandedKey}')" title="Collapse to working range" style="${_arrowStyle};font-size:11px;letter-spacing:0">collapse</button>` : ''}
       </div>
     </div>`;
 
