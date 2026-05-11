@@ -427,13 +427,21 @@ function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed)
       if (!s.completed) return;
       const isAssist = ex.assist;
       const bands = s.bands || [];
+      const bandSum = bands.reduce((a, b) => a + b, 0);
+      // weight_lb is the COMBINED load lifted (matches v1's save format
+      // so /api/last-session round-trips across versions, and history /
+      // 1RM stats accumulate the actual weight moved):
+      //   • assist        → BW − Σbands  (net after assistance)
+      //   • bandsOnly     → Σbands
+      //   • bandAddon     → DB + Σbands  (e.g. 60lb DB + 15lb band = 75)
+      //   • plain loaded  → DB
       let weight_lb;
       if (isAssist) {
-        // Save the NET load (BW − assist) so /api/last-session round-trips.
-        const bandSum = bands.reduce((a, b) => a + b, 0);
         weight_lb = Math.max(0, (s.bodyweight || 0) - bandSum);
       } else if (ex.isBandsOnly) {
-        weight_lb = bands.reduce((a, b) => a + b, 0);
+        weight_lb = bandSum;
+      } else if (ex.bandAddon) {
+        weight_lb = (s.weight || 0) + bandSum;
       } else {
         weight_lb = s.weight || 0;
       }
