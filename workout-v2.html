@@ -1434,6 +1434,22 @@ function App() {
     return () => clearInterval(id);
   }, [rest && rest.paused, rest === null]);
 
+  // Migrate the rest timer to wherever the active set currently lives. When
+  // you log a set, the 350ms-later advancement moves the active set into
+  // the next exercise — the rest timer should follow so it appears right
+  // above the next set's controls (matches the design handoff: "rest timer
+  // appears between strip and active set block" of the active card). If
+  // there's no active set anywhere (you just logged the final set of the
+  // workout), the timer stays put in the exercise card where it was
+  // started so you still see it counting down.
+  useEffect(() => {
+    if (!rest) return;
+    const activeExIdx = exercises.findIndex(e => e.sets.some(s => s.active));
+    if (activeExIdx === -1) return;
+    if (activeExIdx === rest.eIdx) return;
+    setRest(r => r ? { ...r, eIdx: activeExIdx } : r);
+  }, [exercises, rest && rest.eIdx]);
+
   const startTimer = () => {
     if (running) return;
     setRunning(true);
