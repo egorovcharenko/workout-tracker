@@ -218,9 +218,38 @@ const api = {
   // 8s budget — it can be slow to compute on a cold start because the
   // query scans all sets.
   hints: () => fetchT("/api/exercise-hints", 8000),
+  // history + 1rm-history power the motivate payload — they're what makes
+  // Claude actually have something to "dig into" (previous-session sets,
+  // PR comparisons, multi-session trends). Both can be slow on cold start;
+  // 10s budget.
+  history: (limit = 20) => fetchT(`/api/history?limit=${limit}`, 10000),
+  history1RM: () => fetchT("/api/1rm-history", 10000),
   save: (body) => fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
   motivate: (body) => fetch("/api/motivate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
   motivations: (sid) => fetchT(`/api/motivations?session_id=${sid}`),
+};
+
+// Per-exercise muscle map for the motivate payload. v1 has the same data
+// under EXERCISE_MUSCLES at line 261 of workout.html — kept in sync here so
+// Claude knows what muscles a lift hits without an extra lookup table on
+// the server. Primary muscles drive the headline; secondary fills context.
+const EXERCISE_MUSCLES = {
+  "Overhead Dumbbell Press": { primary: ["shoulders"], secondary: ["triceps"] },
+  "Dumbbell Bicep Curls": { primary: ["biceps"], secondary: ["forearms"] },
+  "Overhead Tricep Extension": { primary: ["triceps"], secondary: [] },
+  "Dumbbell Bent-Over Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
+  "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
+  "Assisted Pull-Ups": { primary: ["lats"], secondary: ["biceps", "upper_back", "rear_delts"] },
+  "Reverse Flyes": { primary: ["rear_delts"], secondary: ["upper_back"] },
+  "Goblet Squat": { primary: ["quads", "glutes"], secondary: ["core"] },
+  "Bulgarian Split Squat": { primary: ["quads", "glutes"], secondary: ["hamstrings", "core"] },
+  "Dumbbell Flat Bench Press": { primary: ["chest"], secondary: ["triceps", "shoulders"] },
+  "Band Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"] },
+  "Seated Overhead Press": { primary: ["shoulders"], secondary: ["triceps"] },
+  "Band Squat": { primary: ["quads", "glutes"], secondary: ["core"] },
+  "Band Row": { primary: ["lats", "upper_back"], secondary: ["biceps"] },
+  "Band Tricep Pushdowns": { primary: ["triceps"], secondary: [] },
+  "Dumbbell Hammer Curls": { primary: ["biceps"], secondary: ["forearms"] },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1417,6 +1446,11 @@ function App() {
   const [running, setRunning] = useState(false);
   const [rest, setRest] = useState(null);  // { total, left, eIdx, sIdx, kind, paused }
   const [motivations, setMotivations] = useState({});  // exercise.id → message | "__loading__"
+  // Used by requestMotivation to build the rich payload Claude needs to
+  // recognize PRs, trends, layoffs. Fetched once on mount; refreshed on
+  // workout switch so stats stay consistent with the visible workout.
+  const [history, setHistory] = useState([]);          // [{date, sets:[...]}]
+  const [statHistory, setStatHistory] = useState({});  // {orm,reps,vol,wt}: {[exName]: [{date, value}]}
 
   // Mount / workout switch: reset session state then build exercises from
   // template + last + today. The full state reset on workout change matters —
@@ -1434,6 +1468,8 @@ function App() {
     setRunning(false);
     setRest(null);
     setMotivations({});
+    setHistory([]);
+    setStatHistory({});
     (async () => {
       // allSettled so a single slow / failing endpoint doesn't blank the
       // page. Each result either {status:"fulfilled",value:…} or
@@ -1444,15 +1480,23 @@ function App() {
           api.lastSession(workout.name),
           api.todaySession(workout.name),
           api.hints(),
+          api.history(20),
+          api.history1RM(),
         ]);
         if (cancelled) return;
-        const [lastR, todayR, hintsR] = results;
+        const [lastR, todayR, hintsR, histR, stat1rmR] = results;
         const last = lastR.status === "fulfilled" ? lastR.value : {};
         const today = todayR.status === "fulfilled" ? todayR.value : null;
         const hints = hintsR.status === "fulfilled" ? hintsR.value : {};
+        const hist = histR.status === "fulfilled" ? histR.value : [];
+        const stat1rm = stat1rmR.status === "fulfilled" ? stat1rmR.value : {};
         if (lastR.status === "rejected") console.warn("[V2] last-session failed:", lastR.reason);
         if (todayR.status === "rejected") console.warn("[V2] today-session failed:", todayR.reason);
         if (hintsR.status === "rejected") console.warn("[V2] hints failed:", hintsR.reason);
+        if (histR.status === "rejected") console.warn("[V2] history failed:", histR.reason);
+        if (stat1rmR.status === "rejected") console.warn("[V2] 1rm-history failed:", stat1rmR.reason);
+        setHistory(hist || []);
+        setStatHistory(stat1rm || {});
         let exs = flattenTemplate(workout, last || {}, hints || {});
         if (today && today.id) {
           exs = hydrateToday(exs, today.sets || []);
@@ -1677,23 +1721,160 @@ function App() {
     }
   };
 
+  // Build the rich /api/motivate payload (matching v1's shape) so Claude has
+  // muscles + previous sessions + PR signals + 12-session timeseries to
+  // reason against. Without these, the model sees only this session's reps
+  // and (correctly) reports "no history" — which is what the user just hit.
+  const buildMotivatePayload = (exercise, sid) => {
+    // Sub-exercise expansion: for a flattened superset member (one in v2
+    // is one design exercise = one sub from the template), exercise.name
+    // is already the sub-name. For non-supersets, it's the exercise name.
+    const subNames = [exercise.name];
+    const today = localDate();
+    const todayMs = Date.parse(today + 'T00:00:00Z');
+
+    // Current session's completed sets for this exercise.
+    const current = [];
+    exercise.sets.forEach(s => {
+      if (!s.completed) return;
+      const bandSum = (s.bands || []).reduce((a, b) => a + b, 0);
+      let weight_lb;
+      if (exercise.assist) {
+        weight_lb = Math.max(0, (s.bodyweight || 0) - bandSum);
+      } else if (exercise.isBandsOnly) {
+        weight_lb = bandSum;
+      } else if (exercise.bandAddon) {
+        weight_lb = (s.weight || 0) + bandSum;
+      } else {
+        weight_lb = s.weight || 0;
+      }
+      current.push({
+        sub: exercise.name,
+        type: s.kind === "warmup" ? "warmup" : "working",
+        set_number: s.setNumber,
+        reps: parseInt(s.reps) || 0,
+        weight_lb,
+      });
+    });
+
+    // Previous 1-2 sessions' sets for this exercise.
+    const previous = [];
+    for (const sess of (history || []).slice(0, 4)) {
+      const sessSets = (sess.sets || []).filter(st => subNames.includes(st.exercise));
+      if (sessSets.length) previous.push({
+        date: sess.date,
+        sets: sessSets.map(st => ({ sub: st.exercise, type: st.set_type, reps: st.reps, weight_lb: st.weight_lb })),
+      });
+      if (previous.length >= 2) break;
+    }
+
+    // Muscles hit (primary + secondary).
+    const muscles = [];
+    subNames.forEach(name => {
+      const m = EXERCISE_MUSCLES[name];
+      if (m) muscles.push(...(m.primary || []), ...(m.secondary || []));
+    });
+
+    // PR + trend signals. Port of v1's per-sub-exercise builder. Pulls from
+    // /api/1rm-history (statHistory) which returns {orm, reps, vol, wt}
+    // keyed by exercise name, each a list of {date, <metric>} entries.
+    const prs = subNames.map(subName => {
+      const ormHist  = ((statHistory.orm  || {})[subName] || []).filter(d => d.date !== today);
+      const wtHist   = ((statHistory.wt   || {})[subName] || []).filter(d => d.date !== today);
+      const repsHist = ((statHistory.reps || {})[subName] || []).filter(d => d.date !== today);
+      const volHist  = ((statHistory.vol  || {})[subName] || []).filter(d => d.date !== today);
+      const prevMaxOrm  = ormHist.length  ? Math.max(...ormHist.map(d => +d.orm  || 0)) : 0;
+      const prevMaxWt   = wtHist.length   ? Math.max(...wtHist.map(d => +d.wt    || 0)) : 0;
+      const prevMaxReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps|| 0)) : 0;
+
+      // Current session aggregates from the exercise we just finished.
+      const workingSets = exercise.sets.filter(s => s.kind === "work" && s.completed);
+      const ormOf = (w, r) => r > 1 ? w * (1 + r / 30) : w;
+      const curWt   = workingSets.reduce((m, s) => Math.max(m, (() => {
+        const bs = (s.bands || []).reduce((a, b) => a + b, 0);
+        return exercise.assist ? Math.max(0, (s.bodyweight || 0) - bs)
+             : exercise.isBandsOnly ? bs
+             : exercise.bandAddon ? (s.weight || 0) + bs
+             : (s.weight || 0);
+      })()), 0);
+      const curReps = workingSets.reduce((m, s) => Math.max(m, parseInt(s.reps) || 0), 0);
+      const curOrm  = workingSets.reduce((m, s) => {
+        const reps = parseInt(s.reps) || 0;
+        const bs = (s.bands || []).reduce((a, b) => a + b, 0);
+        const w = exercise.assist ? Math.max(0, (s.bodyweight || 0) - bs)
+                : exercise.isBandsOnly ? bs
+                : exercise.bandAddon ? (s.weight || 0) + bs
+                : (s.weight || 0);
+        return reps > 0 && w > 0 ? Math.max(m, ormOf(w, reps)) : m;
+      }, 0);
+      const curVol = workingSets.reduce((sum, s) => {
+        const reps = parseInt(s.reps) || 0;
+        const bs = (s.bands || []).reduce((a, b) => a + b, 0);
+        const w = exercise.assist ? Math.max(0, (s.bodyweight || 0) - bs)
+                : exercise.isBandsOnly ? bs
+                : exercise.bandAddon ? (s.weight || 0) + bs
+                : (s.weight || 0);
+        return sum + (reps > 0 && w > 0 ? w * reps : 0);
+      }, 0);
+
+      // Chronological timeseries — newest LAST. Cap to 12 sessions to keep
+      // the prompt compact while still showing the long arc.
+      const byDate = {};
+      ormHist.forEach (d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).orm  = +d.orm  || 0; });
+      wtHist.forEach  (d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).wt   = +d.wt   || 0; });
+      repsHist.forEach(d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).reps = +d.reps || 0; });
+      volHist.forEach (d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).vol  = +d.vol  || 0; });
+      const allHist = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+      const trimmed = allHist.slice(-12);
+
+      // Trends / consistency.
+      const lastDate = allHist.length ? allHist[allHist.length - 1].date : null;
+      const daysSinceLast = lastDate
+        ? Math.round((todayMs - Date.parse(lastDate + 'T00:00:00Z')) / 86400000)
+        : null;
+      const recent = allHist.filter(h => todayMs - Date.parse(h.date + 'T00:00:00Z') <= 28 * 86400000);
+      const prior  = allHist.filter(h => {
+        const ago = todayMs - Date.parse(h.date + 'T00:00:00Z');
+        return ago > 28 * 86400000 && ago <= 56 * 86400000;
+      });
+      const avg = arr => arr.length ? arr.reduce((s, x) => s + (+x.vol || 0), 0) / arr.length : 0;
+      const recentAvg = avg(recent), priorAvg = avg(prior);
+      const volTrendPct = priorAvg > 0 ? Math.round((recentAvg - priorAvg) / priorAvg * 100) : null;
+
+      const sameWtReps = curWt > 0 ? allHist.filter(h => h.wt === curWt).map(h => h.reps).filter(r => r > 0) : [];
+      const repsAtCurWtImproved = sameWtReps.length >= 2 && curReps > Math.max(...sameWtReps);
+
+      return {
+        sub: subName,
+        current_orm: curOrm,           previous_best_orm: prevMaxOrm,    is_orm_pr:    !!(curOrm && curOrm > prevMaxOrm),
+        current_max_weight: curWt,     previous_best_weight: prevMaxWt,  is_weight_pr: !!(curWt && curWt > prevMaxWt),
+        current_max_reps: curReps,     previous_best_reps: prevMaxReps,  is_reps_pr:   !!(curReps && curReps > prevMaxReps),
+        current_volume: curVol,
+        sessions_in_history: allHist.length,
+        days_since_last_session: daysSinceLast,
+        returning_after_layoff: daysSinceLast != null && daysSinceLast >= 14,
+        vol_trend_pct_4wk_vs_prior: volTrendPct,
+        reps_at_current_weight_improved: repsAtCurWtImproved,
+        tied_previous_best_orm: !!(curOrm && prevMaxOrm && curOrm === prevMaxOrm),
+        history_timeseries: trimmed,
+      };
+    });
+
+    return {
+      session_id: sid,
+      exercise: exercise.name,
+      muscles: [...new Set(muscles)],
+      current,
+      previous,
+      prs,
+    };
+  };
+
   const requestMotivation = async (exercise, sid) => {
     setMotivations(m => ({ ...m, [exercise.id]: "__loading__" }));
     try {
-      const current = exercise.sets.filter(s => s.kind === "work" && s.completed).map(s => ({
-        set_number: s.setNumber,
-        reps: parseInt(s.reps) || 0,
-        weight_lb: exercise.assist
-          ? Math.max(0, (s.bodyweight || 0) - (s.bands || []).reduce((a, b) => a + b, 0))
-          : exercise.isBandsOnly
-            ? (s.bands || []).reduce((a, b) => a + b, 0)
-            : (s.weight || 0),
-      }));
-      const res = await api.motivate({
-        session_id: sid,
-        exercise: exercise.name,
-        current,
-      });
+      const payload = buildMotivatePayload(exercise, sid);
+      const res = await api.motivate(payload);
       if (res && res.message) {
         setMotivations(m => ({ ...m, [exercise.id]: res.message }));
       } else {
