@@ -194,6 +194,12 @@ const localDate = () => {
 const api = {
   todaySession: (workout) => fetch(`/api/today-session?workout=${encodeURIComponent(workout)}`).then(r => r.json()),
   lastSession:  (workout) => fetch(`/api/last-session?workout=${encodeURIComponent(workout)}`).then(r => r.json()),
+  // exercise-hints returns the most-recent {weight, reps, bands, grip} for
+  // EVERY (exercise, set_type, set_number) across ALL workouts. Falls back
+  // for exercises that share a name with one in a different workout (e.g.
+  // "Dumbbell Flat Bench Press" appears in both Full Body and Full Body B —
+  // hints surfaces the most recent regardless of which workout it was in).
+  hints: () => fetch("/api/exercise-hints").then(r => r.json()),
   save: (body) => fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
   motivate: (body) => fetch("/api/motivate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
   motivations: (sid) => fetch(`/api/motivations?session_id=${sid}`).then(r => r.json()),
@@ -212,7 +218,13 @@ const interleavedSetNumber = (round, subIdx, subCount) => round * subCount + sub
 
 // Each design Exercise is one row in the UI. A superset exercise from the
 // template becomes N flattened design Exercises sharing a `superset` letter.
-function flattenTemplate(workout, lastSessionMap) {
+function flattenTemplate(workout, lastSessionMap, hintsMap) {
+  hintsMap = hintsMap || {};
+  // Two-tier lookup: prefer the workout's own most-recent session (so the
+  // LAST pill literally means "last time you did this workout"), fall back
+  // to global hints (so a workout you haven't done in a while still shows
+  // useful values from whenever you last did that exercise in any workout).
+  const lookupLast = (key) => lastSessionMap[key] || hintsMap[key] || null;
   const out = [];
   let supersetLetter = 'A';
   workout.exercises.forEach((ex, exIdx) => {
@@ -223,9 +235,25 @@ function flattenTemplate(workout, lastSessionMap) {
       const rounds = ex.sets || 3;
       subs.forEach((sub, subIdx) => {
         const sets = [];
+        // Same per-exercise working-set fallback as the standalone branch:
+        // SET 3 borrows from SET 1/2 if the specific set_number is empty.
+        const subWorkingBySetNum = {};
+        [hintsMap, lastSessionMap].forEach(src => {
+          Object.keys(src || {}).forEach(k => {
+            const [exName, kind, setNumStr] = k.split("|");
+            if (exName === sub.name && kind === "working") {
+              subWorkingBySetNum[parseInt(setNumStr)] = src[k];
+            }
+          });
+        });
+        const subFallback = (want) => {
+          if (subWorkingBySetNum[want] != null) return subWorkingBySetNum[want];
+          const nums = Object.keys(subWorkingBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
+          return nums.length ? subWorkingBySetNum[nums[0]] : null;
+        };
         for (let r = 0; r < rounds; r++) {
           const setNumber = interleavedSetNumber(r, subIdx, subs.length);
-          const last = lastSessionMap[`${sub.name}|working|${setNumber}`];
+          const last = subFallback(setNumber) || lookupLast(`${sub.name}|working|${setNumber}`);
           sets.push(buildSet({
             kind: "work", idx: r + 1,
             template: sub,
@@ -259,11 +287,35 @@ function flattenTemplate(workout, lastSessionMap) {
       // Warmup sets. Default = 1; pass `warmups: 2` (or more) on the template
       // to ramp up before the work sets. Each warmup gets its own set_number
       // (0, 1, …) so /api/last-session round-trips per-warmup last values.
+      //
+      // Fallback: when a warmup setNumber has no last-session record (common
+      // when you add a new warmup slot to an exercise that historically had
+      // fewer), borrow data from any other warmup of the same exercise. This
+      // keeps the LAST pill / stepper prefill useful instead of showing 0lb
+      // with no context. Picking by smallest |Δsetnumber| favors adjacent
+      // warmups (W1 inherits from W2 before W3, etc.).
       if (!ex.noWarmup) {
         const warmupCount = Math.max(1, ex.warmups || 1);
+        // Build a per-exercise warmup index from BOTH the workout's last
+        // session and the cross-workout hints, so adding a 2nd warmup slot
+        // to an exercise that historically had 1 still surfaces data.
+        const warmupLastBySetNum = {};
+        [hintsMap, lastSessionMap].forEach(src => {
+          Object.keys(src || {}).forEach(k => {
+            const [exName, kind, setNumStr] = k.split("|");
+            if (exName === ex.name && kind === "warmup") {
+              warmupLastBySetNum[parseInt(setNumStr)] = src[k];
+            }
+          });
+        });
+        const fallbackForWarmup = (want) => {
+          if (warmupLastBySetNum[want] != null) return warmupLastBySetNum[want];
+          const nums = Object.keys(warmupLastBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
+          return nums.length ? warmupLastBySetNum[nums[0]] : null;
+        };
         for (let wi = 0; wi < warmupCount; wi++) {
           const setNumber = wi;
-          const last = lastSessionMap[`${ex.name}|warmup|${setNumber}`];
+          const last = fallbackForWarmup(setNumber);
           sets.push(buildSet({
             kind: "warmup",
             // idx drives the active-block header. For multi-warmup we show
@@ -277,9 +329,26 @@ function flattenTemplate(workout, lastSessionMap) {
           }));
         }
       }
+      // Build a per-exercise working-set index across both data sources too,
+      // so SET 3 prefill can still fall back to SET 1 if the user has only
+      // ever done one working set so far.
+      const workingLastBySetNum = {};
+      [hintsMap, lastSessionMap].forEach(src => {
+        Object.keys(src || {}).forEach(k => {
+          const [exName, kind, setNumStr] = k.split("|");
+          if (exName === ex.name && kind === "working") {
+            workingLastBySetNum[parseInt(setNumStr)] = src[k];
+          }
+        });
+      });
+      const fallbackForWorking = (want) => {
+        if (workingLastBySetNum[want] != null) return workingLastBySetNum[want];
+        const nums = Object.keys(workingLastBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
+        return nums.length ? workingLastBySetNum[nums[0]] : null;
+      };
       for (let i = 0; i < (ex.sets || 3); i++) {
         const setNumber = i + 1;
-        const last = lastSessionMap[`${ex.name}|working|${setNumber}`];
+        const last = fallbackForWorking(setNumber);
         sets.push(buildSet({
           kind: "work", idx: i + 1,
           template: ex,
@@ -1296,12 +1365,13 @@ function App() {
     setMotivations({});
     (async () => {
       try {
-        const [last, today] = await Promise.all([
+        const [last, today, hints] = await Promise.all([
           api.lastSession(workout.name),
           api.todaySession(workout.name),
+          api.hints(),
         ]);
         if (cancelled) return;
-        let exs = flattenTemplate(workout, last || {});
+        let exs = flattenTemplate(workout, last || {}, hints || {});
         if (today && today.id) {
           exs = hydrateToday(exs, today.sets || []);
           setSessionId(today.id);
