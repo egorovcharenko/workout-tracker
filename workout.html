@@ -2010,25 +2010,12 @@ function showMotivation(exIdx) {
 }
 
 function startWorkout(w) {
-  state.screen = "workout"; state.workout = w; state.completed = {}; state.weights = {}; state.reps = {};
-  state.elapsed = 0; state.running = false; state.saved = false; state.showGif = {};
-  state.sessionId = null; state.lastSaved = null;
-  state.timerStartedAt = 0;
-  state.motivations = {}; state.motivationsLoading = {}; state.activeMotivation = null;
-  state.finishMotivation = null; state.finishMotivationLoading = false; state.activeFinishMotivation = null;
-  state.warmupOff = {};
-  state.grip = {};
-  loadGripState();
-  // Apply data-driven `noWarmup: true` defaults — auto-skip warmup for these.
-  w.exercises.forEach((ex, exIdx) => {
-    if (ex.noWarmup) {
-      state.warmupOff[exIdx] = true;
-      state.completed[`${exIdx}-warmup`] = true;
-    }
-  });
-  history.replaceState(null, '', '#' + w.id);
-  render();
-  loadSessionData(w.name);
+  // The workout-session screen now lives in v2 (/workout?w=<id>). v1 keeps
+  // owning the home / stats / history / calendar / measurements pages, but
+  // hands off to v2 the moment a session starts. Server-side autosave +
+  // last-session lookup work the same since v2 hits the identical /api/save
+  // and /api/last-session endpoints.
+  window.location.assign('/workout?w=' + encodeURIComponent(w.id));
 }
 
 // Render

@@ -1,10 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/", "destination": "/workout-v2.html" },
-    { "source": "/legacy", "destination": "/workout.html" },
-    { "source": "/legacy/", "destination": "/workout.html" },
-    { "source": "/v1", "destination": "/workout.html" },
+    { "source": "/", "destination": "/workout.html" },
+    { "source": "/workout", "destination": "/workout-v2.html" },
+    { "source": "/workout/", "destination": "/workout-v2.html" },
     { "source": "/v2", "destination": "/workout-v2.html" },
     { "source": "/v2/", "destination": "/workout-v2.html" },
     { "source": "/api/(.*)", "destination": "/api/index" }
