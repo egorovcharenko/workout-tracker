@@ -313,6 +313,16 @@ function flattenTemplate(workout, lastSessionMap) {
 
 // Single set initializer. `last` is the dict from /api/last-session for this
 // exercise|set_type|set_number, or undefined.
+//
+// Mode-specific weight_lb interpretation (v1 saves these; v2 must invert):
+//   • plain "loaded"  → weight_lb = DB weight, lastWeight = weight_lb
+//   • bandAddon       → weight_lb = DB + Σbands (combined). lastWeight is the
+//                       DB-only portion so the stepper shows DB and the bands
+//                       grid adds on top (otherwise the stepper would read
+//                       e.g. 75 when DB was actually 60 + 15-band).
+//   • assist          → weight_lb = bodyweight − Σbands (net). lastBodyweight
+//                       recovers the BW number by adding Σbands back.
+//   • bandsOnly       → weight_lb = Σbands. Stepper hidden, no lastWeight.
 function buildSet({ kind, idx, template, last, setNumber, saveExerciseName, isAssist, isBandOnly }) {
   const set = {
     kind, idx,
@@ -322,16 +332,20 @@ function buildSet({ kind, idx, template, last, setNumber, saveExerciseName, isAs
     active: false,
     reps: null,
   };
-  // Last-session reference values (drive the LAST pill + use-last shortcuts)
   if (last) {
     set.lastReps = parseInt(last.reps) || null;
     set.lastBands = last.bands_json ? safeJSON(last.bands_json) : [];
     set.lastGrip = last.grip || null;
+    const lastBandSum = (set.lastBands || []).reduce((a, b) => a + b, 0);
+    const savedLb = last.weight_lb || 0;
     if (template.assist) {
-      // Assist: weight_lb is the net (BW − bands). Bodyweight is implied.
-      set.lastBodyweight = (last.weight_lb || 0) + (set.lastBands || []).reduce((a, b) => a + b, 0);
+      set.lastBodyweight = savedLb + lastBandSum;
+    } else if (template.bandAddon) {
+      set.lastWeight = Math.max(0, savedLb - lastBandSum);
+    } else if (isBandOnly) {
+      // No DB ever shown; bands carry the load. Leave lastWeight unset.
     } else {
-      set.lastWeight = last.weight_lb || 0;
+      set.lastWeight = savedLb;
     }
   } else {
     set.lastBands = [];
@@ -372,15 +386,23 @@ function hydrateToday(exercises, todaySets) {
     const key = `${row.exercise}|${row.set_type}|${row.set_number}`;
     const ref = map.get(key);
     if (!ref) return;
-    const set = next[ref.eIdx].sets[ref.sIdx];
+    const ex = next[ref.eIdx];
+    const set = ex.sets[ref.sIdx];
     set.reps = parseInt(row.reps) || null;
     set.completed = true;
     const bands = row.bands_json ? safeJSON(row.bands_json) : [];
     set.bands = bands;
-    if (next[ref.eIdx].assist) {
-      set.bodyweight = (row.weight_lb || 0) + bands.reduce((a, b) => a + b, 0);
+    const bandSum = bands.reduce((a, b) => a + b, 0);
+    const savedLb = row.weight_lb || 0;
+    // Same mode-specific inversion as buildSet — see comment there.
+    if (ex.assist) {
+      set.bodyweight = savedLb + bandSum;
+    } else if (ex.bandAddon) {
+      set.weight = Math.max(0, savedLb - bandSum);
+    } else if (ex.isBandsOnly) {
+      set.weight = 0;
     } else {
-      set.weight = row.weight_lb || 0;
+      set.weight = savedLb;
     }
     if (row.grip) set.grip = row.grip;
   });
@@ -1612,7 +1634,8 @@ function App() {
         total={totalSets}
         elapsedSec={elapsed}
       />
-      {workout.warmup && <WarmupCallout text={workout.warmup} />}
+      {/* Workout-level warm-up callout removed — per-exercise warmups
+          (set strip W1 / W2) carry that intent more directly. */}
       {exercises.map((ex, i) => {
         const prev = i > 0 ? exercises[i - 1] : null;
         const isFirstInSuperset = ex.superset && (!prev || prev.superset !== ex.superset);
