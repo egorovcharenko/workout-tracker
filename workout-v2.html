@@ -532,23 +532,25 @@ function hydrateToday(exercises, todaySets) {
     }
     if (row.grip) set.grip = row.grip;
   });
-  // First non-completed set across the whole workout becomes active. The
-  // warmup pool is "one and done": if you already completed ANY warmup of
-  // an exercise (e.g. you did W2 and closed the tab), the remaining warmup
-  // slots are treated as already-warmed-up so the active focus jumps
-  // straight to the next work set. The unused warmup slots stay visible
-  // in the strip — you can tap one to reopen if you want another ramp set —
-  // they just aren't auto-active.
+  // Activate the next uncompleted set AFTER the highest-index completed set
+  // in each exercise. Skipped sets (e.g. SET 1 missing while SET 2 + SET 3
+  // are done; an unused W1 slot when W2 is done) stay visible in the strip
+  // and tappable to reopen, but the active focus moves FORWARD — never
+  // backward. If every set in every exercise is past the highest completion
+  // mark with nothing left, no set is active and the workout reads as done.
   let activated = false;
   for (const ex of next) {
     if (activated) break;
-    const anyWarmupDone = ex.sets.some(s => s.kind === "warmup" && s.completed);
-    for (const s of ex.sets) {
-      if (s.completed) continue;
-      if (anyWarmupDone && s.kind === "warmup") continue;
-      s.active = true;
-      activated = true;
-      break;
+    let highestCompleted = -1;
+    for (let i = 0; i < ex.sets.length; i++) {
+      if (ex.sets[i].completed) highestCompleted = i;
+    }
+    for (let i = highestCompleted + 1; i < ex.sets.length; i++) {
+      if (!ex.sets[i].completed) {
+        ex.sets[i].active = true;
+        activated = true;
+        break;
+      }
     }
   }
   return next;
