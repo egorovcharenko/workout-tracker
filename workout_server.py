@@ -848,16 +848,10 @@ HTML_PATH_V2 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workout
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path == "/" or parsed.path == "/index.html":
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.end_headers()
-            with open(HTML_PATH, "rb") as f:
-                self.wfile.write(f.read())
-        elif parsed.path == "/v2" or parsed.path == "/v2/" or parsed.path == "/workout-v2.html":
-            # Parallel design-handoff redesign. Same backend, separate render
-            # path. Lives at /v2 so /workout.html keeps shipping unchanged
-            # until v2 reaches feature parity.
+        if parsed.path == "/" or parsed.path == "/index.html" or parsed.path == "/v2" or parsed.path == "/v2/" or parsed.path == "/workout-v2.html":
+            # v2 is now the default at /. /v2 and /workout-v2.html still work
+            # as alternate URLs (older bookmarks, share links from before the
+            # flip).
             try:
                 with open(HTML_PATH_V2, "rb") as f:
                     body = f.read()
@@ -870,6 +864,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "text/plain")
                 self.end_headers()
                 self.wfile.write(b"workout-v2.html not found")
+        elif parsed.path == "/legacy" or parsed.path == "/legacy/" or parsed.path == "/v1" or parsed.path == "/workout.html":
+            # v1 still ships at /legacy for history / stats / measurements
+            # until those pages are ported into v2.
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            with open(HTML_PATH, "rb") as f:
+                self.wfile.write(f.read())
         elif parsed.path == "/api/history":
             params = urllib.parse.parse_qs(parsed.query)
             limit = int(params.get("limit", [20])[0])

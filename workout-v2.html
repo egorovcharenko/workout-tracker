@@ -70,6 +70,10 @@ const { useState, useEffect, useRef, useMemo, useCallback } = React;
 // across both screens. New shape additions live here first, get ported to v1
 // when they stabilize.
 // ─────────────────────────────────────────────────────────────────────────────
+// All four workouts mirrored from v1's WORKOUTS. `hidden: true` no longer
+// hides — v2 surfaces every workout in the header picker since each one is
+// a real option you might pick on any given day. `main: true` picks the
+// default when no ?w= param is set.
 const WORKOUTS = [
   {
     id: "full-body",
@@ -90,6 +94,50 @@ const WORKOUTS = [
           { name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
           { name: "Dumbbell Hammer Curls", reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Hammer grip default · toggle for variants", grips: ['hammer', 'supinated', 'reverse'] },
         ]},
+    ],
+  },
+  {
+    id: "full-body-b",
+    name: "Full Body B",
+    duration: "~40 min",
+    rest: 75,
+    warmup: "Light band squats to warm up legs",
+    exercises: [
+      { name: "Band Squat", sets: 3, reps: "12-15", notes: "Stand on band, handles at shoulders", video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" },
+      { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
+      { name: "Band Row", sets: 3, reps: "12-15", notes: "Stand on band, pull to chest, squeeze back", video: "https://www.youtube.com/shorts/BAlsaA1wIhY", equipment: "band", rest: 120 },
+      { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
+      { name: "Seated Overhead Press", sets: 2, reps: "8-10", notes: "Seated, controlled", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
+      { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
+      { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
+        supersetExercises: [
+          { name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
+          { name: "Dumbbell Hammer Curls", reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Hammer grip default · toggle for variants", grips: ['hammer', 'supinated', 'reverse'] },
+        ]},
+    ],
+  },
+  {
+    id: "arms-shoulders",
+    name: "Arms & Shoulders",
+    duration: "~15 min",
+    rest: 60,
+    warmup: "A few light sets to warm up elbows and wrists",
+    exercises: [
+      { name: "Overhead Dumbbell Press", sets: 3, reps: "6-10", notes: "Seated or standing", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw" },
+      { name: "Dumbbell Bicep Curls", sets: 3, reps: "8-12", notes: "Superset with next", superset: "A", video: "https://www.youtube.com/shorts/MKWBV29S6c0", grips: ['supinated', 'hammer', 'reverse'] },
+      { name: "Overhead Tricep Extension", sets: 3, reps: "10-15", notes: "Single DB, both hands", superset: "A", video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
+    ],
+  },
+  {
+    id: "back",
+    name: "Back",
+    duration: "~20 min",
+    rest: 60,
+    warmup: "Light rows to warm up shoulders and back",
+    exercises: [
+      { name: "Dumbbell Bent-Over Rows", sets: 3, reps: "8-12", notes: "Keep back flat, pull to hips", video: "https://www.youtube.com/shorts/dpYI8K6e-jE" },
+      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", notes: "Each side, knee on bench", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 75 },
+      { name: "Reverse Flyes", sets: 3, reps: "15-20", notes: "Rear delts & upper back, light weight", video: "https://www.youtube.com/shorts/LsT-bR_zxLo" },
     ],
   },
 ];
@@ -405,17 +453,67 @@ async function autoSavePayload(payload, onResolved) {
 // UI primitives
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Header — back link, set count, elapsed timer, animated progress bar.
-function Header({ done, total, elapsedSec }) {
+// Header — workout picker, set count, elapsed timer, animated progress bar.
+// The workout name is the primary navigation handle here; tapping it pops a
+// little switcher so you can flip between Full Body / Back / etc. without
+// leaving the screen. `Legacy` pill jumps to /legacy (v1) for history/stats.
+function Header({ workout, workouts, onPickWorkout, done, total, elapsedSec }) {
   const pct = total ? (done / total) * 100 : 0;
   const m = Math.floor(elapsedSec / 60);
   const s = String(elapsedSec % 60).padStart(2, "0");
+  const [open, setOpen] = useState(false);
+  // Click-outside dismissal — checking the click target keeps the menu open
+  // when you click ON the trigger button itself (which would otherwise see
+  // the document-level click and immediately re-close).
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => {
+      if (!e.target.closest || !e.target.closest("[data-workout-menu]")) setOpen(false);
+    };
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, [open]);
   return (
     <div style={{ background: T.page, padding: "14px 18px 14px", position: "sticky", top: 0, zIndex: 5 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <a href="/" style={{ color: T.accent, fontSize: 16, fontWeight: 600, textDecoration: "none" }}>← Back</a>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <a href="/" style={{ color: T.faint, fontFamily: T.mono, fontSize: 11, fontWeight: 600, textDecoration: "none", border: `1px solid ${T.cardBorder}`, padding: "2px 7px", borderRadius: 5 }} title="Switch to v1">v1</a>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 10 }}>
+        <div data-workout-menu style={{ position: "relative", minWidth: 0 }}>
+          <button onClick={() => setOpen(o => !o)} style={{
+            background: "transparent", border: 0, color: T.strong,
+            fontSize: 17, fontWeight: 700, letterSpacing: -0.3,
+            padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+            maxWidth: "100%",
+          }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{workout.name}</span>
+            <span style={{ color: T.faint, fontSize: 12, transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 160ms ease" }}>▾</span>
+          </button>
+          {open && (
+            <div style={{
+              position: "absolute", top: "100%", left: 0, marginTop: 6,
+              background: "#0f1722", border: `1px solid ${T.cardBorder}`,
+              borderRadius: 10, padding: 4, minWidth: 200, zIndex: 10,
+              boxShadow: "0 10px 30px -8px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)",
+            }}>
+              {workouts.map(w => {
+                const sel = w.id === workout.id;
+                return (
+                  <button key={w.id} onClick={() => { setOpen(false); onPickWorkout(w.id); }} style={{
+                    display: "block", width: "100%", textAlign: "left",
+                    background: sel ? "rgba(59,130,246,0.12)" : "transparent",
+                    border: 0,
+                    color: sel ? T.accentLight : T.text,
+                    fontSize: 14, fontWeight: sel ? 700 : 500,
+                    padding: "9px 12px", borderRadius: 7, cursor: "pointer",
+                  }}>
+                    {w.name}
+                    <span style={{ marginLeft: 8, color: T.faint, fontSize: 11, fontWeight: 500 }}>{w.duration}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <a href="/legacy" style={{ color: T.faint, fontFamily: T.mono, fontSize: 11, fontWeight: 600, textDecoration: "none", border: `1px solid ${T.cardBorder}`, padding: "2px 7px", borderRadius: 5 }} title="History / stats (v1)">Legacy</a>
           <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 12, fontWeight: 600 }}>{done}/{total}</span>
           <span style={{ color: elapsedSec > 0 ? T.green : T.faint, fontFamily: T.mono, fontWeight: 700, fontSize: 15 }}>{m}:{s}</span>
         </div>
@@ -1087,8 +1185,24 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
 // App — top-level state machine. One source of truth for the entire screen.
 // ─────────────────────────────────────────────────────────────────────────────
 function App() {
-  // Pick the first non-hidden workout (usually "Full Body").
-  const workout = useMemo(() => WORKOUTS.find(w => !w.hidden) || WORKOUTS[0], []);
+  // Workout selection. URL ?w=<id> is the source of truth — header picker
+  // updates it via history.replaceState so the URL is shareable and the
+  // browser back button works.
+  const [workoutId, setWorkoutId] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("w");
+    if (fromUrl && WORKOUTS.some(w => w.id === fromUrl)) return fromUrl;
+    return (WORKOUTS.find(w => w.main) || WORKOUTS[0]).id;
+  });
+  const workout = useMemo(() => WORKOUTS.find(w => w.id === workoutId) || WORKOUTS[0], [workoutId]);
+
+  const onPickWorkout = (id) => {
+    if (id === workoutId) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("w", id);
+    window.history.replaceState({}, "", url);
+    setWorkoutId(id);
+  };
 
   const [exercises, setExercises] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -1099,9 +1213,22 @@ function App() {
   const [rest, setRest] = useState(null);  // { total, left, eIdx, sIdx, kind, paused }
   const [motivations, setMotivations] = useState({});  // exercise.id → message | "__loading__"
 
-  // Mount: build exercises from template + last + today.
+  // Mount / workout switch: reset session state then build exercises from
+  // template + last + today. The full state reset on workout change matters —
+  // otherwise an in-progress rest timer or stale sessionId from the previous
+  // workout would carry over and poison the new workout's autosave (which
+  // worked off of state.sessionId in v1 and produced the cross-workout
+  // session collisions we had to clean up by hand).
   useEffect(() => {
     let cancelled = false;
+    setLoaded(false);
+    setExercises([]);
+    setSessionId(null);
+    setStartedAt(null);
+    setElapsed(0);
+    setRunning(false);
+    setRest(null);
+    setMotivations({});
     (async () => {
       try {
         const [last, today] = await Promise.all([
@@ -1124,6 +1251,7 @@ function App() {
           // Hydrate motivations for already-completed exercises.
           try {
             const mots = await api.motivations(today.id);
+            if (cancelled) return;
             const m = {};
             Object.entries(mots || {}).forEach(([exName, msg]) => {
               const ex = exs.find(e => e.name === exName);
@@ -1436,7 +1564,14 @@ function App() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto", paddingBottom: 60 }}>
-      <Header done={doneSets} total={totalSets} elapsedSec={elapsed} />
+      <Header
+        workout={workout}
+        workouts={WORKOUTS}
+        onPickWorkout={onPickWorkout}
+        done={doneSets}
+        total={totalSets}
+        elapsedSec={elapsed}
+      />
       {workout.warmup && <WarmupCallout text={workout.warmup} />}
       {exercises.map((ex, i) => {
         const prev = i > 0 ? exercises[i - 1] : null;
