@@ -191,18 +191,36 @@ const localDate = () => {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 };
 
+// Bounded fetch — Vercel functions can cold-start at 1-3s, and a hung
+// endpoint shouldn't block the entire screen. After `ms` the fetch
+// rejects with a timeout so the boot's allSettled coalesces to empty
+// data rather than spinning forever. Also parses defensively — if the
+// server returns an error page (HTML) instead of JSON, we surface a
+// rejection rather than letting a SyntaxError propagate from .json().
+const fetchT = (url, ms = 6000) => Promise.race([
+  fetch(url),
+  new Promise((_, rej) => setTimeout(() => rej(new Error(`timeout ${url}`)), ms)),
+]).then(async (r) => {
+  if (!r.ok) throw new Error(`${url} → HTTP ${r.status}`);
+  const txt = await r.text();
+  try { return JSON.parse(txt); }
+  catch (e) { throw new Error(`${url} → non-JSON response: ${txt.slice(0, 80)}`); }
+});
+
 const api = {
-  todaySession: (workout) => fetch(`/api/today-session?workout=${encodeURIComponent(workout)}`).then(r => r.json()),
-  lastSession:  (workout) => fetch(`/api/last-session?workout=${encodeURIComponent(workout)}`).then(r => r.json()),
+  todaySession: (workout) => fetchT(`/api/today-session?workout=${encodeURIComponent(workout)}`),
+  lastSession:  (workout) => fetchT(`/api/last-session?workout=${encodeURIComponent(workout)}`),
   // exercise-hints returns the most-recent {weight, reps, bands, grip} for
   // EVERY (exercise, set_type, set_number) across ALL workouts. Falls back
   // for exercises that share a name with one in a different workout (e.g.
   // "Dumbbell Flat Bench Press" appears in both Full Body and Full Body B —
   // hints surfaces the most recent regardless of which workout it was in).
-  hints: () => fetch("/api/exercise-hints").then(r => r.json()),
+  // 8s budget — it can be slow to compute on a cold start because the
+  // query scans all sets.
+  hints: () => fetchT("/api/exercise-hints", 8000),
   save: (body) => fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
   motivate: (body) => fetch("/api/motivate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
-  motivations: (sid) => fetch(`/api/motivations?session_id=${sid}`).then(r => r.json()),
+  motivations: (sid) => fetchT(`/api/motivations?session_id=${sid}`),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
