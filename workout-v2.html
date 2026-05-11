@@ -1403,13 +1403,24 @@ function App() {
     setRest(null);
     setMotivations({});
     (async () => {
+      // allSettled so a single slow / failing endpoint doesn't blank the
+      // page. Each result either {status:"fulfilled",value:…} or
+      // {status:"rejected",reason:…}; we coalesce to {} for missing data
+      // so the screen always renders the template even offline.
       try {
-        const [last, today, hints] = await Promise.all([
+        const results = await Promise.allSettled([
           api.lastSession(workout.name),
           api.todaySession(workout.name),
           api.hints(),
         ]);
         if (cancelled) return;
+        const [lastR, todayR, hintsR] = results;
+        const last = lastR.status === "fulfilled" ? lastR.value : {};
+        const today = todayR.status === "fulfilled" ? todayR.value : null;
+        const hints = hintsR.status === "fulfilled" ? hintsR.value : {};
+        if (lastR.status === "rejected") console.warn("[V2] last-session failed:", lastR.reason);
+        if (todayR.status === "rejected") console.warn("[V2] today-session failed:", todayR.reason);
+        if (hintsR.status === "rejected") console.warn("[V2] hints failed:", hintsR.reason);
         let exs = flattenTemplate(workout, last || {}, hints || {});
         if (today && today.id) {
           exs = hydrateToday(exs, today.sets || []);
@@ -1745,9 +1756,17 @@ function App() {
   const doneSets = exercises.reduce((n, e) => n + e.sets.filter(s => s.completed).length, 0);
 
   if (!loaded) {
+    // Render the header + workout name immediately so the user sees the
+    // app responded even while the API round-trips. Avoids the "blank
+    // screen with header only" impression on a slow cold start.
     return (
-      <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.muted, fontFamily: T.mono, fontSize: 14 }}>
-        loading…
+      <div style={{ height: "100%", overflowY: "auto" }}>
+        <div style={{ maxWidth: 448, margin: "0 auto", minHeight: "100%", background: T.page }}>
+          <Header workout={workout} workouts={WORKOUTS} onPickWorkout={onPickWorkout} done={0} total={0} elapsedSec={0} />
+          <div style={{ margin: "40px 16px", padding: "20px", textAlign: "center", color: T.muted, fontFamily: T.mono, fontSize: 13, border: `1px dashed ${T.cardBorder}`, borderRadius: 12 }}>
+            loading workout…
+          </div>
+        </div>
       </div>
     );
   }
