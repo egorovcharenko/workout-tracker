@@ -2,6 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     { "source": "/", "destination": "/workout.html" },
+    { "source": "/v2", "destination": "/workout-v2.html" },
+    { "source": "/v2/", "destination": "/workout-v2.html" },
     { "source": "/api/(.*)", "destination": "/api/index" }
   ],
   "functions": {
