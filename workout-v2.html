@@ -83,7 +83,7 @@ const WORKOUTS = [
     rest: 75,
     warmup: "Light goblet squats and arm circles to warm up",
     exercises: [
-      { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, rest: 120 },
+      { name: "Goblet Squat", sets: 3, warmups: 2, reps: "10-12", notes: "Hold DB at chest, sit deep. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, rest: 120 },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
       { name: "Assisted Pull-Ups", sets: 3, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
       { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
@@ -103,7 +103,7 @@ const WORKOUTS = [
     rest: 75,
     warmup: "Light band squats to warm up legs",
     exercises: [
-      { name: "Band Squat", sets: 3, reps: "12-15", notes: "Stand on band, handles at shoulders", video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" },
+      { name: "Band Squat", sets: 3, warmups: 2, reps: "12-15", notes: "Stand on band, handles at shoulders", video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" },
       { name: "Dumbbell Flat Bench Press", sets: 3, reps: "10-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
       { name: "Band Row", sets: 3, reps: "12-15", notes: "Stand on band, pull to chest, squeeze back", video: "https://www.youtube.com/shorts/BAlsaA1wIhY", equipment: "band", rest: 120 },
       { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
@@ -256,17 +256,26 @@ function flattenTemplate(workout, lastSessionMap) {
       const sets = [];
       const isAssist = !!ex.assist;
       const isBandOnly = ex.equipment === "band" && !ex.bandAddon && !isAssist;
-      // warmup unless explicitly disabled
+      // Warmup sets. Default = 1; pass `warmups: 2` (or more) on the template
+      // to ramp up before the work sets. Each warmup gets its own set_number
+      // (0, 1, …) so /api/last-session round-trips per-warmup last values.
       if (!ex.noWarmup) {
-        const last = lastSessionMap[`${ex.name}|warmup|0`];
-        sets.push(buildSet({
-          kind: "warmup", idx: "W",
-          template: ex,
-          last,
-          setNumber: 0,
-          saveExerciseName: ex.name,
-          isAssist, isBandOnly,
-        }));
+        const warmupCount = Math.max(1, ex.warmups || 1);
+        for (let wi = 0; wi < warmupCount; wi++) {
+          const setNumber = wi;
+          const last = lastSessionMap[`${ex.name}|warmup|${setNumber}`];
+          sets.push(buildSet({
+            kind: "warmup",
+            // idx drives the active-block header. For multi-warmup we show
+            // "Warm-up 1" / "Warm-up 2"; single keeps the cleaner "Warm-up".
+            idx: warmupCount > 1 ? `W${wi + 1}` : "W",
+            template: ex,
+            last,
+            setNumber,
+            saveExerciseName: ex.name,
+            isAssist, isBandOnly,
+          }));
+        }
       }
       for (let i = 0; i < (ex.sets || 3); i++) {
         const setNumber = i + 1;
@@ -823,7 +832,7 @@ function RepStrip({ min = 1, max = 20, range, last, logged, onLog }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // ActiveSetBlock — the controls for the currently-being-logged set.
 // ─────────────────────────────────────────────────────────────────────────────
-function ActiveSetBlock({ exercise, set, totalWork, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onApplyLast }) {
+function ActiveSetBlock({ exercise, set, totalWork, totalWarmup, warmupPos, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onApplyLast }) {
   const isBW = exercise.mode === "bodyweight";
   const bands = set.bands || [];
   const lastBands = set.lastBands || [];
@@ -857,7 +866,15 @@ function ActiveSetBlock({ exercise, set, totalWork, onPickWeight, onPickBodyweig
       {/* header line */}
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12, gap: 10 }}>
         {set.kind === "warmup" ? (
-          <span style={{ color: T.amber, fontWeight: 700, fontSize: 17, letterSpacing: -0.2 }}>Warm-up</span>
+          <span style={{ color: T.amber, fontWeight: 700, fontSize: 17, letterSpacing: -0.2 }}>
+            Warm-up
+            {totalWarmup > 1 && (
+              <>
+                <span style={{ fontFamily: T.mono }}> {warmupPos}</span>
+                <span style={{ color: T.faint, fontWeight: 500 }}> of {totalWarmup}</span>
+              </>
+            )}
+          </span>
         ) : (
           <span style={{ color: T.strong, fontWeight: 700, fontSize: 17, letterSpacing: -0.2 }}>
             Set <span style={{ fontFamily: T.mono }}>{set.idx}</span>
@@ -1010,16 +1027,31 @@ function RestTimer({ rest, onAdd, onSkip, onToggle }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // ExerciseCard — title, set strip, rest timer, active set block, footer.
 // ─────────────────────────────────────────────────────────────────────────────
-function setStripLabel(s) {
-  return s.kind === "warmup" ? "WARM" : `SET ${s.idx}`;
+// `allSets` is the full sets array for the exercise so multi-warmup labels
+// can be derived from the warmup's position in the strip (W1 / W2 / …).
+function setStripLabel(s, allSets) {
+  if (s.kind === "warmup") {
+    const warmups = allSets.filter(x => x.kind === "warmup");
+    if (warmups.length > 1) {
+      const n = warmups.indexOf(s) + 1;
+      return `W${n}`;
+    }
+    return "WARM";
+  }
+  return `SET ${s.idx}`;
 }
 
 function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup, motivation }) {
   const activeIdx = exercise.sets.findIndex(s => s.active);
   const activeSet = activeIdx >= 0 ? exercise.sets[activeIdx] : null;
   const totalWork = exercise.sets.filter(s => s.kind === "work").length;
-  const hasWarmup = exercise.sets.some(s => s.kind === "warmup");
-  const warmupActive = exercise.sets.some(s => s.kind === "warmup" && s.active);
+  const warmups = exercise.sets.filter(s => s.kind === "warmup");
+  const totalWarmup = warmups.length;
+  const hasWarmup = totalWarmup > 0;
+  const warmupActive = warmups.some(s => s.active);
+  const activeWarmupPos = activeSet && activeSet.kind === "warmup"
+    ? warmups.indexOf(activeSet) + 1
+    : null;
   const lastWork = [...exercise.sets].reverse().find(s => s.kind === "work");
   const canRemove = totalWork > 1 && lastWork && !lastWork.active && !lastWork.completed;
   const allDone = !activeSet && exercise.sets.every(s => s.completed);
@@ -1060,7 +1092,7 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
         minWidth: 0, transition: "all 200ms ease",
       }}>
         <span style={{ color: isWarm ? T.amber : isCurrent ? T.accentLight : T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 0.7 }}>
-          {setStripLabel(s)}
+          {setStripLabel(s, exercise.sets)}
         </span>
         <div style={{ display: "flex", alignItems: "baseline", gap: 2, fontFamily: T.mono }}>
           <span style={{ color: (s.completed || isCurrent) ? T.strong : T.faint, fontSize: 16, fontWeight: 700, letterSpacing: -0.3 }}>{totalLb}</span>
@@ -1132,6 +1164,8 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
           exercise={exercise}
           set={activeSet}
           totalWork={totalWork}
+          totalWarmup={totalWarmup}
+          warmupPos={activeWarmupPos}
           onPickWeight={(w) => onPickWeight(activeIdx, w)}
           onPickBodyweight={(w) => onPickBodyweight(activeIdx, w)}
           onPickGrip={(g) => onPickGrip(activeIdx, g)}
