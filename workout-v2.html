@@ -225,6 +225,31 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
   // to global hints (so a workout you haven't done in a while still shows
   // useful values from whenever you last did that exercise in any workout).
   const lookupLast = (key) => lastSessionMap[key] || hintsMap[key] || null;
+  // Grip cascades across sets of the same exercise — historically the user
+  // only set grip on set 1 so sets 2/3 have grip=null in last data. Without
+  // this fallback those sets would prefill to the template's first grip
+  // option (typically "neutral") instead of inheriting set 1's choice.
+  // Picks the first non-null grip found across last+hints data for the
+  // exercise's name. Working sets win over warmup (warmups often use a
+  // different grip or none at all).
+  const exerciseGripCache = {};
+  const lookupExerciseGrip = (exName) => {
+    if (exerciseGripCache[exName] !== undefined) return exerciseGripCache[exName];
+    let found = null;
+    const scan = (src, kindFilter) => {
+      Object.keys(src || {}).forEach(k => {
+        if (found) return;
+        const [n, kind] = k.split("|");
+        if (n === exName && (!kindFilter || kind === kindFilter) && src[k].grip) found = src[k].grip;
+      });
+    };
+    scan(lastSessionMap, "working");
+    scan(hintsMap, "working");
+    scan(lastSessionMap, "warmup");
+    scan(hintsMap, "warmup");
+    exerciseGripCache[exName] = found;
+    return found;
+  };
   const out = [];
   let supersetLetter = 'A';
   workout.exercises.forEach((ex, exIdx) => {
@@ -251,6 +276,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
           const nums = Object.keys(subWorkingBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
           return nums.length ? subWorkingBySetNum[nums[0]] : null;
         };
+        const subExerciseGrip = lookupExerciseGrip(sub.name);
         for (let r = 0; r < rounds; r++) {
           const setNumber = interleavedSetNumber(r, subIdx, subs.length);
           const last = subFallback(setNumber) || lookupLast(`${sub.name}|working|${setNumber}`);
@@ -260,6 +286,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
             last,
             setNumber,
             saveExerciseName: sub.name,
+            fallbackGrip: subExerciseGrip,
           }));
         }
         out.push({
@@ -313,6 +340,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
           const nums = Object.keys(warmupLastBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
           return nums.length ? warmupLastBySetNum[nums[0]] : null;
         };
+        const exGripFallback = lookupExerciseGrip(ex.name);
         for (let wi = 0; wi < warmupCount; wi++) {
           const setNumber = wi;
           const last = fallbackForWarmup(setNumber);
@@ -326,6 +354,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
             setNumber,
             saveExerciseName: ex.name,
             isAssist, isBandOnly,
+            fallbackGrip: exGripFallback,
           }));
         }
       }
@@ -346,6 +375,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
         const nums = Object.keys(workingLastBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
         return nums.length ? workingLastBySetNum[nums[0]] : null;
       };
+      const workGripFallback = lookupExerciseGrip(ex.name);
       for (let i = 0; i < (ex.sets || 3); i++) {
         const setNumber = i + 1;
         const last = fallbackForWorking(setNumber);
@@ -355,6 +385,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
           last,
           setNumber,
           saveExerciseName: ex.name,
+          fallbackGrip: workGripFallback,
           isAssist, isBandOnly,
         }));
       }
@@ -392,7 +423,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
 //   • assist          → weight_lb = bodyweight − Σbands (net). lastBodyweight
 //                       recovers the BW number by adding Σbands back.
 //   • bandsOnly       → weight_lb = Σbands. Stepper hidden, no lastWeight.
-function buildSet({ kind, idx, template, last, setNumber, saveExerciseName, isAssist, isBandOnly }) {
+function buildSet({ kind, idx, template, last, setNumber, saveExerciseName, isAssist, isBandOnly, fallbackGrip }) {
   const set = {
     kind, idx,
     setNumber,
@@ -404,7 +435,11 @@ function buildSet({ kind, idx, template, last, setNumber, saveExerciseName, isAs
   if (last) {
     set.lastReps = parseInt(last.reps) || null;
     set.lastBands = last.bands_json ? safeJSON(last.bands_json) : [];
-    set.lastGrip = last.grip || null;
+    // Per-set grip cascades to the exercise-wide grip when the specific set's
+    // last record has none (common: user only set grip on set 1, sets 2-3
+    // were saved with grip=null). Without this, sets 2-3 would prefill to
+    // the template's default grip and the LAST marker dot wouldn't show.
+    set.lastGrip = last.grip || fallbackGrip || null;
     const lastBandSum = (set.lastBands || []).reduce((a, b) => a + b, 0);
     const savedLb = last.weight_lb || 0;
     if (template.assist) {
@@ -418,6 +453,10 @@ function buildSet({ kind, idx, template, last, setNumber, saveExerciseName, isAs
     }
   } else {
     set.lastBands = [];
+    // Even with no per-set last record, surface the exercise-wide grip if
+    // one exists in any other set's history. Keeps the LAST marker
+    // showing on the grip pill for an exercise the user has done before.
+    if (fallbackGrip) set.lastGrip = fallbackGrip;
   }
   // Initial value: prefill from last so the user usually only adjusts reps.
   if (template.assist) {
