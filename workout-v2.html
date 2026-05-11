@@ -532,11 +532,23 @@ function hydrateToday(exercises, todaySets) {
     }
     if (row.grip) set.grip = row.grip;
   });
-  // First non-completed set across the whole workout becomes active.
+  // First non-completed set across the whole workout becomes active. The
+  // warmup pool is "one and done": if you already completed ANY warmup of
+  // an exercise (e.g. you did W2 and closed the tab), the remaining warmup
+  // slots are treated as already-warmed-up so the active focus jumps
+  // straight to the next work set. The unused warmup slots stay visible
+  // in the strip — you can tap one to reopen if you want another ramp set —
+  // they just aren't auto-active.
   let activated = false;
   for (const ex of next) {
+    if (activated) break;
+    const anyWarmupDone = ex.sets.some(s => s.kind === "warmup" && s.completed);
     for (const s of ex.sets) {
-      if (!s.completed && !activated) { s.active = true; activated = true; }
+      if (s.completed) continue;
+      if (anyWarmupDone && s.kind === "warmup") continue;
+      s.active = true;
+      activated = true;
+      break;
     }
   }
   return next;
