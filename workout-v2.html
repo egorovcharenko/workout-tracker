@@ -324,6 +324,13 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
           return nums.length ? subWorkingBySetNum[nums[0]] : null;
         };
         const subExerciseGrip = lookupExerciseGrip(sub.name);
+        // Mirror the standalone branch: explicit mode flags drive buildSet's
+        // weight_lb interpretation + initial-value population. Without these
+        // a bandsOnly sub (Band Tricep Pushdowns) falls through to the plain
+        // loaded branch, which assigns set.bands = [] even when last data
+        // has bands — so the bands grid renders empty on mount.
+        const subIsAssist = !!sub.assist;
+        const subIsBandOnly = sub.equipment === "band" && !sub.bandAddon && !subIsAssist;
         for (let r = 0; r < rounds; r++) {
           const setNumber = interleavedSetNumber(r, subIdx, subs.length);
           const last = subFallback(setNumber) || lookupLast(`${sub.name}|working|${setNumber}`);
@@ -333,6 +340,8 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
             last,
             setNumber,
             saveExerciseName: sub.name,
+            isAssist: subIsAssist,
+            isBandOnly: subIsBandOnly,
             fallbackGrip: subExerciseGrip,
           }));
         }
