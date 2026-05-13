@@ -570,15 +570,27 @@ function hydrateToday(exercises, todaySets) {
     }
     if (row.grip) set.grip = row.grip;
   });
-  // Activate the next uncompleted set AFTER the highest-index completed set
-  // in each exercise. Skipped sets (e.g. SET 1 missing while SET 2 + SET 3
-  // are done; an unused W1 slot when W2 is done) stay visible in the strip
-  // and tappable to reopen, but the active focus moves FORWARD — never
-  // backward. If every set in every exercise is past the highest completion
-  // mark with nothing left, no set is active and the workout reads as done.
+  return activateNextSet(next);
+}
+
+// Pick the next uncompleted set across all exercises and mark it active.
+// Mutates and returns the input array. Honors `exercise.skipped` (the whole
+// exercise is opted out, so its sets are never the active focus). Within
+// each non-skipped exercise we activate the next uncompleted set AFTER the
+// highest-index completed set — never backward (matches v1 behavior).
+// Skipped/unused intermediate slots stay tappable in the strip but don't
+// receive automatic focus. If every set is past the highest completion mark
+// with nothing left (or the only candidates live in skipped exercises), no
+// set is active and the workout reads as done.
+function activateNextSet(exercises) {
+  // Clear any pre-existing active flags so we have a single source of truth.
+  for (const ex of exercises) {
+    for (const s of ex.sets) if (s.active) s.active = false;
+  }
   let activated = false;
-  for (const ex of next) {
+  for (const ex of exercises) {
     if (activated) break;
+    if (ex.skipped) continue;
     let highestCompleted = -1;
     for (let i = 0; i < ex.sets.length; i++) {
       if (ex.sets[i].completed) highestCompleted = i;
@@ -591,7 +603,27 @@ function hydrateToday(exercises, todaySets) {
       }
     }
   }
-  return next;
+  return exercises;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Skipped-exercise persistence — survives page reload, scoped to a
+// (workout, date) tuple so a fresh day starts with a clean slate without
+// caring whether the session got a server-side `id` yet.
+// ─────────────────────────────────────────────────────────────────────────────
+const SKIPPED_LS_KEY = (workoutName, date) => `v2-skipped:${workoutName}:${date}`;
+function loadSkippedExercises(workoutName, date) {
+  try {
+    const raw = localStorage.getItem(SKIPPED_LS_KEY(workoutName, date));
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch { return new Set(); }
+}
+function saveSkippedExercises(workoutName, date, namesSet) {
+  try {
+    localStorage.setItem(SKIPPED_LS_KEY(workoutName, date), JSON.stringify([...namesSet]));
+  } catch (e) {
+    console.warn("[V2-SKIPPED] localStorage save failed:", e);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1250,7 +1282,47 @@ function setStripLabel(s, allSets) {
   return `SET ${s.idx}`;
 }
 
-function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup, motivation }) {
+function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup, motivation }) {
+  // Skipped exercise: collapsed chip with a restore tap. No set strip, no
+  // active set block, no AI motivation slot — the exercise is opted out.
+  if (exercise.skipped) {
+    return (
+      <div style={{
+        margin: "0 16px 12px", padding: "10px 14px",
+        background: "rgba(255,255,255,0.015)",
+        border: `1px dashed ${T.cardBorder}`,
+        borderRadius: 14,
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+      }}>
+        <div style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{
+            color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0,
+            padding: "2px 6px", borderRadius: 4,
+            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+            flexShrink: 0,
+          }}>× SKIPPED</span>
+          {supersetTag && (
+            <span style={{
+              color: T.bands, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1,
+              padding: "1px 5px", borderRadius: 4,
+              background: "rgba(192,132,252,0.10)", opacity: 0.6, flexShrink: 0,
+            }}>{supersetTag}</span>
+          )}
+          <span style={{
+            color: T.muted, fontSize: 15, fontWeight: 600,
+            textDecoration: "line-through", textDecorationColor: "rgba(156,163,175,0.4)",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>{exercise.name}</span>
+        </div>
+        <button onClick={onSkipExercise} style={{
+          background: "transparent", border: "1px solid rgba(255,255,255,0.1)",
+          color: T.muted, padding: "5px 10px", borderRadius: 7,
+          fontFamily: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer",
+          flexShrink: 0,
+        }}>↻ restore</button>
+      </div>
+    );
+  }
   const activeIdx = exercise.sets.findIndex(s => s.active);
   const activeSet = activeIdx >= 0 ? exercise.sets[activeIdx] : null;
   const totalWork = exercise.sets.filter(s => s.kind === "work").length;
@@ -1430,6 +1502,7 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
       <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.cardBorder}`, flexWrap: "wrap" }}>
         {footerBtn("+ set", onAddSet)}
         {footerBtn("− set", onRemoveSet, !canRemove)}
+        {footerBtn("× skip exercise", onSkipExercise)}
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           {hasWarmup && warmupActive && footerBtn("Skip warmup →", onSkipWarmup)}
           {hasWarmup && !warmupActive && footerBtn("× warmup", onRemoveWarmup)}
@@ -1547,6 +1620,15 @@ function App() {
         } else {
           // Fresh workout: activate the first set.
           if (exs.length && exs[0].sets.length) exs[0].sets[0].active = true;
+        }
+        // Apply persisted skip flags (localStorage). Done AFTER hydrate so we
+        // can rerun the activate-next pass — if the currently-active set sits
+        // on a newly-skipped exercise, focus jumps forward to the next valid
+        // candidate. Survives page reload across the same (workout, date).
+        const skippedNames = loadSkippedExercises(workout.name, localDate());
+        if (skippedNames.size) {
+          exs = exs.map(e => skippedNames.has(e.name) ? { ...e, skipped: true } : e);
+          activateNextSet(exs);
         }
         setExercises(exs);
         setLoaded(true);
@@ -1956,6 +2038,31 @@ function App() {
     updateAndSave(next);
   };
 
+  // Toggle "skip exercise" for the whole exercise. The card collapses to a
+  // compact SKIPPED chip with a restore action; skipped exercises don't
+  // receive automatic focus and their sets count as done in the header
+  // x/total. Persisted in localStorage (keyed by workout+date) so a refresh
+  // mid-workout keeps the skip. Sets are NOT saved to the DB (we never mark
+  // them completed), so the skip is purely a UI/flow signal.
+  const onSkipExercise = (eIdx) => {
+    const next = exercises.map((e, i) => {
+      if (i !== eIdx) return e;
+      const skipped = !e.skipped;
+      // Clear any in-progress reps/bands selection on this exercise's sets
+      // so a later un-skip starts from prefilled (last-session) values
+      // instead of a half-edited state.
+      const sets = e.sets.map(s => ({ ...s, active: false }));
+      return { ...e, skipped, sets };
+    });
+    activateNextSet(next);
+    const skippedNames = new Set(next.filter(e => e.skipped).map(e => e.name));
+    saveSkippedExercises(workout.name, localDate(), skippedNames);
+    // No /api/save round-trip needed — skipped sets are still completed:false
+    // so serializeForSave would emit the same payload as before. We just need
+    // local state to reflect the new focus.
+    setExercises(next);
+  };
+
   const onAddSet = (eIdx) => {
     const next = exercises.map((e, i) => {
       if (i !== eIdx) return e;
@@ -2000,9 +2107,12 @@ function App() {
   const restSkip = () => setRest(null);
   const restToggle = () => setRest(r => r ? { ...r, paused: !r.paused } : r);
 
-  // Set counts for header.
+  // Set counts for header. A skipped exercise counts its sets as "done" so the
+  // x/total reflects "I've made a decision about this exercise" and the meter
+  // can hit 100% without the skipped sets ever being logged.
   const totalSets = exercises.reduce((n, e) => n + e.sets.length, 0);
-  const doneSets = exercises.reduce((n, e) => n + e.sets.filter(s => s.completed).length, 0);
+  const doneSets = exercises.reduce((n, e) =>
+    e.skipped ? n + e.sets.length : n + e.sets.filter(s => s.completed).length, 0);
 
   if (!loaded) {
     // Render the header + workout name immediately so the user sees the
@@ -2066,6 +2176,7 @@ function App() {
               onClearBands={(sIdx) => onClearBands(i, sIdx)}
               onLogReps={(sIdx, r) => onLogReps(i, sIdx, r)}
               onSkipWarmup={() => onSkipWarmup(i)}
+              onSkipExercise={() => onSkipExercise(i)}
               onReopenSet={(sIdx) => onReopenSet(i, sIdx)}
               onAddSet={() => onAddSet(i)}
               onRemoveSet={() => onRemoveSet(i)}
