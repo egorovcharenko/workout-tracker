@@ -1303,11 +1303,26 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
         <span style={{ color: isWarm ? T.amber : isCurrent ? T.accentLight : T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 0.7 }}>
           {setStripLabel(s, exercise.sets)}
         </span>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 2, fontFamily: T.mono }}>
-          <span style={{ color: (s.completed || isCurrent) ? T.strong : T.faint, fontSize: 16, fontWeight: 700, letterSpacing: -0.3 }}>{totalLb}</span>
-          <span style={{ color: T.disabled, fontSize: 11 }}>×</span>
-          <span style={{ color: (s.completed || isCurrent) ? T.strong : T.faint, fontSize: 16, fontWeight: 700, letterSpacing: -0.3 }}>{s.reps ?? "—"}</span>
-        </div>
+        {/* Reps preview: when this set isn't logged yet but the same exercise+set
+            slot was done last session, show the prior rep count in italic so the
+            target is visible "in advance" — rather than an opaque "—". The italic
+            + lighter color distinguishes it from a logged value. The weight side
+            already pre-fills from last via buildSet, so this just brings reps
+            into parity. */}
+        {(() => {
+          const isPreview = s.reps == null && s.lastReps != null;
+          const repText = s.reps ?? s.lastReps ?? "—";
+          const repColor = isPreview
+            ? T.muted
+            : (s.completed || isCurrent) ? T.strong : T.faint;
+          return (
+            <div style={{ display: "flex", alignItems: "baseline", gap: 2, fontFamily: T.mono }}>
+              <span style={{ color: (s.completed || isCurrent) ? T.strong : T.faint, fontSize: 16, fontWeight: 700, letterSpacing: -0.3 }}>{totalLb}</span>
+              <span style={{ color: T.disabled, fontSize: 11 }}>×</span>
+              <span style={{ color: repColor, fontSize: 16, fontWeight: 700, letterSpacing: -0.3, fontStyle: isPreview ? "italic" : "normal" }}>{repText}</span>
+            </div>
+          );
+        })()}
         {s.completed ? (
           <span style={{ color: deltaColor, fontFamily: T.mono, fontSize: 10, fontWeight: 700 }}>{deltaText}</span>
         ) : isCurrent ? (
