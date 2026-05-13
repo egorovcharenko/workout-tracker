@@ -521,7 +521,7 @@ def get_active_sessions(today=None):
     conn = get_db()
     c = conn.cursor()
     c.execute(
-        "SELECT id, workout_name, duration_sec, started_at FROM sessions WHERE date >= ? ORDER BY id DESC",
+        "SELECT id, workout_name, date, duration_sec, started_at FROM sessions WHERE date >= ? ORDER BY id DESC",
         (_yesterday(),),
     )
     now = datetime.datetime.utcnow()
@@ -552,6 +552,12 @@ def get_active_sessions(today=None):
             sessions.append({
                 "id": row["id"],
                 "workout_name": row["workout_name"],
+                # The session's local date — needed client-side to look up
+                # per-(workout, date) localStorage state (e.g., skipped-
+                # exercise markers from v2) so the home tile can subtract
+                # skipped sets from the "expected" count and stop showing
+                # a fully-skipped-and-done workout as still in-progress.
+                "date": row["date"] if isinstance(row["date"], str) else str(row["date"]),
                 "duration_sec": max(0, duration),
                 "sets_done": cnt,
             })

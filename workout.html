@@ -2757,18 +2757,48 @@ function renderLastFinishCard() {
 }
 
 function renderHome() {
-  // Check for active sessions today — filter out completed ones
-  const activeSessions = (state._activeSessions || []).filter(s => s.sets_done < getExpectedSets(s.workout_name));
-  const activeSessionHTML = activeSessions.length ? activeSessions.map(s => `
+  // How many sets did v2's skip-exercise feature take off the table for a
+  // given (workout, date)? Read the same localStorage key v2 writes:
+  //   v2-skipped:<workoutName>:<YYYY-MM-DD>  →  JSON array of exercise names.
+  // Sum (sets + 1 warmup) per skipped exercise to mirror getExpectedSets's
+  // counting convention so the comparison below stays apples-to-apples.
+  // Without this, skipping any exercise leaves the session permanently
+  // pinned in the "In Progress" list because the DB never sees skip rows.
+  const getSkippedSetCount = (workoutName, date) => {
+    try {
+      const raw = localStorage.getItem(`v2-skipped:${workoutName}:${date}`);
+      if (!raw) return 0;
+      const skippedNames = new Set(JSON.parse(raw));
+      if (!skippedNames.size) return 0;
+      const w = WORKOUTS.find(w => w.name === workoutName);
+      if (!w) return 0;
+      return w.exercises.reduce(
+        (acc, ex) => skippedNames.has(ex.name) ? acc + (ex.sets || 0) + 1 : acc,
+        0
+      );
+    } catch { return 0; }
+  };
+  // Filter out completed sessions — including ones completed via skips.
+  const activeSessions = (state._activeSessions || []).filter(s => {
+    const skipped = getSkippedSetCount(s.workout_name, s.date);
+    return s.sets_done < (getExpectedSets(s.workout_name) - skipped);
+  });
+  const activeSessionHTML = activeSessions.length ? activeSessions.map(s => {
+    const skipped = getSkippedSetCount(s.workout_name, s.date);
+    const detail = skipped
+      ? `${s.sets_done} sets done · ${skipped} skipped · ${formatTime(s.duration_sec || 0)} elapsed`
+      : `${s.sets_done} sets done · ${formatTime(s.duration_sec || 0)} elapsed`;
+    return `
     <button onclick="startWorkout(WORKOUTS.find(w=>w.name==='${s.workout_name.replace(/'/g,"\\'")}')||WORKOUTS[0])"
       style="width:100%;text-align:left;background:#eff6ff;border:2px solid #3b82f6;border-radius:12px;padding:16px;margin-bottom:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
       <div>
         <div style="font-weight:600;color:#1d4ed8">${s.workout_name}</div>
-        <div style="font-size:13px;color:#3b82f6;margin-top:2px">${s.sets_done} sets done · ${formatTime(s.duration_sec || 0)} elapsed</div>
+        <div style="font-size:13px;color:#3b82f6;margin-top:2px">${detail}</div>
       </div>
       <span style="color:#3b82f6;font-size:13px;font-weight:600;background:#dbeafe;padding:4px 10px;border-radius:8px">Resume →</span>
     </button>
-  `).join("") : "";
+  `;
+  }).join("") : "";
 
   return `
     <div style="padding:32px 16px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
