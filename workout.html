@@ -2421,6 +2421,311 @@ function getExpectedSets(workoutName) {
   return w.exercises.reduce((s, e) => s + e.sets + 1, 0); // working sets + warmup per exercise
 }
 
+// =========================================================================
+// Workout Summary card (home screen)
+// -------------------------------------------------------------------------
+// Dark cohesive recap of the most-recent completed session — the design
+// handoff calls this the "post-workout summary". Replaces the old yellow
+// finish-motivation banner; if a witty closer exists for the session it's
+// folded into this card as an italic subtitle.
+//
+// Everything is computed from `state.history` (most-recent N sessions, each
+// with its sets[] array), so no extra API call is needed.
+//
+// Sections, top→bottom:
+//   • Hero        — ✓DONE badge + workout name + date, then a volume card
+//                   with a 5-week mini-bar chart of same-workout history.
+//   • Breakdown   — one CompactRow per working-set exercise: best set,
+//                   total volume, mini-sparkline, %-delta vs prior session
+//                   of the same exercise. Gold ★PR chip when applicable.
+//   • Muscles     — magenta pills sized by accumulated volume share
+//                   (primary muscle 1.0×, secondary 0.5×).
+//
+// Marked `data-noinvert` because the page-level filter:invert dark hack
+// would otherwise wash the carefully tuned dark palette to gray.
+function renderWorkoutSummaryCard() {
+  const history = state.history || [];
+  if (!history.length) return '';
+
+  // Pick the most recent session with at least one logged working set.
+  const latest = history.find(s => (s.sets || []).some(x => x.set_type === 'working' && x.reps));
+  if (!latest) return '';
+
+  const _esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const mono = "ui-monospace, Menlo, monospace";
+
+  // ----- Per-exercise aggregation for the latest session ------------------
+  const exMap = new Map();
+  for (const s of (latest.sets || [])) {
+    if (s.set_type !== 'working') continue;
+    const reps = parseInt(s.reps) || 0;
+    const w = parseFloat(s.weight_lb);
+    if (reps <= 0) continue;
+    if (!exMap.has(s.exercise)) {
+      exMap.set(s.exercise, { volume: 0, totalReps: 0, bestSet: null, bestScore: -Infinity, weights: [], reps: [] });
+    }
+    const e = exMap.get(s.exercise);
+    const wAbs = Math.abs(w || 0);
+    const vol = (w != null && !Number.isNaN(w)) ? wAbs * reps : 0;
+    e.volume += vol;
+    e.totalReps += reps;
+    e.weights.push(w || 0);
+    e.reps.push(reps);
+    // Pick "best set" by weight then reps; format with assist-aware label.
+    const score = wAbs * 1000 + reps;
+    if (score > e.bestScore) {
+      e.bestScore = score;
+      let label;
+      const wRound = Math.round((w || 0) * 10) / 10;
+      if (w != null && w < 0) label = `BW ${wRound} × ${reps}`;
+      else if (!w || w === 0) label = `BW × ${reps}`;
+      else label = `${wRound}lb × ${reps}`;
+      e.bestSet = label;
+    }
+  }
+
+  // ----- Session totals ---------------------------------------------------
+  let totalVol = 0;
+  let totalSets = 0;
+  for (const s of (latest.sets || [])) {
+    if (s.set_type !== 'working' && s.set_type !== 'warmup') continue;
+    totalSets++;
+    if (s.set_type !== 'working') continue;
+    const reps = parseInt(s.reps) || 0;
+    const w = parseFloat(s.weight_lb);
+    if (reps > 0 && w != null && !Number.isNaN(w)) totalVol += Math.abs(w) * reps;
+  }
+
+  // Volume history: last 5 same-workout sessions prior to this one (oldest→newest).
+  const sameWorkoutPast = history
+    .filter(s => s.id !== latest.id && s.workout_name === latest.workout_name)
+    .slice(0, 5)
+    .reverse();
+  const sessionVol = (s) => (s.sets || []).reduce((a, x) => {
+    if (x.set_type !== 'working') return a;
+    const w = parseFloat(x.weight_lb), r = parseInt(x.reps) || 0;
+    return a + (r > 0 && w != null && !Number.isNaN(w) ? Math.abs(w) * r : 0);
+  }, 0);
+  const volumeHistory = sameWorkoutPast.map(sessionVol);
+
+  // Overall % delta vs the most-recent prior session of the same workout.
+  const prevSame = sameWorkoutPast.length ? sameWorkoutPast[sameWorkoutPast.length - 1] : null;
+  const prevVol = prevSame ? sessionVol(prevSame) : 0;
+  const overallDelta = prevVol > 0 ? Math.round(((totalVol - prevVol) / prevVol) * 1000) / 10 : null;
+
+  // ----- Per-exercise: history series + PR detection ----------------------
+  // Walk the entire history once per exercise to compute the comparable
+  // metrics we need (volume series + max-of-prior reps/1RM/weight).
+  const exStats = (name) => {
+    const series = [];
+    let maxVol = 0, maxReps = 0, max1rm = 0, maxW = 0;
+    for (const s of history) {
+      if (s.id === latest.id) continue;
+      let v = 0, sR = 0, s1 = 0, sW = 0;
+      for (const x of (s.sets || [])) {
+        if (x.exercise !== name || x.set_type !== 'working') continue;
+        const w = parseFloat(x.weight_lb), r = parseInt(x.reps) || 0;
+        if (!(r > 0) || w == null || Number.isNaN(w)) continue;
+        const wa = Math.abs(w);
+        v += wa * r;
+        if (r > sR) sR = r;
+        if (wa > sW) sW = wa;
+        const orm = r > 1 ? wa * (1 + r / 30) : wa;
+        if (orm > s1) s1 = orm;
+      }
+      if (v > 0) series.push({ date: s.date, vol: v });
+      if (v > maxVol) maxVol = v;
+      if (sR > maxReps) maxReps = sR;
+      if (sW > maxW) maxW = sW;
+      if (s1 > max1rm) max1rm = s1;
+    }
+    series.sort((a, b) => a.date.localeCompare(b.date));
+    return { series: series.map(x => x.vol), maxVol, maxReps, max1rm, maxW };
+  };
+
+  const exercises = [...exMap.entries()].map(([name, e]) => {
+    const st = exStats(name);
+    const prev = st.series.length ? st.series[st.series.length - 1] : 0;
+    const delta = prev > 0 ? Math.round(((e.volume - prev) / prev) * 100) : 0;
+    const my1rm = Math.max(0, ...e.reps.map((r, i) => {
+      const w = Math.abs(e.weights[i] || 0);
+      return r > 1 ? w * (1 + r / 30) : w;
+    }));
+    const myMaxW = Math.max(0, ...e.weights.map(w => Math.abs(w || 0)));
+    const myMaxReps = Math.max(0, ...e.reps);
+    let prType = null;
+    if (st.maxVol > 0 && e.volume > st.maxVol) prType = 'VOL';
+    else if (st.max1rm > 0 && my1rm > st.max1rm * 1.001) prType = '1RM';
+    else if (st.maxReps > 0 && myMaxReps > st.maxReps) prType = 'REPS';
+    else if (st.maxW > 0 && myMaxW > st.maxW) prType = 'MAX';
+    return {
+      name,
+      bestSet: e.bestSet || '—',
+      totalReps: e.totalReps,
+      volume: Math.round(e.volume),
+      delta,
+      history: [...st.series, e.volume].slice(-6),
+      prType,
+    };
+  });
+
+  const prCount = exercises.filter(e => e.prType).length;
+
+  // ----- Muscle intensities ----------------------------------------------
+  const muscleSums = {};
+  for (const ex of exercises) {
+    const map = EXERCISE_MUSCLES[ex.name];
+    if (!map) continue;
+    for (const m of (map.primary || [])) muscleSums[m] = (muscleSums[m] || 0) + ex.volume;
+    for (const m of (map.secondary || [])) muscleSums[m] = (muscleSums[m] || 0) + ex.volume * 0.5;
+  }
+  const maxMuscle = Math.max(0, ...Object.values(muscleSums));
+  const MUSCLE_LABEL = {
+    triceps: 'TRI', biceps: 'BI', chest: 'CHEST', shoulders: 'SHO',
+    lats: 'LATS', quads: 'QUADS', glutes: 'GLU', hamstrings: 'HAM',
+    upper_back: 'UPBK', rear_delts: 'RDLT', core: 'CORE', forearms: 'FORE',
+    lower_back: 'LOBK', calves: 'CALF',
+  };
+  const muscles = (maxMuscle > 0 ? Object.entries(muscleSums) : [])
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => ({ name: MUSCLE_LABEL[k] || k.toUpperCase(), intensity: v / maxMuscle }))
+    .sort((a, b) => b.intensity - a.intensity)
+    .slice(0, 6);
+
+  // ----- Display strings --------------------------------------------------
+  const dateLabel = (() => {
+    const d = new Date(latest.date + 'T00:00:00');
+    if (isNaN(d.getTime())) return latest.date;
+    const dow = d.toLocaleDateString('en-US', { weekday: 'short' });
+    const mo = d.toLocaleDateString('en-US', { month: 'short' });
+    return `${dow} · ${mo} ${d.getDate()}`;
+  })();
+  const dur = latest.duration_sec || 0;
+  const mm = Math.floor(dur / 60), ss = dur % 60, hh = Math.floor(mm / 60);
+  const durStr = hh > 0
+    ? `${hh}:${String(mm % 60).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
+    : `${mm}:${String(ss).padStart(2, '0')}`;
+
+  // ----- SVG sparkline (inline; avoids React) -----------------------------
+  const sparkSVG = (points, color, w, h) => {
+    if (!points || points.length < 2) {
+      return `<svg width="${w}" height="${h}"><path d="M2 ${h/2} L${w-2} ${h/2}" stroke="#374151" stroke-width="1" stroke-dasharray="2 2"/></svg>`;
+    }
+    const pad = 2;
+    const min = Math.min(...points), max = Math.max(...points);
+    const range = max - min || 1;
+    const xs = points.map((_, i) => pad + (i * (w - pad * 2)) / (points.length - 1));
+    const ys = points.map(v => h - pad - ((v - min) / range) * (h - pad * 2));
+    const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(' ');
+    const area = `${d} L ${xs[xs.length-1].toFixed(1)} ${h} L ${xs[0].toFixed(1)} ${h} Z`;
+    const gid = `sp-${Math.random().toString(36).slice(2, 9)}`;
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="overflow:visible">
+      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient></defs>
+      <path d="${area}" fill="url(#${gid})"/>
+      <path d="${d}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="${xs[xs.length-1].toFixed(1)}" cy="${ys[ys.length-1].toFixed(1)}" r="2.4" fill="${color}"/>
+      <circle cx="${xs[xs.length-1].toFixed(1)}" cy="${ys[ys.length-1].toFixed(1)}" r="5" fill="${color}" fill-opacity="0.25"/>
+    </svg>`;
+  };
+
+  // ----- Volume bars (5 history + today) ---------------------------------
+  const maxBar = Math.max(1, ...volumeHistory, totalVol);
+  const bars = volumeHistory.map((v, i) => `
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+      <div style="width:100%;height:${(v/maxBar)*56}px;background:rgba(255,255,255,0.08);border-radius:4px"></div>
+      <span style="color:#4B5563;font-family:${mono};font-size:9px">${volumeHistory.length - i}w</span>
+    </div>
+  `).join('');
+  const todayBar = `
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+      <div style="width:100%;height:${(totalVol/maxBar)*56}px;background:linear-gradient(180deg,#34D399,#10B981);border-radius:4px;box-shadow:0 0 12px rgba(52,211,153,0.4)"></div>
+      <span style="color:#34D399;font-family:${mono};font-size:9px;font-weight:700">today</span>
+    </div>`;
+
+  // ----- Breakdown rows ---------------------------------------------------
+  const rows = exercises.map(ex => {
+    const isPR = !!ex.prType;
+    const dColor = ex.delta > 0 ? '#34D399' : ex.delta < 0 ? '#F87171' : '#6B7280';
+    return `
+      <div style="padding:7px 8px;border-radius:7px;background:${isPR ? 'rgba(250,204,21,0.05)' : 'transparent'};border:1px solid ${isPR ? 'rgba(250,204,21,0.22)' : 'rgba(255,255,255,0.04)'};display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center">
+        <div style="min-width:0;display:flex;align-items:center;gap:6px">
+          ${isPR ? `<span style="font-size:8px;font-weight:800;letter-spacing:0.6px;color:#FACC15;background:rgba(250,204,21,0.12);padding:1px 4px;border-radius:3px;font-family:${mono};flex-shrink:0">★${ex.prType}</span>` : ''}
+          <div style="min-width:0">
+            <div style="color:#F3F4F6;font-size:13px;font-weight:600;letter-spacing:-0.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(ex.name)}</div>
+            <div style="color:#6B7280;font-size:11px;font-family:${mono};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(ex.bestSet)} · ${ex.volume.toLocaleString()}lb</div>
+          </div>
+        </div>
+        ${sparkSVG(ex.history, isPR ? '#FACC15' : '#34D399', 38, 16)}
+        <span style="color:${dColor};font-family:${mono};font-size:11px;font-weight:700;min-width:34px;text-align:right">${ex.delta > 0 ? '+' : ''}${ex.delta}%</span>
+      </div>
+    `;
+  }).join('');
+
+  // ----- Muscle pills -----------------------------------------------------
+  const pills = muscles.map(m => {
+    const op = 0.15 + m.intensity * 0.85;
+    return `
+      <div style="padding:3px 8px;border-radius:99px;background:rgba(217,70,239,${op*0.18});border:1px solid rgba(217,70,239,${op*0.5});color:rgba(243,232,255,${0.5 + m.intensity*0.5});font-family:${mono};font-size:10px;font-weight:700;letter-spacing:0.3px;display:inline-flex;align-items:center;gap:5px">
+        ${_esc(m.name)}
+        <span style="color:rgba(217,70,239,0.9);font-size:9px;opacity:0.7">${Math.round(m.intensity*100)}%</span>
+      </div>
+    `;
+  }).join('');
+
+  // ----- Overall-delta arrow (next to big volume number) ------------------
+  const deltaArrow = overallDelta != null
+    ? `<span style="margin-left:6px;color:${overallDelta > 0 ? '#34D399' : overallDelta < 0 ? '#F87171' : '#6B7280'};font-size:11px;font-weight:800">${overallDelta > 0 ? '↑' : overallDelta < 0 ? '↓' : '→'}${Math.abs(overallDelta).toFixed(1)}%</span>`
+    : '';
+
+  const finishMotiv = latest.finish_motivation || '';
+
+  return `
+    <div data-noinvert style="margin-bottom:14px;border-radius:16px;background:#0B0F14;color:#E5E7EB;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;overflow:hidden">
+      <div style="padding:14px 16px 8px;position:relative">
+        <div aria-hidden="true" style="position:absolute;inset:-20% -10% auto -10%;height:220px;background:radial-gradient(ellipse at top,rgba(52,211,153,0.16),rgba(52,211,153,0) 60%);pointer-events:none"></div>
+        <div style="position:relative;display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="color:#34D399;font-family:${mono};font-size:9px;font-weight:800;letter-spacing:1.1px;padding:2px 6px;border-radius:4px;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.35);flex-shrink:0">✓ DONE</span>
+          <h1 style="margin:0;color:#F3F4F6;font-size:22px;font-weight:800;letter-spacing:-0.6px;line-height:1.05;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(latest.workout_name)}</h1>
+          <span style="color:#6B7280;font-family:${mono};font-size:11px;flex-shrink:0">${dateLabel}</span>
+        </div>
+        ${finishMotiv ? `<div style="position:relative;color:#9CA3AF;font-size:12px;line-height:1.45;margin:-2px 0 10px;font-style:italic">"${_esc(finishMotiv)}"</div>` : ''}
+        <div style="position:relative;padding:12px 14px;border-radius:14px;background:linear-gradient(180deg,rgba(52,211,153,0.10),rgba(17,24,39,0.5));border:1px solid rgba(52,211,153,0.22);display:flex;align-items:center;gap:14px">
+          <div style="min-width:0;flex:1">
+            <div style="color:#34D399;font-family:${mono};font-size:9px;font-weight:800;letter-spacing:0.9px">VOLUME</div>
+            <div style="display:flex;align-items:baseline;gap:3px;font-family:${mono};line-height:1">
+              <span style="color:#F3F4F6;font-size:32px;font-weight:800;letter-spacing:-1px">${Math.round(totalVol).toLocaleString()}</span>
+              <span style="color:#9CA3AF;font-size:12px;font-weight:700">lb</span>
+              ${deltaArrow}
+            </div>
+            <div style="display:flex;gap:10px;margin-top:6px;font-family:${mono};font-size:11px;color:#9CA3AF;flex-wrap:wrap">
+              <span><span style="color:#F3F4F6;font-weight:700">${durStr}</span> time</span>
+              <span><span style="color:#F3F4F6;font-weight:700">${totalSets}</span> sets</span>
+              <span><span style="color:#FACC15;font-weight:700">${prCount}</span> PR</span>
+            </div>
+          </div>
+          <div style="width:96px;flex-shrink:0">
+            <div style="display:flex;align-items:flex-end;gap:6px;height:64px">
+              ${bars}${todayBar}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin:10px 16px 10px">
+        <div style="color:#6B7280;font-family:${mono};font-size:9px;font-weight:800;letter-spacing:0.8px;margin-bottom:6px">BREAKDOWN</div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${rows || '<div style="color:#6B7280;font-size:12px;padding:8px 0">No working sets logged.</div>'}
+        </div>
+      </div>
+      ${pills ? `<div style="margin:0 16px 12px;display:flex;gap:6px;flex-wrap:wrap">${pills}</div>` : ''}
+    </div>
+  `;
+}
+
 function renderLastFinishCard() {
   // The witty workout-finish closer for the most recent session that has one.
   const history = state.history || [];
@@ -2475,7 +2780,7 @@ function renderHome() {
       </div>
     </div>
     <div style="padding:0 16px">
-      ${renderLastFinishCard()}
+      ${renderWorkoutSummaryCard()}
       ${activeSessionHTML ? `<div style="margin-bottom:4px"><p style="font-size:11px;font-weight:600;color:#3b82f6;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">In Progress</p>${activeSessionHTML}</div>` : ""}
       ${WORKOUTS.filter(w => !w.hidden).map((w,i) => renderWorkoutCard(w, WORKOUTS.indexOf(w))).join("")}
       ${renderCalendar()}
