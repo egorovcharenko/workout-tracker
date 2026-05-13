@@ -964,6 +964,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 length = int(self.headers.get("Content-Length", 0))
                 raw = self.rfile.read(length)
                 body = json.loads(raw)
+                # Compact debug snapshot of the payload so when Claude's output
+                # looks off we can see what it actually had to work with.
+                prs = body.get("prs") or []
+                prs_summary = [
+                    {
+                        "sub": p.get("sub"),
+                        "n_sessions": p.get("sessions_in_history"),
+                        "is_pr": p.get("is_orm_pr") or p.get("is_weight_pr") or p.get("is_reps_pr"),
+                    }
+                    for p in prs
+                ]
+                print(
+                    f"  [MOTIVATE-PAYLOAD] ex={body.get('exercise')!r} "
+                    f"current_sets={len(body.get('current') or [])} "
+                    f"previous_sessions={len(body.get('previous') or [])} "
+                    f"prs={prs_summary}"
+                )
                 msg, model_used = call_claude_motivate(body)
                 print(f"  [MOTIVATE] {body.get('exercise')!r} ({model_used}) -> {msg!r}")
                 if msg:

@@ -1802,11 +1802,23 @@ function App() {
     // PR + trend signals. Port of v1's per-sub-exercise builder. Pulls from
     // /api/1rm-history (statHistory) which returns {orm, reps, vol, wt}
     // keyed by exercise name, each a list of {date, <metric>} entries.
+    //
+    // NOTE: we used to .filter(d => d.date !== today) to "exclude the current
+    // in-progress session". That was wrong on two counts:
+    //   1. statHistory is a boot-time snapshot — it CAN'T contain the
+    //      in-progress session's data (page hasn't refetched).
+    //   2. If the user did a partial earlier session today and started a
+    //      fresh one, the today-filter nuked the earlier session too. The
+    //      `previous` block (which has no such filter) would still surface
+    //      that earlier session, so the LLM saw "1 working set on May 13"
+    //      from `previous` AND "sessions_in_history: 0" from prs, called
+    //      out the contradiction, and produced a confused message.
+    // Dropping the filter aligns both data sources.
     const prs = subNames.map(subName => {
-      const ormHist  = ((statHistory.orm  || {})[subName] || []).filter(d => d.date !== today);
-      const wtHist   = ((statHistory.wt   || {})[subName] || []).filter(d => d.date !== today);
-      const repsHist = ((statHistory.reps || {})[subName] || []).filter(d => d.date !== today);
-      const volHist  = ((statHistory.vol  || {})[subName] || []).filter(d => d.date !== today);
+      const ormHist  = ((statHistory.orm  || {})[subName] || []);
+      const wtHist   = ((statHistory.wt   || {})[subName] || []);
+      const repsHist = ((statHistory.reps || {})[subName] || []);
+      const volHist  = ((statHistory.vol  || {})[subName] || []);
       const prevMaxOrm  = ormHist.length  ? Math.max(...ormHist.map(d => +d.orm  || 0)) : 0;
       const prevMaxWt   = wtHist.length   ? Math.max(...wtHist.map(d => +d.wt    || 0)) : 0;
       const prevMaxReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps|| 0)) : 0;
