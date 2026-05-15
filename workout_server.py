@@ -846,27 +846,30 @@ def get_motivations_for_session(session_id):
         conn.close()
 
 
-# Read the HTML file
-HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workout.html")
-HTML_PATH_V2 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workout-v2.html")
+# The app is two pages, served by two HTML files:
+#   workout.html          — the SHELL: home, history, stats, calendar, measurements.
+#   workout-session.html  — the live WORKOUT SESSION screen (set logging).
+# The shell's startWorkout() redirects to /workout, which serves the session
+# page. They share the same /api/* backend.
+HTML_PATH_SHELL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workout.html")
+HTML_PATH_SESSION = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workout-session.html")
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/" or parsed.path == "/index.html" or parsed.path == "/workout.html":
-            # v1 is the shell: home, history, stats, calendar, measurements.
-            # It hands off to v2 for the live workout-session screen.
+            # Shell page: home, history, stats, calendar, measurements.
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.end_headers()
-            with open(HTML_PATH, "rb") as f:
+            with open(HTML_PATH_SHELL, "rb") as f:
                 self.wfile.write(f.read())
-        elif parsed.path == "/workout" or parsed.path == "/workout/" or parsed.path == "/v2" or parsed.path == "/v2/" or parsed.path == "/workout-v2.html":
-            # v2 renders the workout-session screen only — the design-handoff
-            # surface. Reached from v1 home via startWorkout() redirect.
+        elif parsed.path == "/workout" or parsed.path == "/workout/" or parsed.path == "/workout-session.html":
+            # The live workout-session screen. Reached from the shell's home
+            # via startWorkout() redirect to /workout?w=<id>.
             try:
-                with open(HTML_PATH_V2, "rb") as f:
+                with open(HTML_PATH_SESSION, "rb") as f:
                     body = f.read()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html")
@@ -876,7 +879,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_response(404)
                 self.send_header("Content-Type", "text/plain")
                 self.end_headers()
-                self.wfile.write(b"workout-v2.html not found")
+                self.wfile.write(b"workout-session.html not found")
         elif parsed.path == "/api/history":
             params = urllib.parse.parse_qs(parsed.query)
             limit = int(params.get("limit", [20])[0])

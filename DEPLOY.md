@@ -1,6 +1,6 @@
 # Vercel Deployment
 
-Runs as: static `workout.html` + single Python serverless function at `api/index.py`, backed by **Vercel Postgres** (Neon). Env vars auto-inject — no external signup.
+Runs as: two static HTML pages (`workout.html` — the shell; `workout-session.html` — the live session screen) + a single Python serverless function at `api/index.py`, backed by **Vercel Postgres** (Neon). Env vars auto-inject — no external signup.
 
 ## Deploy
 
@@ -53,7 +53,7 @@ python3 workout_server.py    # now uses Postgres
 
 ## How it works
 
-- `vercel.json` — rewrites `/` → `/workout.html` and `/api/*` → `/api/index`.
+- `vercel.json` — rewrites `/` → `/workout.html` (shell), `/workout` → `/workout-session.html` (session screen), and `/api/*` → `/api/index`.
 - `api/index.py` — subclasses the `Handler` from `workout_server.py`, so the same route/DB logic runs locally and on Vercel.
 - `workout_server.py` `get_db()` — if `POSTGRES_URL[_NON_POOLING]` is set, connects via psycopg with a tiny wrapper that makes a psycopg connection look like a `sqlite3.Connection` (translates `?` → `%s`, auto-adds `RETURNING id` so `cursor.lastrowid` works). Otherwise falls back to local SQLite.
 - `requirements.txt` — `psycopg[binary]` only.

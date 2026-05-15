@@ -2012,11 +2012,11 @@ function showMotivation(exIdx) {
 }
 
 function startWorkout(w) {
-  // The workout-session screen now lives in v2 (/workout?w=<id>). v1 keeps
-  // owning the home / stats / history / calendar / measurements pages, but
-  // hands off to v2 the moment a session starts. Server-side autosave +
-  // last-session lookup work the same since v2 hits the identical /api/save
-  // and /api/last-session endpoints.
+  // The live workout-session screen is a separate page — workout-session.html,
+  // served at /workout?w=<id>. This file (workout.html) is the SHELL: it owns
+  // home / stats / history / calendar / measurements and hands off to the
+  // session page the moment a session starts. Both pages share the identical
+  // /api/save and /api/last-session backend, so autosave round-trips cleanly.
   window.location.assign('/workout?w=' + encodeURIComponent(w.id));
 }
 
@@ -2757,9 +2757,12 @@ function renderLastFinishCard() {
 }
 
 function renderHome() {
-  // How many sets did v2's skip-exercise feature take off the table for a
-  // given (workout, date)? Read the same localStorage key v2 writes:
+  // How many sets did the session page's skip-exercise feature take off the
+  // table for a given (workout, date)? Read the same localStorage key the
+  // session page writes:
   //   v2-skipped:<workoutName>:<YYYY-MM-DD>  →  JSON array of exercise names.
+  // (The "v2-" key prefix is a legacy name kept stable so existing in-flight
+  // data is not orphaned — it has nothing to do with an app version.)
   // Sum (sets + 1 warmup) per skipped exercise to mirror getExpectedSets's
   // counting convention so the comparison below stays apples-to-apples.
   // Without this, skipping any exercise leaves the session permanently

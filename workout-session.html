@@ -3,20 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Workout · v2</title>
+<title>Workout Session</title>
 <!--
-  Parallel implementation of the workout-session screen following
-  ~/Downloads/design_handoff_workout_session/. React + Babel via CDN so the
-  whole thing stays a single file with no build step (matches the prototype's
-  approach, easy to deploy on Vercel through workout_server.py).
+  ═══════════════════════════════════════════════════════════════════════════
+  workout-session.html — the LIVE WORKOUT SESSION screen (set logging).
+  Served at /workout?w=<id>.
 
-  Shares the backend with v1 (workout.html). Saves go through /api/save with
-  the same payload shape, including the interleaved set_number convention for
-  supersets so switching between v1 and v2 mid-workout stays consistent.
+  This is ONE of the app's two pages. The other is workout.html (the SHELL:
+  home, history, stats, calendar, measurements). They are NOT two versions of
+  the app — they are two distinct pages. The shell's startWorkout() redirects
+  here when a session begins; this page's "← Back" returns to the shell.
+  ═══════════════════════════════════════════════════════════════════════════
 
-  v2 deliberately ships smaller than v1: no auto-progression suggestions, no
-  exercise notes editor, no stats/history/calendar pages. Those will be ported
-  once the core logger reaches parity.
+  React + Babel via CDN so the whole thing stays a single file with no build
+  step (easy to deploy on Vercel through workout_server.py).
+
+  Shares the backend with the shell. Saves go through /api/save with a payload
+  shape including the interleaved set_number convention for supersets.
 -->
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -40,7 +43,7 @@
   /* Edge-fade nudge animations (rep strip) */
   @keyframes repNudgeR { 0%, 80%, 100% { transform: translateY(-50%); } 88% { transform: translate(3px, -50%); } 94% { transform: translate(-1px, -50%); } }
   @keyframes repNudgeL { 0%, 80%, 100% { transform: translateY(-50%); } 88% { transform: translate(-3px, -50%); } 94% { transform: translate(1px, -50%); } }
-  /* Rest-done halo (matches v1's flashRestDone) */
+  /* Rest-done halo (matches the shell's flashRestDone) */
   @keyframes rest-done-flash {
     0% { opacity: 0; }
     8% { opacity: 1; }
@@ -66,14 +69,12 @@
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Workout templates — kept in sync with v1's WORKOUTS so /api/save data flows
-// across both screens. New shape additions live here first, get ported to v1
-// when they stabilize.
+// Workout templates — kept in sync with the shell's WORKOUTS (workout.html)
+// so /api/save data flows across both pages.
 // ─────────────────────────────────────────────────────────────────────────────
-// All four workouts mirrored from v1's WORKOUTS. `hidden: true` no longer
-// hides — v2 surfaces every workout in the header picker since each one is
-// a real option you might pick on any given day. `main: true` picks the
-// default when no ?w= param is set.
+// `hidden: true` no longer hides — this page surfaces every workout in the
+// header picker since each one is a real option you might pick on any given
+// day. `main: true` picks the default when no ?w= param is set.
 const WORKOUTS = [
   {
     id: "full-body",
@@ -229,8 +230,8 @@ const api = {
   motivations: (sid) => fetchT(`/api/motivations?session_id=${sid}`),
 };
 
-// Per-exercise muscle map for the motivate payload. v1 has the same data
-// under EXERCISE_MUSCLES at line 261 of workout.html — kept in sync here so
+// Per-exercise muscle map for the motivate payload. The shell (workout.html)
+// has the same data under its own EXERCISE_MUSCLES — kept in sync here so
 // Claude knows what muscles a lift hits without an extra lookup table on
 // the server. Primary muscles drive the headline; secondary fills context.
 const EXERCISE_MUSCLES = {
@@ -245,6 +246,8 @@ const EXERCISE_MUSCLES = {
   "Bulgarian Split Squat": { primary: ["quads", "glutes"], secondary: ["hamstrings", "core"] },
   "Dumbbell Flat Bench Press": { primary: ["chest"], secondary: ["triceps", "shoulders"] },
   "Band Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"] },
+  "Dumbbell Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"] },
+  "Single-Leg DB RDL": { primary: ["hamstrings", "glutes"], secondary: ["lower_back", "core"] },
   "Seated Overhead Press": { primary: ["shoulders"], secondary: ["triceps"] },
   "Band Squat": { primary: ["quads", "glutes"], secondary: ["core"] },
   "Band Row": { primary: ["lats", "upper_back"], secondary: ["biceps"] },
@@ -253,14 +256,35 @@ const EXERCISE_MUSCLES = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Swappable exercise groups — any exercise in a group can be swapped for any
+// other in the same group from the exercise card footer. Each entry is a full
+// template exercise (same shape WORKOUTS uses), so a swap drops straight into
+// flattenTemplate. Ported from the shell's SWAP_GROUPS.
+// ─────────────────────────────────────────────────────────────────────────────
+const SWAP_GROUPS = [
+  [
+    { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
+    { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "8-12", notes: "Hinge at hips, slight knee bend", video: "https://www.youtube.com/shorts/cGMaBqaExBo", rest: 120, noWarmup: true },
+    { name: "Single-Leg DB RDL", sets: 3, reps: "8", notes: "One DB in each hand, rear leg lifts as you hinge — slow tempo, 8 per leg. Warmup 1 set @ ~20lb, work @ ~30lb.", rest: 120 },
+  ],
+];
+function getSwapGroup(exerciseName) {
+  return SWAP_GROUPS.find(g => g.some(e => e.name === exerciseName)) || null;
+}
+function getSwapOptions(exerciseName) {
+  const g = getSwapGroup(exerciseName);
+  return g ? g.filter(e => e.name !== exerciseName) : [];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Data adapters — convert WORKOUTS template + last-session + today-session
 // into the design's `exercises[]` shape. Done once on mount; subsequent state
 // edits mutate this in-memory tree.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// v1's superset save format: each sub-exercise's set_number is an interleaved
+// Superset save format: each sub-exercise's set_number is an interleaved
 // position. Round 0 sub 0 → 1, round 0 sub 1 → 2, round 1 sub 0 → 3, etc.
-// We use the same formula so /api/save data round-trips through v1.
+// Shared with the shell so /api/save data round-trips across both pages.
 const interleavedSetNumber = (round, subIdx, subCount) => round * subCount + subIdx + 1;
 
 // Each design Exercise is one row in the UI. A superset exercise from the
@@ -470,7 +494,8 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
 // Single set initializer. `last` is the dict from /api/last-session for this
 // exercise|set_type|set_number, or undefined.
 //
-// Mode-specific weight_lb interpretation (v1 saves these; v2 must invert):
+// Mode-specific weight_lb interpretation (the save format stores the
+// combined value; this page must invert it back to its parts):
 //   • plain "loaded"  → weight_lb = DB weight, lastWeight = weight_lb
 //   • bandAddon       → weight_lb = DB + Σbands (combined). lastWeight is the
 //                       DB-only portion so the stepper shows DB and the bands
@@ -577,7 +602,7 @@ function hydrateToday(exercises, todaySets) {
 // Mutates and returns the input array. Honors `exercise.skipped` (the whole
 // exercise is opted out, so its sets are never the active focus). Within
 // each non-skipped exercise we activate the next uncompleted set AFTER the
-// highest-index completed set — never backward (matches v1 behavior).
+// highest-index completed set — never backward.
 // Skipped/unused intermediate slots stay tappable in the strip but don't
 // receive automatic focus. If every set is past the highest completion mark
 // with nothing left (or the only candidates live in skipped exercises), no
@@ -610,6 +635,10 @@ function activateNextSet(exercises) {
 // Skipped-exercise persistence — survives page reload, scoped to a
 // (workout, date) tuple so a fresh day starts with a clean slate without
 // caring whether the session got a server-side `id` yet.
+//
+// NOTE: the "v2-" localStorage key prefix is a legacy name kept stable so
+// existing in-flight data is not orphaned. It does NOT mean an app version —
+// it is just an opaque key string, also read by the shell (workout.html).
 // ─────────────────────────────────────────────────────────────────────────────
 const SKIPPED_LS_KEY = (workoutName, date) => `v2-skipped:${workoutName}:${date}`;
 function loadSkippedExercises(workoutName, date) {
@@ -627,8 +656,47 @@ function saveSkippedExercises(workoutName, date, namesSet) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Save: serialize state into the v1-compatible shape and POST. Single-in-flight
-// + queue pattern guards against autoSave race (matches v1 exactly).
+// Swapped-exercise persistence — a map { templateExIdx: chosenName } scoped to
+// a (workout, date) tuple, same convention as the skip store. Survives reload.
+// ─────────────────────────────────────────────────────────────────────────────
+const SWAP_LS_KEY = (workoutName, date) => `v2-swaps:${workoutName}:${date}`;
+function loadSwaps(workoutName, date) {
+  try {
+    const raw = localStorage.getItem(SWAP_LS_KEY(workoutName, date));
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+function saveSwaps(workoutName, date, swapMap) {
+  try {
+    if (swapMap && Object.keys(swapMap).length) {
+      localStorage.setItem(SWAP_LS_KEY(workoutName, date), JSON.stringify(swapMap));
+    } else {
+      localStorage.removeItem(SWAP_LS_KEY(workoutName, date));
+    }
+  } catch (e) {
+    console.warn("[V2-SWAP] localStorage save failed:", e);
+  }
+}
+// Produce a workout template with swaps applied — each swapped slot's exercise
+// is replaced by the chosen group member. Returned shape matches WORKOUTS so it
+// flows straight into flattenTemplate.
+function applySwaps(workout, swapMap) {
+  if (!swapMap || !Object.keys(swapMap).length) return workout;
+  return {
+    ...workout,
+    exercises: workout.exercises.map((ex, idx) => {
+      const want = swapMap[idx];
+      if (!want || want === ex.name) return ex;
+      const grp = getSwapGroup(ex.name);
+      const repl = grp && grp.find(e => e.name === want);
+      return repl ? { ...repl } : ex;
+    }),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Save: serialize state into the shared /api/save shape and POST. Single-
+// in-flight + queue pattern guards against an autoSave race.
 // ─────────────────────────────────────────────────────────────────────────────
 function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed) {
   const sets = [];
@@ -638,8 +706,8 @@ function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed)
       const isAssist = ex.assist;
       const bands = s.bands || [];
       const bandSum = bands.reduce((a, b) => a + b, 0);
-      // weight_lb is the COMBINED load lifted (matches v1's save format
-      // so /api/last-session round-trips across versions, and history /
+      // weight_lb is the COMBINED load lifted (the shared save format,
+      // so /api/last-session round-trips across both pages, and history /
       // 1RM stats accumulate the actual weight moved):
       //   • assist        → BW − Σbands  (net after assistance)
       //   • bandsOnly     → Σbands
@@ -702,7 +770,7 @@ async function autoSavePayload(payload, onResolved) {
 // UI primitives
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Header — ← back to / (v1 home), workout picker, set count, elapsed timer,
+// Header — ← back to / (the shell's home), workout picker, set count, elapsed timer,
 // animated progress bar. The workout name is also the dropdown trigger to
 // flip between Full Body / Back / etc. without leaving the screen.
 function Header({ workout, workouts, onPickWorkout, done, total, elapsedSec }) {
@@ -1282,7 +1350,9 @@ function setStripLabel(s, allSets) {
   return `SET ${s.idx}`;
 }
 
-function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup, motivation }) {
+function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onSwapExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup, motivation }) {
+  const [swapOpen, setSwapOpen] = useState(false);
+  const swapOptions = getSwapOptions(exercise.name);
   // Skipped exercise: collapsed chip with a restore tap. No set strip, no
   // active set block, no AI motivation slot — the exercise is opted out.
   if (exercise.skipped) {
@@ -1503,6 +1573,32 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
         {footerBtn("+ set", onAddSet)}
         {footerBtn("− set", onRemoveSet, !canRemove)}
         {footerBtn("× skip exercise", onSkipExercise)}
+        {swapOptions.length > 0 && (
+          <div style={{ position: "relative" }}>
+            {footerBtn(swapOpen ? "⇄ swap ▾" : "⇄ swap", () => setSwapOpen(o => !o))}
+            {swapOpen && (
+              <div style={{
+                position: "absolute", bottom: "calc(100% + 6px)", right: 0, zIndex: 50,
+                background: "#111827", border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 9, boxShadow: "0 10px 28px rgba(0,0,0,0.55)",
+                overflow: "hidden", minWidth: 210, maxWidth: "78vw",
+              }}>
+                <div style={{ padding: "7px 12px 5px", color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 0.8, borderBottom: `1px solid ${T.cardBorder}` }}>
+                  SWAP FOR
+                </div>
+                {swapOptions.map(opt => (
+                  <button key={opt.name} onClick={() => { setSwapOpen(false); onSwapExercise(opt.name); }} style={{
+                    display: "block", width: "100%", textAlign: "left",
+                    padding: "9px 12px", background: "transparent", border: 0,
+                    borderBottom: `1px solid ${T.cardBorder}`,
+                    color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}>{opt.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           {hasWarmup && warmupActive && footerBtn("Skip warmup →", onSkipWarmup)}
           {hasWarmup && !warmupActive && footerBtn("× warmup", onRemoveWarmup)}
@@ -1548,13 +1644,16 @@ function App() {
   // workout switch so stats stay consistent with the visible workout.
   const [history, setHistory] = useState([]);          // [{date, sets:[...]}]
   const [statHistory, setStatHistory] = useState({});  // {orm,reps,vol,wt}: {[exName]: [{date, value}]}
+  const [swaps, setSwaps] = useState({});              // { templateExIdx: chosenExerciseName }
+  // last-session + cross-workout hints maps, cached so a mid-session exercise
+  // swap can re-flatten the swapped slot without another network round-trip.
+  const dataRef = useRef({ last: {}, hints: {} });
 
   // Mount / workout switch: reset session state then build exercises from
   // template + last + today. The full state reset on workout change matters —
   // otherwise an in-progress rest timer or stale sessionId from the previous
-  // workout would carry over and poison the new workout's autosave (which
-  // worked off of state.sessionId in v1 and produced the cross-workout
-  // session collisions we had to clean up by hand).
+  // workout would carry over and poison the new workout's autosave and
+  // produce cross-workout session collisions.
   useEffect(() => {
     let cancelled = false;
     setLoaded(false);
@@ -1567,6 +1666,7 @@ function App() {
     setMotivations({});
     setHistory([]);
     setStatHistory({});
+    setSwaps({});
     (async () => {
       // allSettled so a single slow / failing endpoint doesn't blank the
       // page. Each result either {status:"fulfilled",value:…} or
@@ -1594,7 +1694,13 @@ function App() {
         if (stat1rmR.status === "rejected") console.warn("[V2] 1rm-history failed:", stat1rmR.reason);
         setHistory(hist || []);
         setStatHistory(stat1rm || {});
-        let exs = flattenTemplate(workout, last || {}, hints || {});
+        // Cache the lookup maps so a mid-session swap can re-flatten locally.
+        dataRef.current = { last: last || {}, hints: hints || {} };
+        // Apply any persisted exercise swaps before flattening so the swapped
+        // slot builds with the chosen exercise's template + its own history.
+        const swapMap = loadSwaps(workout.name, localDate());
+        setSwaps(swapMap);
+        let exs = flattenTemplate(applySwaps(workout, swapMap), last || {}, hints || {});
         if (today && today.id) {
           exs = hydrateToday(exs, today.sets || []);
           setSessionId(today.id);
@@ -1690,7 +1796,7 @@ function App() {
 
   // Save: serialize current exercises[] and POST. Debounced 400ms after the
   // last state edit. Single-in-flight + queue guard to prevent duplicate
-  // session inserts (race that bit v1 hard).
+  // session inserts.
   const saveDebounceRef = useRef(null);
   const queueSave = (currentExercises, currentSessionId, currentStartedAt, currentElapsed) => {
     clearTimeout(saveDebounceRef.current);
@@ -1827,12 +1933,12 @@ function App() {
     }
   };
 
-  // Build the rich /api/motivate payload (matching v1's shape) so Claude has
-  // muscles + previous sessions + PR signals + 12-session timeseries to
-  // reason against. Without these, the model sees only this session's reps
-  // and (correctly) reports "no history" — which is what the user just hit.
+  // Build the rich /api/motivate payload so Claude has muscles + previous
+  // sessions + PR signals + 12-session timeseries to reason against. Without
+  // these, the model sees only this session's reps and (correctly) reports
+  // "no history".
   const buildMotivatePayload = (exercise, sid) => {
-    // Sub-exercise expansion: for a flattened superset member (one in v2
+    // Sub-exercise expansion: for a flattened superset member (one row here
     // is one design exercise = one sub from the template), exercise.name
     // is already the sub-name. For non-supersets, it's the exercise name.
     const subNames = [exercise.name];
@@ -1881,7 +1987,7 @@ function App() {
       if (m) muscles.push(...(m.primary || []), ...(m.secondary || []));
     });
 
-    // PR + trend signals. Port of v1's per-sub-exercise builder. Pulls from
+    // PR + trend signals, per sub-exercise. Pulls from
     // /api/1rm-history (statHistory) which returns {orm, reps, vol, wt}
     // keyed by exercise name, each a list of {date, <metric>} entries.
     //
@@ -2063,6 +2169,37 @@ function App() {
     setExercises(next);
   };
 
+  // Swap an exercise for an alternative in its SWAP_GROUP. Re-flattens the
+  // whole workout against the new template (using the cached last/hints maps
+  // so there's no network round-trip), then re-hydrates from the sets already
+  // logged this session so progress on every OTHER exercise is preserved. The
+  // swapped slot itself starts fresh — its sets carry the new exercise's own
+  // history (LAST pills, reps preview). Persisted in localStorage so a reload
+  // mid-workout keeps the swap.
+  const onSwapExercise = (eIdx, newName) => {
+    const ex = exercises[eIdx];
+    const tIdx = ex.templateExIdx;
+    const originalName = workout.exercises[tIdx] ? workout.exercises[tIdx].name : ex.name;
+    const nextSwaps = { ...swaps };
+    if (newName === originalName) delete nextSwaps[tIdx];
+    else nextSwaps[tIdx] = newName;
+    saveSwaps(workout.name, localDate(), nextSwaps);
+    setSwaps(nextSwaps);
+    // Rebuild against the swapped template.
+    const { last, hints } = dataRef.current;
+    let exs = flattenTemplate(applySwaps(workout, nextSwaps), last, hints);
+    // Re-hydrate from this session's logged sets so the swap doesn't wipe
+    // progress on other exercises. The swapped exercise's old sets won't match
+    // (different name) — it correctly comes back blank.
+    const todaySets = serializeForSave(exercises, workout.name, sessionId, startedAt, elapsed).sets;
+    exs = hydrateToday(exs, todaySets);
+    // Re-apply skip flags, then recompute focus.
+    const skippedNames = loadSkippedExercises(workout.name, localDate());
+    if (skippedNames.size) exs = exs.map(e => skippedNames.has(e.name) ? { ...e, skipped: true } : e);
+    activateNextSet(exs);
+    updateAndSave(exs);
+  };
+
   const onAddSet = (eIdx) => {
     const next = exercises.map((e, i) => {
       if (i !== eIdx) return e;
@@ -2131,8 +2268,8 @@ function App() {
   }
 
   return (
-    // Mobile-first column with a desktop cap. Matches v1's 448px wrapper so
-    // the design's iOS-sized layout doesn't stretch edge-to-edge on a wide
+    // Mobile-first column with a desktop cap. Matches the shell's 448px
+    // wrapper so the iOS-sized layout doesn't stretch edge-to-edge on a wide
     // screen. Outer div takes the scroll so the sticky header pins inside
     // the constrained column, not the viewport.
     <div style={{ height: "100%", overflowY: "auto" }}>
@@ -2177,6 +2314,7 @@ function App() {
               onLogReps={(sIdx, r) => onLogReps(i, sIdx, r)}
               onSkipWarmup={() => onSkipWarmup(i)}
               onSkipExercise={() => onSkipExercise(i)}
+              onSwapExercise={(newName) => onSwapExercise(i, newName)}
               onReopenSet={(sIdx) => onReopenSet(i, sIdx)}
               onAddSet={() => onAddSet(i)}
               onRemoveSet={() => onRemoveSet(i)}

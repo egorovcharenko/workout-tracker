@@ -25,6 +25,9 @@ Open http://localhost:8000
 
 ## Files
 
-- `workout.html` — the entire frontend (single file, no build step)
-- `workout_server.py` — Python HTTP server with SQLite backend
+The frontend is two pages (no build step), sharing one backend:
+
+- `workout.html` — the **shell**: home, history, stats, calendar, measurements. Served at `/`.
+- `workout-session.html` — the **live workout-session screen** (set logging). Served at `/workout`; the shell redirects here when a session starts.
+- `workout_server.py` — Python HTTP server with SQLite backend (serves both pages + `/api/*`)
 - `workouts.db` — auto-created SQLite database (gitignored)

@@ -2,7 +2,8 @@
 
 Reuses the Handler + DB logic from workout_server.py at the project root.
 Routing: vercel.json rewrites /api/* here; the Handler matches self.path.
-Static workout.html is served directly by Vercel (see vercel.json).
+The static HTML pages (workout.html, workout-session.html) are served
+directly by Vercel (see vercel.json).
 """
 import sys
 import os
