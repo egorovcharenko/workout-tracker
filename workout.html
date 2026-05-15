@@ -204,6 +204,7 @@ const WORKOUTS = [
           { name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
           { name: "Dumbbell Hammer Curls", reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Hammer grip default · toggle for variants", grips: ['hammer', 'supinated', 'reverse'] },
         ]},
+      { name: "Pallof Press", sets: 3, reps: "10-12", notes: "Anti-rotation core finisher: anchor band at chest height, press straight out and resist the twist. Each side.", superset: false, equipment: "band", rest: 60, noWarmup: true },
     ],
     rest: 75,
     warmup: "Light goblet squats and arm circles to warm up",
@@ -279,6 +280,7 @@ const EXERCISE_MUSCLES = {
   "Band Squat": { primary: ["quads", "glutes"], secondary: ["core"] },
   "Band Row": { primary: ["lats", "upper_back"], secondary: ["biceps"] },
   "Band Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"] },
+  "Pallof Press": { primary: ["core"], secondary: [] },
   // Future
   "Lunges": { primary: ["quads", "glutes"], secondary: ["hamstrings"] },
   "Calf Raises": { primary: ["calves"], secondary: [] },
