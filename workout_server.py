@@ -865,9 +865,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             with open(HTML_PATH_SHELL, "rb") as f:
                 self.wfile.write(f.read())
-        elif parsed.path == "/workout" or parsed.path == "/workout/" or parsed.path == "/workout-session.html":
+        elif parsed.path in ("/workout", "/workout/", "/workout-session.html",
+                             "/v2", "/v2/", "/workout-v2.html"):
             # The live workout-session screen. Reached from the shell's home
-            # via startWorkout() redirect to /workout?w=<id>.
+            # via startWorkout() redirect to /workout?w=<id>. The /v2 and
+            # /workout-v2.html paths are legacy compat aliases (the file was
+            # renamed from workout-v2.html) so old bookmarks/PWAs still work.
             try:
                 with open(HTML_PATH_SESSION, "rb") as f:
                     body = f.read()

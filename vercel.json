@@ -4,6 +4,9 @@
     { "source": "/", "destination": "/workout.html" },
     { "source": "/workout", "destination": "/workout-session.html" },
     { "source": "/workout/", "destination": "/workout-session.html" },
+    { "source": "/v2", "destination": "/workout-session.html" },
+    { "source": "/v2/", "destination": "/workout-session.html" },
+    { "source": "/workout-v2.html", "destination": "/workout-session.html" },
     { "source": "/api/(.*)", "destination": "/api/index" }
   ],
   "functions": {
