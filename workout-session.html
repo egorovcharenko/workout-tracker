@@ -1659,11 +1659,12 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   const muscleInfo = EXERCISE_MUSCLES[exercise.name] || { primary: [], secondary: [] };
 
   // Working sets per primary muscle of this exercise, last 7 days inclusive.
-  // History gives all prior sessions; today's current state gives the in-progress
-  // session (we exclude today from history to avoid double-counting since
-  // autosave already wrote some of today into the history endpoint).
+  // Each entry is a {date, isToday} record so the chart below can render one
+  // slice per set, grouped visually by session. History gives prior sessions;
+  // exercises[] gives today (excluded from history to avoid double-counting,
+  // since autosave already wrote some of today into the /api/history endpoint).
   const muscleSets7d = {};
-  (muscleInfo.primary || []).forEach(m => muscleSets7d[m] = 0);
+  (muscleInfo.primary || []).forEach(m => muscleSets7d[m] = []);
   for (const sess of (history || [])) {
     if (!sess.date || sess.date === today) continue;
     const sessMs = Date.parse(sess.date + 'T00:00:00Z');
@@ -1673,7 +1674,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
       const mm = EXERCISE_MUSCLES[st.exercise];
       if (!mm) continue;
       for (const muscle of (mm.primary || [])) {
-        if (muscle in muscleSets7d) muscleSets7d[muscle]++;
+        if (muscle in muscleSets7d) muscleSets7d[muscle].push({ date: sess.date, isToday: false });
       }
     }
   }
@@ -1683,10 +1684,13 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
     for (const s of e.sets) {
       if (!s.completed || s.kind !== 'work') continue;
       for (const muscle of (em.primary || [])) {
-        if (muscle in muscleSets7d) muscleSets7d[muscle]++;
+        if (muscle in muscleSets7d) muscleSets7d[muscle].push({ date: today, isToday: true });
       }
     }
   }
+  // Sort each muscle's events chronologically so slices read left → right
+  // oldest → newest, with today's slices on the right edge (brightest).
+  Object.values(muscleSets7d).forEach(arr => arr.sort((a, b) => a.date.localeCompare(b.date)));
 
   // Last 4 sessions of THIS specific lift (working sets only).
   const recent = [];
@@ -1706,40 +1710,64 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   const bestReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps || 0)) : 0;
   const bestVol = volHist.length ? Math.max(...volHist.map(d => +d.vol || 0)) : 0;
 
-  // Inline volume bar: 0..20+ scale, with the 10-20 "productive zone" band
-  // overlaid. Color tracks whether the count is under (red), inside (green),
-  // or beyond (amber) the productive range.
-  const VolumeBar = ({ muscle, sets }) => {
+  // Sliced volume chart: one slice per working set, sorted oldest→newest.
+  // The 10-20 hypertrophy zone is rendered as 10 lightly-tinted ghost slots
+  // (positions 10-19) so you can see at a glance how far into the productive
+  // range you are. Today's sets get the bright green fill; older days drop
+  // to a muted green. Sets beyond slot 20 render in amber (overflow).
+  const VolumeBar = ({ muscle, events }) => {
     const TARGET_MIN = 10, TARGET_MAX = 20;
-    const SCALE_MAX = Math.max(20, sets + 2);
-    const pct = Math.min(100, (sets / SCALE_MAX) * 100);
-    const zoneLeftPct = (TARGET_MIN / SCALE_MAX) * 100;
-    const zoneRightPct = (TARGET_MAX / SCALE_MAX) * 100;
-    let color = T.red, label = "low";
-    if (sets >= TARGET_MIN && sets <= TARGET_MAX) { color = T.green; label = "in zone"; }
-    else if (sets > TARGET_MAX) { color = T.amber; label = "high"; }
+    const sets = events.length;
+    const SLOT_COUNT = Math.max(TARGET_MAX, sets);
+    // Determine the small-vs-big gap between adjacent slices: a new day
+    // gets a wider gap so you can read session boundaries.
+    const slots = Array.from({ length: SLOT_COUNT }, (_, i) => {
+      const ev = i < sets ? events[i] : null;
+      const prevEv = i > 0 && i - 1 < sets ? events[i - 1] : null;
+      const dayChanged = ev && prevEv && ev.date !== prevEv.date;
+      const inZone = i >= TARGET_MIN && i < TARGET_MAX; // slot index 10..19
+      const overflow = i >= TARGET_MAX;
+      let bg;
+      if (ev) {
+        // filled slice
+        if (overflow) bg = "rgba(251,191,36,0.85)";          // amber overflow
+        else if (ev.isToday) bg = T.green;                    // today: bright
+        else bg = "rgba(52,211,153,0.55)";                    // earlier days: muted
+      } else {
+        // empty slot — zone slots get a subtle green tint
+        bg = inZone ? "rgba(52,211,153,0.10)" : "rgba(255,255,255,0.04)";
+      }
+      return { bg, dayChanged, ev, inZone };
+    });
+    const countColor = sets === 0 ? T.faint
+                      : sets < TARGET_MIN ? T.red
+                      : sets <= TARGET_MAX ? T.green
+                      : T.amber;
     return (
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4 }}>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 5 }}>
           <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>
             {muscle.replace("_", " ")}
           </span>
           <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 800 }}>
-            <span style={{ color }}>{sets}</span>
+            <span style={{ color: countColor }}>{sets}</span>
             <span style={{ color: T.disabled, fontWeight: 500 }}> / 10-20</span>
           </span>
         </div>
-        <div style={{ position: "relative", height: 7, borderRadius: 4, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
-          {/* productive zone band */}
-          <div style={{
-            position: "absolute", top: 0, bottom: 0,
-            left: `${zoneLeftPct}%`, width: `${zoneRightPct - zoneLeftPct}%`,
-            background: "rgba(52,211,153,0.10)",
-            borderLeft: "1px dashed rgba(52,211,153,0.4)",
-            borderRight: "1px dashed rgba(52,211,153,0.4)",
-          }} />
-          {/* progress */}
-          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: color, borderRadius: 4, transition: "width 320ms ease" }} />
+        <div style={{ display: "flex", height: 16, alignItems: "stretch" }}>
+          {slots.map((slot, i) => (
+            <div key={i} style={{
+              flex: 1,
+              minWidth: 0,
+              background: slot.bg,
+              borderRadius: 2,
+              marginLeft: i === 0 ? 0 : (slot.dayChanged ? 5 : 1.5),
+              boxShadow: slot.ev && slot.ev.isToday
+                ? "0 0 5px rgba(52,211,153,0.45)"
+                : "none",
+              transition: "background 250ms ease",
+            }} />
+          ))}
         </div>
       </div>
     );
@@ -1790,7 +1818,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
       {primaryList.length > 0 && (
         <Section label="HARD SETS · LAST 7 DAYS">
           {primaryList.map(m => (
-            <VolumeBar key={m} muscle={m} sets={muscleSets7d[m] || 0} />
+            <VolumeBar key={m} muscle={m} events={muscleSets7d[m] || []} />
           ))}
         </Section>
       )}
