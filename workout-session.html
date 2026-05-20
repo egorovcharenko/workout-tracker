@@ -1736,42 +1736,44 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   const bestReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps || 0)) : 0;
   const bestVol = volHist.length ? Math.max(...volHist.map(d => +d.vol || 0)) : 0;
 
-  // Sliced volume chart: one slice per working set, sorted oldest→newest.
-  // The 10-20 hypertrophy zone is rendered as 10 lightly-tinted ghost slots
-  // (positions 10-19) so you can see at a glance how far into the productive
-  // range you are. Today's sets get the bright green fill; older days drop
-  // to a muted green. Sets beyond slot 20 render in amber (overflow).
+  // Per-day stacked volume chart: 7 vertical columns (one per day in the
+  // rolling window), each stacking one slice per working set logged that
+  // day. Today is the rightmost column, brightened with a soft glow.
+  // Reading direction: tall column = high-volume day; empty columns = rest.
+  // The target zone is communicated by the count label's color (red < 10,
+  // green 10-20, amber > 20) rather than a per-day line — the zone is a
+  // weekly figure that doesn't map cleanly onto a per-day y-axis.
   const VolumeBar = ({ muscle, events }) => {
     const TARGET_MIN = 10, TARGET_MAX = 20;
     const sets = events.length;
-    const SLOT_COUNT = Math.max(TARGET_MAX, sets);
-    // Determine the small-vs-big gap between adjacent slices: a new day
-    // gets a wider gap so you can read session boundaries.
-    const slots = Array.from({ length: SLOT_COUNT }, (_, i) => {
-      const ev = i < sets ? events[i] : null;
-      const prevEv = i > 0 && i - 1 < sets ? events[i - 1] : null;
-      const dayChanged = ev && prevEv && ev.date !== prevEv.date;
-      const inZone = i >= TARGET_MIN && i < TARGET_MAX; // slot index 10..19
-      const overflow = i >= TARGET_MAX;
-      let bg;
-      if (ev) {
-        // filled slice
-        if (overflow) bg = "rgba(251,191,36,0.85)";          // amber overflow
-        else if (ev.isToday) bg = T.green;                    // today: bright
-        else bg = "rgba(52,211,153,0.55)";                    // earlier days: muted
-      } else {
-        // empty slot — zone slots get a subtle green tint
-        bg = inZone ? "rgba(52,211,153,0.10)" : "rgba(255,255,255,0.04)";
-      }
-      return { bg, dayChanged, ev, inZone };
+    const DAY_MS = 86400000;
+    // Build 7 day-buckets, oldest → newest left → right.
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const ms = todayMs - i * DAY_MS;
+      const d = new Date(ms);
+      const dateStr = d.toISOString().slice(0, 10);
+      const dayNum = d.getUTCDate();
+      days.push({ date: dateStr, label: String(dayNum), events: [], isToday: i === 0 });
+    }
+    events.forEach(ev => {
+      const day = days.find(d => d.date === ev.date);
+      if (day) day.events.push(ev);
     });
+    // Y-axis scale — bounded so a single huge day doesn't crush quiet days
+    // into invisible nubs. Min 4 keeps the chart visually consistent across
+    // muscles even on rest weeks.
+    const maxPerDay = Math.max(4, ...days.map(d => d.events.length));
+    const CHART_H = 64;
+    const GAP = 1.5;
+    const SLICE_H = Math.max(3, Math.floor((CHART_H - (maxPerDay - 1) * GAP) / maxPerDay));
     const countColor = sets === 0 ? T.faint
                       : sets < TARGET_MIN ? T.red
                       : sets <= TARGET_MAX ? T.green
                       : T.amber;
     return (
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 5 }}>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
           <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>
             {muscle.replace("_", " ")}
           </span>
@@ -1780,19 +1782,41 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
             <span style={{ color: T.disabled, fontWeight: 500 }}> / 10-20</span>
           </span>
         </div>
-        <div style={{ display: "flex", height: 16, alignItems: "stretch" }}>
-          {slots.map((slot, i) => (
+        {/* columns */}
+        <div style={{ display: "flex", alignItems: "flex-end", height: CHART_H, gap: 3 }}>
+          {days.map((d, i) => (
             <div key={i} style={{
-              flex: 1,
-              minWidth: 0,
-              background: slot.bg,
-              borderRadius: 2,
-              marginLeft: i === 0 ? 0 : (slot.dayChanged ? 5 : 1.5),
-              boxShadow: slot.ev && slot.ev.isToday
-                ? "0 0 5px rgba(52,211,153,0.45)"
-                : "none",
-              transition: "background 250ms ease",
-            }} />
+              flex: 1, minWidth: 0,
+              display: "flex", flexDirection: "column-reverse",
+              gap: `${GAP}px`,
+              height: "100%",
+              justifyContent: "flex-start",
+            }}>
+              {d.events.length === 0 ? (
+                // Empty day: thin baseline dot so the column is still visible
+                <div style={{ height: 3, background: "rgba(255,255,255,0.05)", borderRadius: 1 }} />
+              ) : (
+                d.events.map((ev, j) => (
+                  <div key={j} style={{
+                    height: SLICE_H,
+                    background: d.isToday ? T.green : "rgba(52,211,153,0.6)",
+                    borderRadius: 2,
+                    boxShadow: d.isToday ? "0 0 5px rgba(52,211,153,0.45)" : "none",
+                  }} />
+                ))
+              )}
+            </div>
+          ))}
+        </div>
+        {/* date labels */}
+        <div style={{ display: "flex", gap: 3, marginTop: 5 }}>
+          {days.map((d, i) => (
+            <span key={i} style={{
+              flex: 1, textAlign: "center",
+              color: d.isToday ? T.accentLight : (d.events.length ? T.muted : T.disabled),
+              fontFamily: T.mono, fontSize: 9,
+              fontWeight: d.isToday ? 800 : (d.events.length ? 600 : 500),
+            }}>{d.label}</span>
           ))}
         </div>
       </div>
