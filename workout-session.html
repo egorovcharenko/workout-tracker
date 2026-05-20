@@ -714,6 +714,27 @@ function saveSwaps(workoutName, date, swapMap) {
     console.warn("[V2-SWAP] localStorage save failed:", e);
   }
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// PM-started gate — when a workout uses the two-a-day split, the PM block is
+// hidden behind a "Continue" button until the user explicitly opens it, so
+// the screen during AM only shows AM exercises. Scoped to (workout, date)
+// like skip/swap; auto-detected from any completed PM set if localStorage is
+// stale or cleared on a different device.
+// ─────────────────────────────────────────────────────────────────────────────
+const PM_STARTED_LS_KEY = (workoutName, date) => `v2-pm-started:${workoutName}:${date}`;
+function loadPmStarted(workoutName, date) {
+  try { return localStorage.getItem(PM_STARTED_LS_KEY(workoutName, date)) === "1"; }
+  catch { return false; }
+}
+function savePmStarted(workoutName, date, started) {
+  try {
+    if (started) localStorage.setItem(PM_STARTED_LS_KEY(workoutName, date), "1");
+    else localStorage.removeItem(PM_STARTED_LS_KEY(workoutName, date));
+  } catch (e) {
+    console.warn("[V2-PM] localStorage save failed:", e);
+  }
+}
+
 // Produce a workout template with swaps applied — each swapped slot's exercise
 // is replaced by the chosen group member. Returned shape matches WORKOUTS so it
 // flows straight into flattenTemplate.
@@ -1905,6 +1926,7 @@ function App() {
   const [history, setHistory] = useState([]);          // [{date, sets:[...]}]
   const [statHistory, setStatHistory] = useState({});  // {orm,reps,vol,wt}: {[exName]: [{date, value}]}
   const [swaps, setSwaps] = useState({});              // { templateExIdx: chosenExerciseName }
+  const [pmStarted, setPmStarted] = useState(false);   // two-a-day: hide PM block behind a Continue button until user taps it
   // last-session + cross-workout hints maps, cached so a mid-session exercise
   // swap can re-flatten the swapped slot without another network round-trip.
   const dataRef = useRef({ last: {}, hints: {} });
@@ -1934,6 +1956,7 @@ function App() {
     setHistory([]);
     setStatHistory({});
     setSwaps({});
+    setPmStarted(false);
     (async () => {
       // allSettled so a single slow / failing endpoint doesn't blank the
       // page. Each result either {status:"fulfilled",value:…} or
@@ -2004,6 +2027,16 @@ function App() {
         if (skippedNames.size) {
           exs = exs.map(e => skippedNames.has(e.name) ? { ...e, skipped: true } : e);
           activateNextSet(exs);
+        }
+        // PM-started flag: prefer the persisted localStorage value; if absent
+        // but any PM set is already completed (e.g. you continued PM on a
+        // different device, or the LS got cleared), auto-recover the started
+        // state so the gate doesn't reappear blocking already-active work.
+        const hasSplit = exs.some(e => e.session);
+        if (hasSplit) {
+          const persisted = loadPmStarted(workout.name, localDate());
+          const pmHasProgress = exs.some(e => e.session === "PM" && e.sets.some(s => s.completed));
+          setPmStarted(persisted || pmHasProgress);
         }
         setExercises(exs);
         setLoaded(true);
@@ -2521,6 +2554,12 @@ function App() {
   const restSkip = () => setRest(null);
   const restToggle = () => setRest(r => r ? { ...r, paused: !r.paused } : r);
 
+  // Two-a-day: reveal the PM block and persist so a reload keeps it open.
+  const onContinuePm = () => {
+    setPmStarted(true);
+    savePmStarted(workout.name, localDate(), true);
+  };
+
   // Set counts for header. A skipped exercise counts its sets as "done" so the
   // x/total reflects "I've made a decision about this exercise" and the meter
   // can hit 100% without the skipped sets ever being logged.
@@ -2587,6 +2626,57 @@ function App() {
         const hasSplit = exercises.some(e => e.session);
         const isFirstAM = hasSplit && ex.session === "AM" && (!prev || prev.session !== "AM");
         const isFirstPM = hasSplit && ex.session === "PM" && (!prev || prev.session !== "PM");
+
+        // PM-gated: when the workout has the split and the user hasn't tapped
+        // Continue yet, replace the entire PM block with a single "Ready for
+        // the evening session?" card. The first PM exercise renders the card;
+        // later PM exercises render nothing.
+        if (hasSplit && ex.session === "PM" && !pmStarted) {
+          if (!isFirstPM) return null;
+          const pmExs = exercises.filter(e => e.session === "PM");
+          const previewNames = pmExs
+            .filter(e => !e.skipped)
+            .map(e => e.superset ? null : e.name)
+            .filter(Boolean);
+          // Roll up superset members into a single label.
+          const pmSupersetTags = Array.from(new Set(pmExs.filter(e => e.superset && !e.skipped).map(e => `Superset ${e.superset}`)));
+          const previewLabels = [...previewNames, ...pmSupersetTags].join(" · ") || "(all PM exercises currently skipped)";
+          return (
+            <div key="pm-gate" style={{
+              margin: "16px 16px 4px",
+              padding: "22px 18px 18px",
+              borderRadius: 16,
+              background: "linear-gradient(180deg, rgba(96,165,250,0.12), rgba(96,165,250,0.03))",
+              border: "1px solid rgba(96,165,250,0.28)",
+              boxShadow: "0 12px 30px -16px rgba(59,130,246,0.35)",
+              textAlign: "center",
+            }}>
+              <div style={{ fontSize: 26, marginBottom: 4 }} aria-hidden>🌙</div>
+              <div style={{
+                color: T.accentLight, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1.4,
+                marginBottom: 8,
+              }}>EVENING SESSION</div>
+              <div style={{ color: T.strong, fontSize: 16, fontWeight: 700, lineHeight: 1.35, marginBottom: 4 }}>
+                Ready for the second half?
+              </div>
+              {previewLabels && (
+                <div style={{ color: T.muted, fontSize: 11.5, lineHeight: 1.45, marginBottom: 16, padding: "0 4px" }}>
+                  {previewLabels}
+                </div>
+              )}
+              <button onClick={onContinuePm} style={{
+                background: "linear-gradient(180deg, #60A5FA, #3B82F6)",
+                border: 0, color: "#0B0F14",
+                padding: "14px 32px", borderRadius: 12,
+                fontFamily: "inherit", fontSize: 15, fontWeight: 800, letterSpacing: 0.3,
+                cursor: "pointer",
+                boxShadow: "0 8px 22px -6px rgba(59,130,246,0.55)",
+                minWidth: 180,
+              }}>Continue →</button>
+            </div>
+          );
+        }
+
         const sessionDivider = (label, emoji, color, bg, border) => (
           <div style={{ margin: "10px 16px 8px", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, height: 1, background: border }} />
