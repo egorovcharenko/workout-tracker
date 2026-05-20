@@ -1658,7 +1658,12 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   const sevenDaysAgoMs = todayMs - 7 * 86400000;
   const muscleInfo = EXERCISE_MUSCLES[exercise.name] || { primary: [], secondary: [] };
 
-  // Working sets per primary muscle of this exercise, last 7 days inclusive.
+  // Working sets per primary muscle of this exercise, last 7 days inclusive
+  // of today and exclusive of the day exactly 7 days ago. Window = [today-6d,
+  // today] = 7 distinct calendar days. Without the strict `>` against
+  // sevenDaysAgoMs, a session ON the day exactly one week ago would still
+  // count and inflate the rolling total as it ages out.
+  //
   // Each entry is a {date, isToday} record so the chart below can render one
   // slice per set, grouped visually by session. History gives prior sessions;
   // exercises[] gives today (excluded from history to avoid double-counting,
@@ -1668,7 +1673,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   for (const sess of (history || [])) {
     if (!sess.date || sess.date === today) continue;
     const sessMs = Date.parse(sess.date + 'T00:00:00Z');
-    if (sessMs < sevenDaysAgoMs || sessMs > todayMs) continue;
+    if (sessMs <= sevenDaysAgoMs || sessMs > todayMs) continue;
     for (const st of (sess.sets || [])) {
       if (st.set_type !== 'working') continue;
       const mm = EXERCISE_MUSCLES[st.exercise];
