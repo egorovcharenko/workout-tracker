@@ -1655,6 +1655,13 @@ function App() {
   // last-session + cross-workout hints maps, cached so a mid-session exercise
   // swap can re-flatten the swapped slot without another network round-trip.
   const dataRef = useRef({ last: {}, hints: {} });
+  // Track last user interaction. The elapsed timer auto-pauses if there's
+  // been no interaction for IDLE_THRESHOLD_MS, so a two-a-day workout
+  // (AM session, long gap, PM session same day) doesn't count the hours
+  // between halves as training time. Survives reload by restoring elapsed
+  // from the saved duration_sec rather than wall-clock since started_at.
+  const lastInteractionRef = useRef(Date.now());
+  const IDLE_THRESHOLD_MS = 5 * 60 * 1000;
 
   // Mount / workout switch: reset session state then build exercises from
   // template + last + today. The full state reset on workout change matters —
@@ -1711,14 +1718,16 @@ function App() {
         if (today && today.id) {
           exs = hydrateToday(exs, today.sets || []);
           setSessionId(today.id);
+          // Restore startedAt for record-keeping (it's saved back to the DB
+          // unchanged). Elapsed is restored from the saved duration_sec
+          // instead of wall-clock since started_at — otherwise a multi-hour
+          // gap between AM and PM halves would read as e.g. "10h" elapsed.
+          // Timer stays paused until the next interaction.
           if (today.started_at) {
             const startedMs = Date.parse(today.started_at);
-            if (!isNaN(startedMs)) {
-              setStartedAt(startedMs);
-              setElapsed(Math.floor((Date.now() - startedMs) / 1000));
-              setRunning(true);
-            }
+            if (!isNaN(startedMs)) setStartedAt(startedMs);
           }
+          setElapsed(today.duration_sec || 0);
           // Hydrate motivations for already-completed exercises.
           try {
             const mots = await api.motivations(today.id);
@@ -1753,18 +1762,23 @@ function App() {
     return () => { cancelled = true; };
   }, [workout]);
 
-  // Elapsed timer. Auto-starts on first interaction; ticks every 1s.
+  // Elapsed timer. Monotonic — increments by 1s each tick, never derived
+  // from wall-clock. Auto-pauses if no interaction in IDLE_THRESHOLD_MS so
+  // idle time between two-a-day halves doesn't accumulate. Resumes the
+  // moment the user logs / picks / toggles anything (startTimer is called
+  // from every state-changing handler via markInteraction).
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => {
-      if (startedAt) {
-        setElapsed(Math.floor((Date.now() - startedAt) / 1000));
-      } else {
-        setElapsed(e => e + 1);
+      const idleFor = Date.now() - lastInteractionRef.current;
+      if (idleFor > IDLE_THRESHOLD_MS) {
+        setRunning(false);
+        return;
       }
+      setElapsed(e => e + 1);
     }, 1000);
     return () => clearInterval(id);
-  }, [running, startedAt]);
+  }, [running]);
 
   // Rest timer ticks every 1s while not paused.
   useEffect(() => {
@@ -1795,10 +1809,13 @@ function App() {
     setRest(r => r ? { ...r, eIdx: activeExIdx } : r);
   }, [exercises, rest && rest.eIdx]);
 
+  // Called from every state-changing handler. Stamps the interaction so the
+  // idle-threshold tick keeps going, and resumes the timer if it was paused
+  // (either auto-paused from idle, or never started yet on a fresh session).
   const startTimer = () => {
-    if (running) return;
-    setRunning(true);
-    if (!startedAt) setStartedAt(Date.now() - elapsed * 1000);
+    lastInteractionRef.current = Date.now();
+    if (!running) setRunning(true);
+    if (!startedAt) setStartedAt(Date.now());
   };
 
   // Save: serialize current exercises[] and POST. Debounced 400ms after the
