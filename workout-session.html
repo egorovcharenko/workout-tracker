@@ -60,6 +60,36 @@
     40% { transform: scale(1.15); }
     100% { transform: scale(1); }
   }
+  /* Two-column layout when the viewport is wide enough for a stats sidebar.
+     Below the breakpoint the layout falls back to a single mobile column —
+     the sidebar is hidden via display:none so its computations are skipped
+     too (StatsPane is still rendered but its container collapses). */
+  .session-shell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100%;
+  }
+  .session-main { width: 100%; max-width: 448px; padding-bottom: 60px; }
+  .stats-pane-wrap { display: none; }
+  @media (min-width: 960px) {
+    .session-shell {
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 24px;
+      padding: 0 24px;
+    }
+    .session-main { flex-shrink: 0; }
+    .stats-pane-wrap {
+      display: block;
+      width: 320px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 16px;
+      margin-top: 64px; /* align with the first exercise card, past the header row */
+    }
+  }
 </style>
 </head>
 <body>
@@ -1616,6 +1646,196 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// StatsPane — desktop sidebar showing context for the currently-active
+// exercise: weekly volume per primary muscle (with the 10-20-sets hypertrophy
+// target highlighted), the last few sessions of this lift, and PR snapshots.
+// Hidden by CSS on narrow viewports; computations are still cheap.
+// ─────────────────────────────────────────────────────────────────────────────
+function StatsPane({ exercise, history, statHistory, exercises }) {
+  if (!exercise) return null;
+  const today = localDate();
+  const todayMs = Date.parse(today + 'T00:00:00Z');
+  const sevenDaysAgoMs = todayMs - 7 * 86400000;
+  const muscleInfo = EXERCISE_MUSCLES[exercise.name] || { primary: [], secondary: [] };
+
+  // Working sets per primary muscle of this exercise, last 7 days inclusive.
+  // History gives all prior sessions; today's current state gives the in-progress
+  // session (we exclude today from history to avoid double-counting since
+  // autosave already wrote some of today into the history endpoint).
+  const muscleSets7d = {};
+  (muscleInfo.primary || []).forEach(m => muscleSets7d[m] = 0);
+  for (const sess of (history || [])) {
+    if (!sess.date || sess.date === today) continue;
+    const sessMs = Date.parse(sess.date + 'T00:00:00Z');
+    if (sessMs < sevenDaysAgoMs || sessMs > todayMs) continue;
+    for (const st of (sess.sets || [])) {
+      if (st.set_type !== 'working') continue;
+      const mm = EXERCISE_MUSCLES[st.exercise];
+      if (!mm) continue;
+      for (const muscle of (mm.primary || [])) {
+        if (muscle in muscleSets7d) muscleSets7d[muscle]++;
+      }
+    }
+  }
+  for (const e of (exercises || [])) {
+    const em = EXERCISE_MUSCLES[e.name];
+    if (!em) continue;
+    for (const s of e.sets) {
+      if (!s.completed || s.kind !== 'work') continue;
+      for (const muscle of (em.primary || [])) {
+        if (muscle in muscleSets7d) muscleSets7d[muscle]++;
+      }
+    }
+  }
+
+  // Last 4 sessions of THIS specific lift (working sets only).
+  const recent = [];
+  for (const sess of (history || [])) {
+    const sets = (sess.sets || []).filter(s => s.exercise === exercise.name && s.set_type === 'working');
+    if (sets.length) recent.push({ date: sess.date, sets });
+    if (recent.length >= 4) break;
+  }
+
+  const stat = statHistory || {};
+  const ormHist = (stat.orm || {})[exercise.name] || [];
+  const wtHist  = (stat.wt  || {})[exercise.name] || [];
+  const repsHist = (stat.reps || {})[exercise.name] || [];
+  const volHist = (stat.vol  || {})[exercise.name] || [];
+  const bestOrm = ormHist.length ? Math.max(...ormHist.map(d => +d.orm || 0)) : 0;
+  const bestWt = wtHist.length ? Math.max(...wtHist.map(d => +d.wt || 0)) : 0;
+  const bestReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps || 0)) : 0;
+  const bestVol = volHist.length ? Math.max(...volHist.map(d => +d.vol || 0)) : 0;
+
+  // Inline volume bar: 0..20+ scale, with the 10-20 "productive zone" band
+  // overlaid. Color tracks whether the count is under (red), inside (green),
+  // or beyond (amber) the productive range.
+  const VolumeBar = ({ muscle, sets }) => {
+    const TARGET_MIN = 10, TARGET_MAX = 20;
+    const SCALE_MAX = Math.max(20, sets + 2);
+    const pct = Math.min(100, (sets / SCALE_MAX) * 100);
+    const zoneLeftPct = (TARGET_MIN / SCALE_MAX) * 100;
+    const zoneRightPct = (TARGET_MAX / SCALE_MAX) * 100;
+    let color = T.red, label = "low";
+    if (sets >= TARGET_MIN && sets <= TARGET_MAX) { color = T.green; label = "in zone"; }
+    else if (sets > TARGET_MAX) { color = T.amber; label = "high"; }
+    return (
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4 }}>
+          <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>
+            {muscle.replace("_", " ")}
+          </span>
+          <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 800 }}>
+            <span style={{ color }}>{sets}</span>
+            <span style={{ color: T.disabled, fontWeight: 500 }}> / 10-20</span>
+          </span>
+        </div>
+        <div style={{ position: "relative", height: 7, borderRadius: 4, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+          {/* productive zone band */}
+          <div style={{
+            position: "absolute", top: 0, bottom: 0,
+            left: `${zoneLeftPct}%`, width: `${zoneRightPct - zoneLeftPct}%`,
+            background: "rgba(52,211,153,0.10)",
+            borderLeft: "1px dashed rgba(52,211,153,0.4)",
+            borderRight: "1px dashed rgba(52,211,153,0.4)",
+          }} />
+          {/* progress */}
+          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: color, borderRadius: 4, transition: "width 320ms ease" }} />
+        </div>
+      </div>
+    );
+  };
+
+  const Section = ({ label, children }) => (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 0.9, marginBottom: 8 }}>
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+
+  const KV = ({ k, v }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: 11, borderBottom: `1px solid ${T.cardBorder}` }}>
+      <span style={{ color: T.faint, fontFamily: T.mono }}>{k}</span>
+      <span style={{ color: T.strong, fontFamily: T.mono, fontWeight: 700 }}>{v}</span>
+    </div>
+  );
+
+  const hasPRs = bestOrm > 0 || bestWt > 0 || bestVol > 0;
+  const primaryList = (muscleInfo.primary || []);
+
+  return (
+    <div style={{
+      padding: 14, borderRadius: 14,
+      background: T.cardBg, border: `1px solid ${T.cardBorder}`,
+      color: T.text,
+    }}>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0, marginBottom: 4 }}>STATS</div>
+        <div style={{ color: T.strong, fontSize: 16, fontWeight: 800, letterSpacing: -0.3, lineHeight: 1.2 }}>{exercise.name}</div>
+        {primaryList.length > 0 && (
+          <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {primaryList.map(m => (
+              <span key={m} style={{
+                color: T.bandsText, background: "rgba(192,132,252,0.12)",
+                border: "1px solid rgba(192,132,252,0.25)",
+                fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 0.4,
+                padding: "2px 6px", borderRadius: 4, textTransform: "uppercase",
+              }}>{m.replace("_", " ")}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {primaryList.length > 0 && (
+        <Section label="HARD SETS · LAST 7 DAYS">
+          {primaryList.map(m => (
+            <VolumeBar key={m} muscle={m} sets={muscleSets7d[m] || 0} />
+          ))}
+        </Section>
+      )}
+
+      {recent.length > 0 && (
+        <Section label="RECENT">
+          {recent.map(r => {
+            // Top set by weight × reps (proxy for the heaviest meaningful set)
+            const top = r.sets.reduce((m, s) => {
+              const w = +s.weight_lb || 0;
+              const reps = parseInt(s.reps) || 0;
+              const sc = w * reps;
+              return sc > m.score ? { score: sc, w, reps } : m;
+            }, { score: 0, w: 0, reps: 0 });
+            return (
+              <div key={r.date} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "5px 0", fontSize: 11, borderBottom: `1px solid ${T.cardBorder}` }}>
+                <span style={{ color: T.muted, fontFamily: T.mono }}>{r.date.slice(5)}</span>
+                <span style={{ color: T.text, fontFamily: T.mono }}>
+                  <span style={{ color: T.faint }}>{r.sets.length}×</span> {top.w || "—"}<span style={{ color: T.disabled }}> × </span>{top.reps || "—"}
+                </span>
+              </div>
+            );
+          })}
+        </Section>
+      )}
+
+      {hasPRs && (
+        <Section label="PRS">
+          {bestOrm > 0 && <KV k="1RM est" v={`${Math.round(bestOrm)} lb`} />}
+          {bestWt > 0 && <KV k="Top weight" v={`${bestWt} lb`} />}
+          {bestReps > 0 && <KV k="Top reps" v={String(bestReps)} />}
+          {bestVol > 0 && <KV k="Top volume" v={`${bestVol.toLocaleString()} lb`} />}
+        </Section>
+      )}
+
+      {!hasPRs && recent.length === 0 && (
+        <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 11, padding: "8px 0", textAlign: "center" }}>
+          no prior data yet — log a set to start tracking
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // App — top-level state machine. One source of truth for the entire screen.
 // ─────────────────────────────────────────────────────────────────────────────
 function App() {
@@ -2291,13 +2511,21 @@ function App() {
     );
   }
 
+  // The "current exercise" the stats sidebar describes — the one with an
+  // active set, falling back to the last exercise if the workout is finished.
+  const currentExercise = (() => {
+    const active = exercises.find(e => e.sets.some(s => s.active));
+    if (active) return active;
+    return exercises.length ? exercises[exercises.length - 1] : null;
+  })();
+
   return (
-    // Mobile-first column with a desktop cap. Matches the shell's 448px
-    // wrapper so the iOS-sized layout doesn't stretch edge-to-edge on a wide
-    // screen. Outer div takes the scroll so the sticky header pins inside
-    // the constrained column, not the viewport.
-    <div style={{ height: "100%", overflowY: "auto" }}>
-      <div style={{ maxWidth: 448, margin: "0 auto", minHeight: "100%", paddingBottom: 60, background: T.page }}>
+    // Two-column on desktop (.session-shell media query), mobile-first single
+    // column below the breakpoint. Outer div takes the scroll; the stats pane
+    // sticks within that scroll context.
+    <div style={{ height: "100%", overflowY: "auto", background: T.page }}>
+      <div className="session-shell">
+      <div className="session-main">
       <Header
         workout={workout}
         workouts={WORKOUTS}
@@ -2370,6 +2598,15 @@ function App() {
           </React.Fragment>
         );
       })}
+      </div>
+      <aside className="stats-pane-wrap">
+        <StatsPane
+          exercise={currentExercise}
+          history={history}
+          statHistory={statHistory}
+          exercises={exercises}
+        />
+      </aside>
       </div>
     </div>
   );
