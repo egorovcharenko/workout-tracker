@@ -2511,11 +2511,20 @@ function App() {
     );
   }
 
-  // The "current exercise" the stats sidebar describes — the one with an
-  // active set, falling back to the last exercise if the workout is finished.
+  // The "current exercise" the stats sidebar describes — what you're
+  // working on right now. Resolution order:
+  //   1. Exercise with an active set (the strongest signal).
+  //   2. First non-skipped exercise that still has an uncompleted set —
+  //      handles the case where the active flag didn't propagate forward
+  //      (e.g., you completed a set externally, reopened-then-redid one,
+  //      or the auto-advance lost the active marker for any reason).
+  //   3. Last exercise — workout is fully done, show the lift you just
+  //      finished so the PR snapshot is still useful.
   const currentExercise = (() => {
-    const active = exercises.find(e => e.sets.some(s => s.active));
+    const active = exercises.find(e => !e.skipped && e.sets.some(s => s.active));
     if (active) return active;
+    const nextIncomplete = exercises.find(e => !e.skipped && e.sets.some(s => !s.completed));
+    if (nextIncomplete) return nextIncomplete;
     return exercises.length ? exercises[exercises.length - 1] : null;
   })();
 
