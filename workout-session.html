@@ -1704,13 +1704,19 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
       }
     }
   }
+  // exercises[] is the in-progress session that the user is editing — by
+  // definition it belongs to whichever day the chart's rightmost column
+  // represents. We tag these events with the chart-side "today" string so
+  // bucketing never depends on a timezone-dependent string match between
+  // localDate() and the UTC-formatted day labels.
+  const chartTodayDate = new Date(todayMs).toISOString().slice(0, 10);
   for (const e of (exercises || [])) {
     const em = EXERCISE_MUSCLES[e.name];
     if (!em) continue;
     for (const s of e.sets) {
       if (!s.completed || s.kind !== 'work') continue;
       for (const muscle of (em.primary || [])) {
-        if (muscle in muscleSets7d) muscleSets7d[muscle].push({ date: today, isToday: true });
+        if (muscle in muscleSets7d) muscleSets7d[muscle].push({ date: chartTodayDate, isToday: true });
       }
     }
   }
