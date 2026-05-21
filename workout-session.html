@@ -257,8 +257,17 @@ const api = {
   // Claude actually have something to "dig into" (previous-session sets,
   // PR comparisons, multi-session trends). Both can be slow on cold start;
   // 10s budget.
-  history: (limit = 20) => fetchT(`/api/history?limit=${limit}`, 10000),
-  history1RM: () => fetchT("/api/1rm-history", 10000),
+  // history + 1rm-history retry once: Vercel Python cold-starts can eat the
+  // full 10s function budget on the first hit, and a single timeout would
+  // leave the stats pane with empty data ("no prior data" everywhere even
+  // though the user has done the lift many times). Second try lands on a
+  // warm function and almost always returns in <1s.
+  history: (limit = 20) =>
+    fetchT(`/api/history?limit=${limit}`, 10000)
+      .catch(e => { console.warn("[V2] history retry:", e); return fetchT(`/api/history?limit=${limit}`, 10000); }),
+  history1RM: () =>
+    fetchT("/api/1rm-history", 10000)
+      .catch(e => { console.warn("[V2] 1rm-history retry:", e); return fetchT("/api/1rm-history", 10000); }),
   save: (body) => fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
   motivate: (body) => fetch("/api/motivate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
   motivations: (sid) => fetchT(`/api/motivations?session_id=${sid}`),
@@ -2011,11 +2020,30 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
         </Section>
       )}
 
-      {!hasPRs && ormHist.length === 0 && (
-        <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 11, padding: "8px 0", textAlign: "center" }}>
-          no prior data yet — log a set to start tracking
-        </div>
-      )}
+      {!hasPRs && ormHist.length === 0 && (() => {
+        // Disambiguate: empty statHistory entirely vs only this lift missing.
+        // If the fetch failed (likely Vercel cold-start), every lift would look
+        // empty — but the user knows they've done this. A retry CTA is more
+        // useful than the misleading "log a set to start tracking" line.
+        const fetchFailed = Object.keys(stat.orm || {}).length === 0;
+        return (
+          <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 11, padding: "8px 0", textAlign: "center", lineHeight: 1.5 }}>
+            {fetchFailed ? (
+              <>
+                stats didn't load —
+                {" "}
+                <button onClick={() => window.location.reload()} style={{
+                  background: "transparent", border: 0, padding: 0,
+                  color: T.accentLight, fontFamily: T.mono, fontSize: 11,
+                  fontWeight: 700, cursor: "pointer", textDecoration: "underline",
+                }}>refresh</button>
+              </>
+            ) : (
+              <>no prior data for this lift yet</>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
