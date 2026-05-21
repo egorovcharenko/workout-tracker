@@ -1794,10 +1794,36 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   ];
 
   const stat = statHistory || {};
-  const ormHist = (stat.orm || {})[exercise.name] || [];
+  const ormHistRaw = (stat.orm || {})[exercise.name] || [];
   const wtHist  = (stat.wt  || {})[exercise.name] || [];
   const repsHist = (stat.reps || {})[exercise.name] || [];
-  const volHist = (stat.vol  || {})[exercise.name] || [];
+  const volHistRaw = (stat.vol  || {})[exercise.name] || [];
+  // Compute today's 1RM-est + total volume from the in-progress exercises[]
+  // state so the sparkline reflects the user's current session immediately —
+  // without it the rightmost dot can't appear until /api/1rm-history refetches
+  // (which only happens on next page load).
+  let todayOrm = 0, todayVol = 0;
+  (exercise.sets || []).forEach(s => {
+    if (!s.completed || s.kind !== 'work') return;
+    const bs = (s.bands || []).reduce((a, b) => a + b, 0);
+    const w = exercise.assist ? Math.max(0, (s.bodyweight || 0) - bs)
+            : exercise.isBandsOnly ? bs
+            : exercise.bandAddon ? (s.weight || 0) + bs
+            : (s.weight || 0);
+    const r = parseInt(s.reps) || 0;
+    if (r > 0 && w > 0) {
+      const o = r > 1 ? w * (1 + r / 30) : w;
+      if (o > todayOrm) todayOrm = o;
+      todayVol += w * r;
+    }
+  });
+  const chartTodayDateStr = new Date(todayMs).toISOString().slice(0, 10);
+  const ormHist = todayOrm > 0
+    ? [...ormHistRaw.filter(d => d.date !== chartTodayDateStr), { date: chartTodayDateStr, orm: todayOrm }]
+    : ormHistRaw;
+  const volHist = todayVol > 0
+    ? [...volHistRaw.filter(d => d.date !== chartTodayDateStr), { date: chartTodayDateStr, vol: todayVol }]
+    : volHistRaw;
   const bestOrm = ormHist.length ? Math.max(...ormHist.map(d => +d.orm || 0)) : 0;
   const bestWt = wtHist.length ? Math.max(...wtHist.map(d => +d.wt || 0)) : 0;
   const bestReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps || 0)) : 0;
@@ -1935,38 +1961,73 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
     );
   };
 
-  // Mini sparkline component — used in the PROGRESS section below to show
-  // 1RM est + total volume trends per session over the recent past.
+  // Day-positioned sparkline — aligned to the same 7-day window as the
+  // HARD SETS chart above (oldest left → today right). Rest days appear as
+  // gaps in the line; data points sit at their actual day x-position. Day
+  // labels below match the per-day chart's labels so the eye can connect
+  // a tall stacked bar with its corresponding 1RM/volume dot.
   const Sparkline = ({ data, valueKey, color, label, fmt }) => {
-    if (!data || data.length === 0) {
+    const DAY_MS = 86400000;
+    // Build the same 7-day skeleton the VolumeBar uses
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const ms = todayMs - i * DAY_MS;
+      const d = new Date(ms);
+      days.push({
+        date: d.toISOString().slice(0, 10),
+        label: String(d.getUTCDate()),
+        isToday: i === 0,
+        value: null,
+      });
+    }
+    (data || []).forEach(d => {
+      const day = days.find(x => x.date === d.date);
+      if (day) day.value = +d[valueKey] || 0;
+    });
+    const presentVals = days.filter(d => d.value != null && d.value > 0).map(d => d.value);
+    if (presentVals.length === 0) {
       return (
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 10, fontWeight: 700 }}>{label}</div>
-          <div style={{ color: T.disabled, fontFamily: T.mono, fontSize: 10, paddingTop: 4 }}>no data yet</div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+            <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.3 }}>{label}</span>
+            <span style={{ color: T.disabled, fontFamily: T.mono, fontSize: 10 }}>—</span>
+          </div>
+          <div style={{ height: 38, display: "flex", alignItems: "center", justifyContent: "center", color: T.disabled, fontFamily: T.mono, fontSize: 10, border: `1px dashed ${T.cardBorder}`, borderRadius: 4 }}>no data this week</div>
+          <div style={{ display: "flex", gap: 3, marginTop: 5 }}>
+            {days.map((d, i) => (
+              <span key={i} style={{ flex: 1, textAlign: "center", color: d.isToday ? T.accentLight : T.disabled, fontFamily: T.mono, fontSize: 9, fontWeight: d.isToday ? 800 : 500 }}>{d.label}</span>
+            ))}
+          </div>
         </div>
       );
     }
-    const series = data.slice(-12);
-    const values = series.map(d => +d[valueKey] || 0);
-    const min = Math.min(...values), max = Math.max(...values);
-    const range = max - min || 1;
-    const w = 280, h = 38, padX = 3, padY = 3;
-    const xs = series.map((_, i) => series.length === 1 ? w / 2 : padX + (i * (w - 2 * padX)) / (series.length - 1));
-    const ys = values.map(v => h - padY - ((v - min) / range) * (h - 2 * padY));
-    const linePath = xs.map((x, i) => `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" ");
-    const areaPath = `${linePath} L ${xs[xs.length-1].toFixed(1)} ${h} L ${xs[0].toFixed(1)} ${h} Z`;
-    const last = values[values.length - 1];
-    const first = values[0];
+    const min = Math.min(...presentVals);
+    const max = Math.max(...presentVals);
+    const range = max - min || max || 1;
+    const w = 280, h = 38, padX = 8, padY = 4;
+    const dayX = (i) => padX + (i * (w - 2 * padX)) / 6;
+    const yFor = (v) => h - padY - ((v - min) / range) * (h - 2 * padY);
+    const pts = days.map((d, i) => d.value != null && d.value > 0 ? {
+      x: dayX(i), y: yFor(d.value), value: d.value, isToday: d.isToday,
+    } : null);
+    const presentPts = pts.filter(Boolean);
+    const linePath = presentPts.length > 1
+      ? presentPts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ")
+      : "";
+    const areaPath = presentPts.length > 1
+      ? `${linePath} L ${presentPts[presentPts.length-1].x.toFixed(1)} ${h} L ${presentPts[0].x.toFixed(1)} ${h} Z`
+      : "";
+    const first = presentVals[0], last = presentVals[presentVals.length - 1];
     const delta = first ? Math.round(((last - first) / first) * 100) : 0;
     const deltaColor = delta > 0 ? T.green : delta < 0 ? T.red : T.faint;
     const gradId = `spark-${label}-${color.replace(/[^a-z0-9]/gi, "")}`;
     return (
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 2 }}>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 5 }}>
           <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.3 }}>{label}</span>
           <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 800, color: T.strong }}>
             {fmt(last)}
-            {series.length > 1 && (
+            {presentVals.length > 1 && (
               <span style={{ color: deltaColor, fontWeight: 700, marginLeft: 6, fontSize: 10 }}>
                 {delta > 0 ? "↑" : delta < 0 ? "↓" : "→"} {Math.abs(delta)}%
               </span>
@@ -1980,12 +2041,31 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
               <stop offset="100%" stopColor={color} stopOpacity="0" />
             </linearGradient>
           </defs>
-          <path d={areaPath} fill={`url(#${gradId})`} />
-          <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          {series.length > 1 && (
-            <circle cx={xs[xs.length-1]} cy={ys[ys.length-1]} r="2.4" fill={color} />
-          )}
+          {areaPath && <path d={areaPath} fill={`url(#${gradId})`} />}
+          {linePath && <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
+          {/* Faint vertical guide lines per day (visual day markers under the curve) */}
+          {days.map((d, i) => (
+            <line key={`g${i}`} x1={dayX(i)} y1={padY} x2={dayX(i)} y2={h - padY}
+              stroke={d.isToday ? "rgba(96,165,250,0.18)" : "rgba(255,255,255,0.04)"}
+              strokeWidth={d.isToday ? 1 : 0.5}
+              strokeDasharray={d.isToday ? "" : "2 3"} />
+          ))}
+          {/* Dots per actual data point */}
+          {presentPts.map((p, i) => (
+            <circle key={`p${i}`} cx={p.x} cy={p.y} r={p.isToday ? 3.2 : 2.4} fill={color}
+              stroke={p.isToday ? "rgba(11,15,20,0.9)" : "none"} strokeWidth={p.isToday ? 1 : 0} />
+          ))}
         </svg>
+        <div style={{ display: "flex", gap: 3, marginTop: 5 }}>
+          {days.map((d, i) => (
+            <span key={i} style={{
+              flex: 1, textAlign: "center",
+              color: d.isToday ? T.accentLight : (d.value != null && d.value > 0 ? T.muted : T.disabled),
+              fontFamily: T.mono, fontSize: 9,
+              fontWeight: d.isToday ? 800 : (d.value != null && d.value > 0 ? 600 : 500),
+            }}>{d.label}</span>
+          ))}
+        </div>
       </div>
     );
   };
@@ -2040,12 +2120,10 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
         </Section>
       )}
 
-      {(ormHist.length > 0 || volHist.length > 0) && (
-        <Section label="PROGRESS · LAST 12 SESSIONS">
-          <Sparkline data={ormHist} valueKey="orm" color="#60A5FA" label="1RM EST" fmt={v => `${Math.round(v)} lb`} />
-          <Sparkline data={volHist} valueKey="vol" color="#34D399" label="VOLUME" fmt={v => `${Math.round(v).toLocaleString()} lb`} />
-        </Section>
-      )}
+      <Section label="PROGRESS · LAST 7 DAYS">
+        <Sparkline data={ormHist} valueKey="orm" color="#60A5FA" label="1RM EST" fmt={v => `${Math.round(v)} lb`} />
+        <Sparkline data={volHist} valueKey="vol" color="#34D399" label="VOLUME" fmt={v => `${Math.round(v).toLocaleString()} lb`} />
+      </Section>
 
       {hasPRs && (
         <Section label="PRS">
