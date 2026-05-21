@@ -1681,14 +1681,11 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
 
   // Working sets per primary muscle of this exercise, last 7 days inclusive
   // of today and exclusive of the day exactly 7 days ago. Window = [today-6d,
-  // today] = 7 distinct calendar days. Without the strict `>` against
-  // sevenDaysAgoMs, a session ON the day exactly one week ago would still
-  // count and inflate the rolling total as it ages out.
+  // today] = 7 distinct calendar days.
   //
-  // Each entry is a {date, isToday} record so the chart below can render one
-  // slice per set, grouped visually by session. History gives prior sessions;
-  // exercises[] gives today (excluded from history to avoid double-counting,
-  // since autosave already wrote some of today into the /api/history endpoint).
+  // Each entry now carries the contributing exercise, weight, and reps so the
+  // chart can color slices per exercise and modulate intensity by the set's
+  // "hardness" (weight × reps relative to the exercise's max in the window).
   const muscleSets7d = {};
   (muscleInfo.primary || []).forEach(m => muscleSets7d[m] = []);
   for (const sess of (history || [])) {
@@ -1700,37 +1697,56 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
       const mm = EXERCISE_MUSCLES[st.exercise];
       if (!mm) continue;
       for (const muscle of (mm.primary || [])) {
-        if (muscle in muscleSets7d) muscleSets7d[muscle].push({ date: sess.date, isToday: false });
+        if (muscle in muscleSets7d) muscleSets7d[muscle].push({
+          date: sess.date, isToday: false,
+          exercise: st.exercise,
+          weight: +st.weight_lb || 0,
+          reps: parseInt(st.reps) || 0,
+        });
       }
     }
   }
-  // exercises[] is the in-progress session that the user is editing — by
-  // definition it belongs to whichever day the chart's rightmost column
-  // represents. We tag these events with the chart-side "today" string so
-  // bucketing never depends on a timezone-dependent string match between
-  // localDate() and the UTC-formatted day labels.
+  // exercises[] is the in-progress session — pin its events to the chart's
+  // rightmost column directly, so timezone string mismatches between
+  // localDate() and the UTC-formatted day labels can never make today's
+  // slices disappear.
   const chartTodayDate = new Date(todayMs).toISOString().slice(0, 10);
   for (const e of (exercises || [])) {
     const em = EXERCISE_MUSCLES[e.name];
     if (!em) continue;
     for (const s of e.sets) {
       if (!s.completed || s.kind !== 'work') continue;
+      const bs = (s.bands || []).reduce((a, b) => a + b, 0);
+      const weight = e.assist ? Math.max(0, (s.bodyweight || 0) - bs)
+                    : e.isBandsOnly ? bs
+                    : e.bandAddon ? (s.weight || 0) + bs
+                    : (s.weight || 0);
       for (const muscle of (em.primary || [])) {
-        if (muscle in muscleSets7d) muscleSets7d[muscle].push({ date: chartTodayDate, isToday: true });
+        if (muscle in muscleSets7d) muscleSets7d[muscle].push({
+          date: chartTodayDate, isToday: true,
+          exercise: e.name,
+          weight,
+          reps: parseInt(s.reps) || 0,
+        });
       }
     }
   }
   // Sort each muscle's events chronologically so slices read left → right
-  // oldest → newest, with today's slices on the right edge (brightest).
+  // oldest → newest, with today's slices on the right edge.
   Object.values(muscleSets7d).forEach(arr => arr.sort((a, b) => a.date.localeCompare(b.date)));
 
-  // Last 4 sessions of THIS specific lift (working sets only).
-  const recent = [];
-  for (const sess of (history || [])) {
-    const sets = (sess.sets || []).filter(s => s.exercise === exercise.name && s.set_type === 'working');
-    if (sets.length) recent.push({ date: sess.date, sets });
-    if (recent.length >= 4) break;
-  }
+  // Per-exercise color palette + max-volume for hardness scaling. Computed
+  // once per muscle so a single chart's legend / coloring stays consistent.
+  // Hue palette deliberately spans warm → cool so distinct exercises read
+  // apart at a glance even when only 2-3 are in play.
+  const PALETTE = [
+    { hue: 152 }, // green (Single-Arm Rows / first exercise)
+    { hue: 200 }, // blue
+    { hue: 30 },  // orange
+    { hue: 280 }, // violet
+    { hue: 340 }, // pink
+    { hue: 50 },  // amber
+  ];
 
   const stat = statHistory || {};
   const ormHist = (stat.orm || {})[exercise.name] || [];
@@ -1743,12 +1759,11 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   const bestVol = volHist.length ? Math.max(...volHist.map(d => +d.vol || 0)) : 0;
 
   // Per-day stacked volume chart: 7 vertical columns (one per day in the
-  // rolling window), each stacking one slice per working set logged that
-  // day. Today is the rightmost column, brightened with a soft glow.
-  // Reading direction: tall column = high-volume day; empty columns = rest.
-  // The target zone is communicated by the count label's color (red < 10,
-  // green 10-20, amber > 20) rather than a per-day line — the zone is a
-  // weekly figure that doesn't map cleanly onto a per-day y-axis.
+  // rolling window), each stacking one slice per working set logged that day.
+  // Slice color encodes the contributing EXERCISE (legend below the chart);
+  // slice brightness encodes the set's HARDNESS — weight × reps relative to
+  // the heaviest such product in the window for that exercise. Today's column
+  // adds a small glow. Hovering a slice shows exercise / weight × reps / date.
   const VolumeBar = ({ muscle, events }) => {
     const TARGET_MIN = 10, TARGET_MAX = 20;
     const sets = events.length;
@@ -1759,16 +1774,29 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
       const ms = todayMs - i * DAY_MS;
       const d = new Date(ms);
       const dateStr = d.toISOString().slice(0, 10);
-      const dayNum = d.getUTCDate();
-      days.push({ date: dateStr, label: String(dayNum), events: [], isToday: i === 0 });
+      days.push({ date: dateStr, label: String(d.getUTCDate()), events: [], isToday: i === 0 });
     }
     events.forEach(ev => {
       const day = days.find(d => d.date === ev.date);
       if (day) day.events.push(ev);
     });
-    // Y-axis scale — bounded so a single huge day doesn't crush quiet days
-    // into invisible nubs. Min 4 keeps the chart visually consistent across
-    // muscles even on rest weeks.
+
+    // Per-exercise palette: first contributing exercise → first palette hue,
+    // second → second, etc. Stable for the chart's lifetime so the legend
+    // colors match the slices.
+    const exerciseOrder = [];
+    events.forEach(ev => { if (!exerciseOrder.includes(ev.exercise)) exerciseOrder.push(ev.exercise); });
+    const exerciseHue = {};
+    exerciseOrder.forEach((name, i) => { exerciseHue[name] = PALETTE[i % PALETTE.length].hue; });
+    // Top weight × reps per exercise — used to scale "hardness" intensity
+    // so the heaviest sets in the window look most saturated, lighter sets
+    // pale toward the background.
+    const topScorePerEx = {};
+    events.forEach(ev => {
+      const sc = ev.weight * ev.reps;
+      if (sc > (topScorePerEx[ev.exercise] || 0)) topScorePerEx[ev.exercise] = sc;
+    });
+
     const maxPerDay = Math.max(4, ...days.map(d => d.events.length));
     const CHART_H = 64;
     const GAP = 1.5;
@@ -1777,6 +1805,24 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
                       : sets < TARGET_MIN ? T.red
                       : sets <= TARGET_MAX ? T.green
                       : T.amber;
+
+    // Compute slice color: per-exercise hue, saturation scales with hardness,
+    // lightness slightly higher on bright (today) slices.
+    const sliceStyle = (ev, isToday) => {
+      const hue = exerciseHue[ev.exercise] ?? 152;
+      const top = topScorePerEx[ev.exercise] || 1;
+      const score = (ev.weight * ev.reps) / top;
+      // 0..1 hardness, with a floor so the easiest sets stay visible.
+      const hardness = Math.max(0.35, Math.min(1, score || 0.35));
+      const sat = Math.round(55 + hardness * 35);   // 55–90%
+      const light = Math.round(isToday ? (44 + hardness * 12) : (38 + hardness * 14));
+      const alpha = isToday ? 1 : 0.85;
+      return {
+        background: `hsla(${hue}, ${sat}%, ${light}%, ${alpha})`,
+        boxShadow: isToday ? `0 0 6px hsla(${hue}, ${sat}%, 60%, 0.5)` : "none",
+      };
+    };
+
     return (
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
@@ -1794,20 +1840,17 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
             <div key={i} style={{
               flex: 1, minWidth: 0,
               display: "flex", flexDirection: "column-reverse",
-              gap: `${GAP}px`,
-              height: "100%",
-              justifyContent: "flex-start",
+              gap: `${GAP}px`, height: "100%", justifyContent: "flex-start",
             }}>
               {d.events.length === 0 ? (
-                // Empty day: thin baseline dot so the column is still visible
                 <div style={{ height: 3, background: "rgba(255,255,255,0.05)", borderRadius: 1 }} />
               ) : (
                 d.events.map((ev, j) => (
-                  <div key={j} style={{
+                  <div key={j} title={`${ev.exercise} · ${ev.weight}lb × ${ev.reps} · ${ev.date}`} style={{
                     height: SLICE_H,
-                    background: d.isToday ? T.green : "rgba(52,211,153,0.6)",
                     borderRadius: 2,
-                    boxShadow: d.isToday ? "0 0 5px rgba(52,211,153,0.45)" : "none",
+                    cursor: "default",
+                    ...sliceStyle(ev, d.isToday),
                   }} />
                 ))
               )}
@@ -1825,6 +1868,79 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
             }}>{d.label}</span>
           ))}
         </div>
+        {/* legend */}
+        {exerciseOrder.length > 0 && (
+          <div style={{ display: "flex", gap: 10, marginTop: 7, flexWrap: "wrap" }}>
+            {exerciseOrder.map((name, i) => (
+              <div key={name} style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                <div style={{
+                  width: 9, height: 9, borderRadius: 2,
+                  background: `hsl(${exerciseHue[name]}, 75%, 50%)`,
+                  flexShrink: 0,
+                }} />
+                <span style={{
+                  color: T.muted, fontFamily: T.mono, fontSize: 9.5, fontWeight: 600,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>{name}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Mini sparkline component — used in the PROGRESS section below to show
+  // 1RM est + total volume trends per session over the recent past.
+  const Sparkline = ({ data, valueKey, color, label, fmt }) => {
+    if (!data || data.length === 0) {
+      return (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 10, fontWeight: 700 }}>{label}</div>
+          <div style={{ color: T.disabled, fontFamily: T.mono, fontSize: 10, paddingTop: 4 }}>no data yet</div>
+        </div>
+      );
+    }
+    const series = data.slice(-12);
+    const values = series.map(d => +d[valueKey] || 0);
+    const min = Math.min(...values), max = Math.max(...values);
+    const range = max - min || 1;
+    const w = 280, h = 38, padX = 3, padY = 3;
+    const xs = series.map((_, i) => series.length === 1 ? w / 2 : padX + (i * (w - 2 * padX)) / (series.length - 1));
+    const ys = values.map(v => h - padY - ((v - min) / range) * (h - 2 * padY));
+    const linePath = xs.map((x, i) => `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" ");
+    const areaPath = `${linePath} L ${xs[xs.length-1].toFixed(1)} ${h} L ${xs[0].toFixed(1)} ${h} Z`;
+    const last = values[values.length - 1];
+    const first = values[0];
+    const delta = first ? Math.round(((last - first) / first) * 100) : 0;
+    const deltaColor = delta > 0 ? T.green : delta < 0 ? T.red : T.faint;
+    const gradId = `spark-${label}-${color.replace(/[^a-z0-9]/gi, "")}`;
+    return (
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 2 }}>
+          <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.3 }}>{label}</span>
+          <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 800, color: T.strong }}>
+            {fmt(last)}
+            {series.length > 1 && (
+              <span style={{ color: deltaColor, fontWeight: 700, marginLeft: 6, fontSize: 10 }}>
+                {delta > 0 ? "↑" : delta < 0 ? "↓" : "→"} {Math.abs(delta)}%
+              </span>
+            )}
+          </span>
+        </div>
+        <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block", height: h }}>
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+              <stop offset="100%" stopColor={color} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path d={areaPath} fill={`url(#${gradId})`} />
+          <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          {series.length > 1 && (
+            <circle cx={xs[xs.length-1]} cy={ys[ys.length-1]} r="2.4" fill={color} />
+          )}
+        </svg>
       </div>
     );
   };
@@ -1879,25 +1995,10 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
         </Section>
       )}
 
-      {recent.length > 0 && (
-        <Section label="RECENT">
-          {recent.map(r => {
-            // Top set by weight × reps (proxy for the heaviest meaningful set)
-            const top = r.sets.reduce((m, s) => {
-              const w = +s.weight_lb || 0;
-              const reps = parseInt(s.reps) || 0;
-              const sc = w * reps;
-              return sc > m.score ? { score: sc, w, reps } : m;
-            }, { score: 0, w: 0, reps: 0 });
-            return (
-              <div key={r.date} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "5px 0", fontSize: 11, borderBottom: `1px solid ${T.cardBorder}` }}>
-                <span style={{ color: T.muted, fontFamily: T.mono }}>{r.date.slice(5)}</span>
-                <span style={{ color: T.text, fontFamily: T.mono }}>
-                  <span style={{ color: T.faint }}>{r.sets.length}×</span> {top.w || "—"}<span style={{ color: T.disabled }}> × </span>{top.reps || "—"}
-                </span>
-              </div>
-            );
-          })}
+      {(ormHist.length > 0 || volHist.length > 0) && (
+        <Section label="PROGRESS · LAST 12 SESSIONS">
+          <Sparkline data={ormHist} valueKey="orm" color="#60A5FA" label="1RM EST" fmt={v => `${Math.round(v)} lb`} />
+          <Sparkline data={volHist} valueKey="vol" color="#34D399" label="VOLUME" fmt={v => `${Math.round(v).toLocaleString()} lb`} />
         </Section>
       )}
 
@@ -1910,7 +2011,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
         </Section>
       )}
 
-      {!hasPRs && recent.length === 0 && (
+      {!hasPRs && ormHist.length === 0 && (
         <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 11, padding: "8px 0", textAlign: "center" }}>
           no prior data yet — log a set to start tracking
         </div>
