@@ -296,6 +296,7 @@ const EXERCISE_MUSCLES = {
   "Band Squat": { primary: ["quads", "glutes"], secondary: ["core"] },
   "Band Row": { primary: ["lats", "upper_back"], secondary: ["biceps"] },
   "Band Tricep Pushdowns": { primary: ["triceps"], secondary: [] },
+  "Bench Dips": { primary: ["triceps"], secondary: ["chest", "shoulders"] },
   "Dumbbell Hammer Curls": { primary: ["biceps"], secondary: ["forearms"] },
 };
 
@@ -310,6 +311,15 @@ const SWAP_GROUPS = [
     { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
     { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "8-12", notes: "Hinge at hips, slight knee bend", video: "https://www.youtube.com/shorts/cGMaBqaExBo", rest: 120, noWarmup: true },
     { name: "Single-Leg DB RDL", sets: 3, reps: "8", notes: "One DB in each hand, rear leg lifts as you hinge — slow tempo, 8 per leg. Warmup 1 set @ ~20lb, work @ ~30lb.", rest: 120 },
+  ],
+  // Tricep variants — usable as standalone OR as a superset member. The
+  // `sets`/`rest` fields are ignored when the swap is applied inside a
+  // superset wrapper (the wrapper controls rounds + inter-round rest); the
+  // sub-only fields (name, reps, equipment, notes, video, bodyweight) are
+  // what flattenTemplate's superset branch reads.
+  [
+    { name: "Band Tricep Pushdowns", sets: 3, reps: "12-15", notes: "Elbows glued to ribs, squeeze at bottom", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", rest: 60 },
+    { name: "Bench Dips", sets: 3, reps: "10-15", notes: "Assisted tricep dip — hands on bench behind you, feet on floor, lower until elbows ~90°. Drive through palms.", bodyweight: true, video: "https://www.youtube.com/shorts/0326dy_-CzM", rest: 60 },
   ],
 ];
 function getSwapGroup(exerciseName) {
@@ -747,16 +757,42 @@ function savePmStarted(workoutName, date, started) {
 // Produce a workout template with swaps applied — each swapped slot's exercise
 // is replaced by the chosen group member. Returned shape matches WORKOUTS so it
 // flows straight into flattenTemplate.
+//
+// Swap key formats:
+//   "<idx>"           — top-level exercise at workout.exercises[idx]
+//   "<idx>-<subIdx>"  — superset member at workout.exercises[idx].supersetExercises[subIdx]
+//
+// This lets the user swap one half of a superset (e.g. Band Tricep Pushdowns
+// → Bench Dips) without rewriting the wrapper or losing the partner exercise.
 function applySwaps(workout, swapMap) {
   if (!swapMap || !Object.keys(swapMap).length) return workout;
   return {
     ...workout,
     exercises: workout.exercises.map((ex, idx) => {
-      const want = swapMap[idx];
-      if (!want || want === ex.name) return ex;
-      const grp = getSwapGroup(ex.name);
-      const repl = grp && grp.find(e => e.name === want);
-      return repl ? { ...repl } : ex;
+      // Top-level replacement.
+      const topWant = swapMap[`${idx}`];
+      if (topWant && topWant !== ex.name) {
+        const grp = getSwapGroup(ex.name);
+        const repl = grp && grp.find(e => e.name === topWant);
+        if (repl) return { ...repl };
+      }
+      // Per-sub replacement within a superset wrapper.
+      if (ex.supersetExercises) {
+        let changed = false;
+        const newSubs = ex.supersetExercises.map((sub, subIdx) => {
+          const subWant = swapMap[`${idx}-${subIdx}`];
+          if (!subWant || subWant === sub.name) return sub;
+          const grp = getSwapGroup(sub.name);
+          const repl = grp && grp.find(e => e.name === subWant);
+          if (!repl) return sub;
+          changed = true;
+          // Strip wrapper-owned fields so the replacement reads cleanly as a sub.
+          const { sets: _s, rest: _r, warmups: _w, ...subFields } = repl;
+          return subFields;
+        });
+        if (changed) return { ...ex, supersetExercises: newSubs };
+      }
+      return ex;
     }),
   };
 }
@@ -2694,10 +2730,19 @@ function App() {
   const onSwapExercise = (eIdx, newName) => {
     const ex = exercises[eIdx];
     const tIdx = ex.templateExIdx;
-    const originalName = workout.exercises[tIdx] ? workout.exercises[tIdx].name : ex.name;
+    // Superset members are nested inside workout.exercises[tIdx].supersetExercises[subIdx]
+    // — they need a compound swap key so applySwaps can replace just one half
+    // of the superset (e.g. Pushdowns → Bench Dips) without touching the
+    // partner exercise. Top-level exercises keep the simple "<tIdx>" key.
+    const isSub = ex.subIdx != null;
+    const swapKey = isSub ? `${tIdx}-${ex.subIdx}` : `${tIdx}`;
+    const wrapper = workout.exercises[tIdx];
+    const originalName = isSub
+      ? (wrapper?.supersetExercises?.[ex.subIdx]?.name || ex.name)
+      : (wrapper?.name || ex.name);
     const nextSwaps = { ...swaps };
-    if (newName === originalName) delete nextSwaps[tIdx];
-    else nextSwaps[tIdx] = newName;
+    if (newName === originalName) delete nextSwaps[swapKey];
+    else nextSwaps[swapKey] = newName;
     saveSwaps(workout.name, localDate(), nextSwaps);
     setSwaps(nextSwaps);
     // Rebuild against the swapped template.
