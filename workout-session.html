@@ -71,7 +71,10 @@
     min-height: 100%;
   }
   .session-main { width: 100%; max-width: 448px; padding-bottom: 60px; }
-  .stats-pane-wrap { display: none; }
+  .stats-pane-wrap, .motivations-pane-wrap { display: none; }
+  /* Inline motivation chips show on mobile/narrow; hidden when the dedicated
+     motivations column is visible at wide viewports. */
+  .inline-motivation { display: flex; }
   @media (min-width: 960px) {
     .session-shell {
       flex-direction: row;
@@ -89,6 +92,23 @@
       top: 16px;
       margin-top: 64px; /* align with the first exercise card, past the header row */
     }
+  }
+  /* Add the third (motivations) column when there's room. Hides the inline
+     motivation chips so AI takes aren't duplicated. */
+  @media (min-width: 1240px) {
+    .session-shell { padding: 0 16px; }
+    .motivations-pane-wrap {
+      display: block;
+      width: 280px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 16px;
+      margin-top: 64px;
+      align-self: flex-start;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+    }
+    .inline-motivation { display: none; }
   }
 </style>
 </head>
@@ -242,9 +262,16 @@ const fetchT = (url, ms = 6000) => Promise.race([
   catch (e) { throw new Error(`${url} → non-JSON response: ${txt.slice(0, 80)}`); }
 });
 
+// One-shot retry on cold-start timeouts. Vercel Python functions can eat
+// the full timeout budget on first hit; the second attempt lands warm and
+// usually returns in <1s. Avoids the empty-prefill / empty-stats user
+// experience that happens when these boot fetches silently drop.
+const fetchTRetry = (url, timeout) => fetchT(url, timeout)
+  .catch(e => { console.warn(`[V2] ${url} retry:`, e); return fetchT(url, timeout); });
+
 const api = {
-  todaySession: (workout) => fetchT(`/api/today-session?workout=${encodeURIComponent(workout)}`),
-  lastSession:  (workout) => fetchT(`/api/last-session?workout=${encodeURIComponent(workout)}`),
+  todaySession: (workout) => fetchTRetry(`/api/today-session?workout=${encodeURIComponent(workout)}`, 6000),
+  lastSession:  (workout) => fetchTRetry(`/api/last-session?workout=${encodeURIComponent(workout)}`, 6000),
   // exercise-hints returns the most-recent {weight, reps, bands, grip} for
   // EVERY (exercise, set_type, set_number) across ALL workouts. Falls back
   // for exercises that share a name with one in a different workout (e.g.
@@ -252,22 +279,13 @@ const api = {
   // hints surfaces the most recent regardless of which workout it was in).
   // 8s budget — it can be slow to compute on a cold start because the
   // query scans all sets.
-  hints: () => fetchT("/api/exercise-hints", 8000),
+  hints: () => fetchTRetry("/api/exercise-hints", 8000),
   // history + 1rm-history power the motivate payload — they're what makes
   // Claude actually have something to "dig into" (previous-session sets,
   // PR comparisons, multi-session trends). Both can be slow on cold start;
   // 10s budget.
-  // history + 1rm-history retry once: Vercel Python cold-starts can eat the
-  // full 10s function budget on the first hit, and a single timeout would
-  // leave the stats pane with empty data ("no prior data" everywhere even
-  // though the user has done the lift many times). Second try lands on a
-  // warm function and almost always returns in <1s.
-  history: (limit = 20) =>
-    fetchT(`/api/history?limit=${limit}`, 10000)
-      .catch(e => { console.warn("[V2] history retry:", e); return fetchT(`/api/history?limit=${limit}`, 10000); }),
-  history1RM: () =>
-    fetchT("/api/1rm-history", 10000)
-      .catch(e => { console.warn("[V2] 1rm-history retry:", e); return fetchT("/api/1rm-history", 10000); }),
+  history: (limit = 20) => fetchTRetry(`/api/history?limit=${limit}`, 10000),
+  history1RM: () => fetchTRetry("/api/1rm-history", 10000),
   save: (body) => fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
   motivate: (body) => fetch("/api/motivate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
   motivations: (sid) => fetchT(`/api/motivations?session_id=${sid}`),
@@ -1655,14 +1673,16 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
         />
       )}
 
-      {/* AI motivation chip — appears once exercise is fully done */}
+      {/* AI motivation chip — appears once exercise is fully done. On wide
+          viewports the dedicated motivations column hides this via CSS to
+          avoid duplication; mobile keeps it inline. */}
       {allDone && motivation && (
-        <div style={{
+        <div className="inline-motivation" style={{
           marginTop: 10, padding: "10px 12px",
           background: "linear-gradient(135deg, rgba(192,132,252,0.10), rgba(96,165,250,0.10))",
           border: "1px solid rgba(192,132,252,0.2)",
           borderRadius: 10,
-          display: "flex", alignItems: "flex-start", gap: 9,
+          alignItems: "flex-start", gap: 9,
         }}>
           <span style={{ fontSize: 14, flexShrink: 0 }}>✨</span>
           <span style={{ fontSize: 13, color: "#E9D5FF", lineHeight: 1.45, fontWeight: 500 }}>
@@ -1722,6 +1742,16 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   const today = localDate();
   const todayMs = Date.parse(today + 'T00:00:00Z');
   const sevenDaysAgoMs = todayMs - 7 * 86400000;
+  // Shared tooltip for every chart element in the pane. Position is anchored
+  // to the hovered element's bounding rect (above + centered) so it stays put
+  // even as the cursor wiggles inside the element — feels snappier than the
+  // ~1s native title-attribute delay.
+  const [tip, setTip] = useState(null);
+  const showTip = (e, content) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setTip({ content, x: r.left + r.width / 2, y: r.top - 4 });
+  };
+  const hideTip = () => setTip(null);
   const muscleInfo = EXERCISE_MUSCLES[exercise.name] || { primary: [], secondary: [] };
 
   // Working sets per primary muscle of this exercise, last 7 days inclusive
@@ -1944,12 +1974,15 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
                 <div style={{ height: 3, background: "rgba(255,255,255,0.05)", borderRadius: 1 }} />
               ) : (
                 d.events.map((ev, j) => (
-                  <div key={j} title={`${ev.exercise} · ${ev.weight}lb × ${ev.reps} · ${ev.date}`} style={{
-                    height: SLICE_H,
-                    borderRadius: 2,
-                    cursor: "default",
-                    ...sliceStyle(ev, d.isToday),
-                  }} />
+                  <div key={j}
+                    onMouseEnter={(e) => showTip(e, `${ev.exercise} · ${ev.weight}lb × ${ev.reps} · ${ev.date}`)}
+                    onMouseLeave={hideTip}
+                    style={{
+                      height: SLICE_H,
+                      borderRadius: 2,
+                      cursor: "default",
+                      ...sliceStyle(ev, d.isToday),
+                    }} />
                 ))
               )}
             </div>
@@ -2035,7 +2068,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
     const dayX = (i) => padX + (i * (w - 2 * padX)) / 6;
     const yFor = (v) => h - padY - ((v - min) / range) * (h - 2 * padY);
     const pts = days.map((d, i) => d.value != null && d.value > 0 ? {
-      x: dayX(i), y: yFor(d.value), value: d.value, isToday: d.isToday,
+      x: dayX(i), y: yFor(d.value), value: d.value, isToday: d.isToday, date: d.date,
     } : null);
     const presentPts = pts.filter(Boolean);
     const linePath = presentPts.length > 1
@@ -2077,10 +2110,17 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
               strokeWidth={d.isToday ? 1 : 0.5}
               strokeDasharray={d.isToday ? "" : "2 3"} />
           ))}
-          {/* Dots per actual data point */}
+          {/* Dots per actual data point — invisible bigger hit-area sits
+              behind the visible dot so the hover tooltip is easier to land. */}
           {presentPts.map((p, i) => (
-            <circle key={`p${i}`} cx={p.x} cy={p.y} r={p.isToday ? 3.2 : 2.4} fill={color}
-              stroke={p.isToday ? "rgba(11,15,20,0.9)" : "none"} strokeWidth={p.isToday ? 1 : 0} />
+            <g key={`p${i}`}>
+              <circle cx={p.x} cy={p.y} r={p.isToday ? 3.2 : 2.4} fill={color}
+                stroke={p.isToday ? "rgba(11,15,20,0.9)" : "none"} strokeWidth={p.isToday ? 1 : 0} />
+              <circle cx={p.x} cy={p.y} r="8" fill="transparent"
+                style={{ cursor: "default" }}
+                onMouseEnter={(e) => showTip(e, `${p.date} · ${fmt(p.value)}${p.isToday ? " (today)" : ""}`)}
+                onMouseLeave={hideTip} />
+            </g>
           ))}
         </svg>
         <div style={{ display: "flex", gap: 3, marginTop: 5 }}>
@@ -2190,6 +2230,92 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
           </div>
         );
       })()}
+      {tip && (
+        <div style={{
+          position: "fixed",
+          left: tip.x, top: tip.y,
+          transform: "translate(-50%, -100%)",
+          background: "#0F1722",
+          color: T.strong,
+          padding: "6px 10px",
+          borderRadius: 6,
+          fontFamily: T.mono, fontSize: 11, fontWeight: 700,
+          border: "1px solid rgba(255,255,255,0.14)",
+          boxShadow: "0 8px 22px rgba(0,0,0,0.55)",
+          pointerEvents: "none",
+          zIndex: 1000,
+          whiteSpace: "nowrap",
+          letterSpacing: 0.2,
+        }}>{tip.content}</div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MotivationsList — desktop-only third column. Renders all completed-exercise
+// AI motivation messages, newest at the top. Hidden on mid/narrow viewports
+// (<1240px) where the inline chips inside each ExerciseCard render instead.
+// ─────────────────────────────────────────────────────────────────────────────
+function MotivationsList({ exercises, motivations }) {
+  // Walk exercises in workout order; surface those with a motivation set
+  // AND at least one completed working set (matches the inline-chip render
+  // condition so what you see on mobile is what you see on desktop).
+  const entries = exercises
+    .map((e, i) => ({
+      ex: e, idx: i,
+      msg: motivations[e.id],
+      done: !e.sets.find(s => s.active) && e.sets.every(s => s.completed),
+      anyDone: e.sets.some(s => s.completed),
+    }))
+    .filter(x => x.msg && x.done && x.anyDone)
+    .reverse(); // newest finished first
+
+  const empty = entries.length === 0;
+  return (
+    <div style={{
+      padding: 14, borderRadius: 14,
+      background: T.cardBg, border: `1px solid ${T.cardBorder}`,
+      color: T.text,
+    }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0 }}>
+          ✨ NOTES
+        </span>
+        {!empty && (
+          <span style={{ color: T.disabled, fontFamily: T.mono, fontSize: 10 }}>
+            {entries.length}
+          </span>
+        )}
+      </div>
+      {empty ? (
+        <div style={{ color: T.disabled, fontFamily: T.mono, fontSize: 11, textAlign: "center", padding: "16px 0", lineHeight: 1.5 }}>
+          Finish an exercise<br/>to see AI takes here
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {entries.map(({ ex, msg }) => (
+            <div key={ex.id} style={{
+              padding: "10px 12px", borderRadius: 10,
+              background: msg === "__loading__"
+                ? "rgba(255,255,255,0.02)"
+                : "linear-gradient(135deg, rgba(192,132,252,0.10), rgba(96,165,250,0.10))",
+              border: msg === "__loading__"
+                ? `1px dashed ${T.cardBorder}`
+                : "1px solid rgba(192,132,252,0.2)",
+            }}>
+              <div style={{
+                color: T.faint, fontFamily: T.mono,
+                fontSize: 9, fontWeight: 800, letterSpacing: 0.6,
+                textTransform: "uppercase", marginBottom: 4,
+              }}>{ex.name}</div>
+              <div style={{ color: "#E9D5FF", fontSize: 12.5, lineHeight: 1.45, fontWeight: 500 }}>
+                {msg === "__loading__" ? <span style={{ opacity: 0.55, color: T.muted }}>thinking…</span> : msg}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2961,11 +3087,15 @@ function App() {
   })();
 
   return (
-    // Two-column on desktop (.session-shell media query), mobile-first single
-    // column below the breakpoint. Outer div takes the scroll; the stats pane
-    // sticks within that scroll context.
+    // 3-column on wide desktop (≥1240px): motivations left, exercises center,
+    // stats right. 2-column at ≥960px: just exercises + stats. Mobile keeps
+    // single column. .session-shell + media queries handle the responsive
+    // visibility. Outer div takes the scroll; both side panes are sticky.
     <div style={{ height: "100%", overflowY: "auto", background: T.page }}>
       <div className="session-shell">
+      <aside className="motivations-pane-wrap">
+        <MotivationsList exercises={exercises} motivations={motivations} />
+      </aside>
       <div className="session-main">
       <Header
         workout={workout}
