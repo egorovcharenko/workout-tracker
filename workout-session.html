@@ -2456,50 +2456,78 @@ function App() {
       if (m) muscles.push(...(m.primary || []), ...(m.secondary || []));
     });
 
-    // PR + trend signals, per sub-exercise. Pulls from
-    // /api/1rm-history (statHistory) which returns {orm, reps, vol, wt}
-    // keyed by exercise name, each a list of {date, <metric>} entries.
+    // PR + trend signals, per sub-exercise.
     //
-    // NOTE: we used to .filter(d => d.date !== today) to "exclude the current
-    // in-progress session". That was wrong on two counts:
-    //   1. statHistory is a boot-time snapshot — it CAN'T contain the
-    //      in-progress session's data (page hasn't refetched).
-    //   2. If the user did a partial earlier session today and started a
-    //      fresh one, the today-filter nuked the earlier session too. The
-    //      `previous` block (which has no such filter) would still surface
-    //      that earlier session, so the LLM saw "1 working set on May 13"
-    //      from `previous` AND "sessions_in_history: 0" from prs, called
-    //      out the contradiction, and produced a confused message.
-    // Dropping the filter aligns both data sources.
-    // Detect a global stats-fetch failure: if /api/1rm-history timed out on
-    // a Vercel cold-start (10s budget, retried once but still possible), the
-    // statHistory map is empty across all exercises. Sending the prs array
-    // anyway would produce `sessions_in_history: 0` for every lift — Claude
-    // would then "trust the database" and write a confused message
-    // contradicting `previous` (built from /api/history, which usually
-    // succeeds independently).
-    const statsFailed = Object.keys(statHistory.orm || {}).length === 0;
+    // BULLETPROOF DESIGN — never produce numbers that contradict `previous`:
+    // the historical aggregates here are computed PRIMARILY from `history`
+    // (the same set-level data `previous` is built from), and only AUGMENTED
+    // by statHistory if that loaded. Previously we leaned on statHistory
+    // alone — when its fetch timed out on a Vercel cold start, every lift
+    // got `sessions_in_history: 0` while `previous` clearly listed recent
+    // sessions, and Claude would write "history says zero sessions but I
+    // see you rowing 50s on May 18 and 20" — confused, contradictory.
+    //
+    // Now: history is the floor. If history shows any session for this lift,
+    // sessions_in_history >= 1, full stop. statHistory only ever raises the
+    // floor (it may contain sessions older than the history(20) window).
+    // The two sources can't disagree because they share a parent fact.
+    const statsLoaded = Object.keys(statHistory.orm || {}).length > 0;
+    const ormOf = (w, r) => r > 1 ? w * (1 + r / 30) : w;
 
     const prs = subNames.map(subName => {
+      // Step 1 — derive everything we can from `history` (set-level truth).
+      const histSessions = (history || []).filter(s =>
+        (s.sets || []).some(st => st.exercise === subName && st.set_type === 'working')
+      );
+      let histMaxWt = 0, histMaxReps = 0, histMaxOrm = 0;
+      // Per-session aggregates rebuilt from set rows so we can seed the
+      // timeseries even when statHistory is empty.
+      const histByDate = {};
+      histSessions.forEach(sess => {
+        let mw = 0, mr = 0, mo = 0, sv = 0;
+        sess.sets.forEach(st => {
+          if (st.exercise !== subName || st.set_type !== 'working') return;
+          const w = +st.weight_lb || 0;
+          const r = parseInt(st.reps) || 0;
+          if (w > mw) mw = w; if (mw > histMaxWt) histMaxWt = mw;
+          if (r > mr) mr = r; if (mr > histMaxReps) histMaxReps = mr;
+          if (w > 0 && r > 0) {
+            const o = ormOf(w, r);
+            if (o > mo) mo = o;
+            if (mo > histMaxOrm) histMaxOrm = mo;
+            sv += w * r;
+          }
+        });
+        histByDate[sess.date] = { date: sess.date, orm: mo, wt: mw, reps: mr, vol: sv };
+      });
+
+      // Step 2 — augment with statHistory if it loaded. Same-date wins go
+      // to statHistory (more authoritative for orm calc); new dates from
+      // statHistory expand the window past history(20).
       const ormHist  = ((statHistory.orm  || {})[subName] || []);
       const wtHist   = ((statHistory.wt   || {})[subName] || []);
       const repsHist = ((statHistory.reps || {})[subName] || []);
       const volHist  = ((statHistory.vol  || {})[subName] || []);
-      // Per-sub coherence check: if stats are empty for this sub AND
-      // `previous` shows the user has done it recently, the stats fetch
-      // didn't include this lift — drop the prs entry rather than feed
-      // the model contradictory zeros. The model still has `current` and
-      // `previous` to reason from.
-      const allEmpty = !ormHist.length && !wtHist.length && !repsHist.length && !volHist.length;
-      const prevHasIt = (previous || []).some(p => (p.sets || []).some(s => s.sub === subName));
-      if (allEmpty && (statsFailed || prevHasIt)) return null;
-      const prevMaxOrm  = ormHist.length  ? Math.max(...ormHist.map(d => +d.orm  || 0)) : 0;
-      const prevMaxWt   = wtHist.length   ? Math.max(...wtHist.map(d => +d.wt    || 0)) : 0;
-      const prevMaxReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps|| 0)) : 0;
+      const statMaxOrm  = ormHist.length  ? Math.max(...ormHist.map(d => +d.orm  || 0)) : 0;
+      const statMaxWt   = wtHist.length   ? Math.max(...wtHist.map(d => +d.wt    || 0)) : 0;
+      const statMaxReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps|| 0)) : 0;
+      const byDate = { ...histByDate };
+      ormHist.forEach (d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).orm  = +d.orm  || 0; });
+      wtHist.forEach  (d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).wt   = +d.wt   || 0; });
+      repsHist.forEach(d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).reps = +d.reps || 0; });
+      volHist.forEach (d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).vol  = +d.vol  || 0; });
+
+      const prevMaxOrm  = Math.max(histMaxOrm,  statMaxOrm);
+      const prevMaxWt   = Math.max(histMaxWt,   statMaxWt);
+      const prevMaxReps = Math.max(histMaxReps, statMaxReps);
+      const allHist = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+
+      // Step 3 — drop the entry only if we genuinely have zero data from
+      // BOTH sources. Otherwise sessions_in_history reflects union truth.
+      if (allHist.length === 0) return null;
 
       // Current session aggregates from the exercise we just finished.
       const workingSets = exercise.sets.filter(s => s.kind === "work" && s.completed);
-      const ormOf = (w, r) => r > 1 ? w * (1 + r / 30) : w;
       const curWt   = workingSets.reduce((m, s) => Math.max(m, (() => {
         const bs = (s.bands || []).reduce((a, b) => a + b, 0);
         return exercise.assist ? Math.max(0, (s.bodyweight || 0) - bs)
@@ -2527,21 +2555,11 @@ function App() {
         return sum + (reps > 0 && w > 0 ? w * reps : 0);
       }, 0);
 
-      // Chronological timeseries — newest LAST. Cap to 12 sessions to keep
-      // the prompt compact while still showing the long arc.
-      const byDate = {};
-      ormHist.forEach (d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).orm  = +d.orm  || 0; });
-      wtHist.forEach  (d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).wt   = +d.wt   || 0; });
-      repsHist.forEach(d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).reps = +d.reps || 0; });
-      volHist.forEach (d => { (byDate[d.date] = byDate[d.date] || { date: d.date }).vol  = +d.vol  || 0; });
-      const allHist = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
       const trimmed = allHist.slice(-12);
 
       // Trends / consistency.
-      const lastDate = allHist.length ? allHist[allHist.length - 1].date : null;
-      const daysSinceLast = lastDate
-        ? Math.round((todayMs - Date.parse(lastDate + 'T00:00:00Z')) / 86400000)
-        : null;
+      const lastDate = allHist[allHist.length - 1].date;
+      const daysSinceLast = Math.round((todayMs - Date.parse(lastDate + 'T00:00:00Z')) / 86400000);
       const recent = allHist.filter(h => todayMs - Date.parse(h.date + 'T00:00:00Z') <= 28 * 86400000);
       const prior  = allHist.filter(h => {
         const ago = todayMs - Date.parse(h.date + 'T00:00:00Z');
@@ -2562,13 +2580,23 @@ function App() {
         current_volume: curVol,
         sessions_in_history: allHist.length,
         days_since_last_session: daysSinceLast,
-        returning_after_layoff: daysSinceLast != null && daysSinceLast >= 14,
+        returning_after_layoff: daysSinceLast >= 14,
         vol_trend_pct_4wk_vs_prior: volTrendPct,
         reps_at_current_weight_improved: repsAtCurWtImproved,
         tied_previous_best_orm: !!(curOrm && prevMaxOrm && curOrm === prevMaxOrm),
         history_timeseries: trimmed,
+        // Tell the server whether this entry's long-arc fields (volTrendPct,
+        // history_timeseries beyond ~20 sessions) are limited to the
+        // recent-history window vs. backed by the full aggregated stats.
+        stats_source: statsLoaded ? "full" : "recent_history_only",
       };
     }).filter(Boolean);
+
+    // statsFailed is now an informational flag — the prs entries themselves
+    // are no longer compromised when stats fail, because they fall back to
+    // history. Kept on the payload so the server can pass it through to
+    // the model as additional context.
+    const statsFailed = !statsLoaded;
 
     return {
       session_id: sid,

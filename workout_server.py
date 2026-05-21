@@ -674,7 +674,13 @@ def call_claude_motivate(payload):
         "is toast\", \"you're cooking\") welcome when they fit. No fitness "
         "clichés (\"crush it\", \"beast mode\", \"no pain no gain\").\n"
         "7. 1–2 emojis max, only if they add something. None is fine.\n"
-        "8. 2–3 sentences. Hard cap 55 words."
+        "8. 2–3 sentences. Hard cap 55 words.\n"
+        "9. HARD RULE — coherence with the data: NEVER say 'no history', "
+        "'first time', 'zero sessions', or 'database says nothing' if the "
+        "`previous` array shows even one prior session of this lift. If the "
+        "two seem to disagree, trust `previous` and write from those concrete "
+        "set numbers. Don't call out the data as confusing or self-"
+        "contradicting — just use what's there."
     )
     # The client omits prs entries (and sets stats_loaded=false) when the
     # aggregate-stats fetch failed on its end. Tell the model explicitly so
