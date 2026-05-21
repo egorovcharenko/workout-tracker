@@ -1794,10 +1794,33 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   ];
 
   const stat = statHistory || {};
-  const ormHistRaw = (stat.orm || {})[exercise.name] || [];
-  const wtHist  = (stat.wt  || {})[exercise.name] || [];
-  const repsHist = (stat.reps || {})[exercise.name] || [];
-  const volHistRaw = (stat.vol  || {})[exercise.name] || [];
+  // Sibling-pooling: when the current lift is brand new (just swapped in,
+  // never logged), per-exercise stats are empty — but the user has likely
+  // been training the same muscle group via a swap-group sibling. Surface
+  // the sibling's data with a label note so the pane stays useful instead
+  // of saying "no data" for a movement the user has done many times.
+  const pickSiblingForStats = () => {
+    const grp = getSwapGroup(exercise.name);
+    if (!grp) return null;
+    const own = ((stat.orm || {})[exercise.name] || []).length
+              + ((stat.vol || {})[exercise.name] || []).length
+              + ((stat.wt  || {})[exercise.name] || []).length
+              + ((stat.reps|| {})[exercise.name] || []).length;
+    if (own > 0) return null;  // we have our own data, no need to borrow
+    let best = null, bestCount = 0;
+    for (const member of grp) {
+      if (member.name === exercise.name) continue;
+      const cnt = ((stat.orm || {})[member.name] || []).length;
+      if (cnt > bestCount) { bestCount = cnt; best = member.name; }
+    }
+    return bestCount > 0 ? best : null;
+  };
+  const sibling = pickSiblingForStats();
+  const lookupName = sibling || exercise.name;
+  const ormHistRaw = (stat.orm || {})[lookupName] || [];
+  const wtHist  = (stat.wt  || {})[lookupName] || [];
+  const repsHist = (stat.reps || {})[lookupName] || [];
+  const volHistRaw = (stat.vol  || {})[lookupName] || [];
   // Compute today's 1RM-est + total volume from the in-progress exercises[]
   // state so the sparkline reflects the user's current session immediately —
   // without it the rightmost dot can't appear until /api/1rm-history refetches
@@ -1818,10 +1841,14 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
     }
   });
   const chartTodayDateStr = new Date(todayMs).toISOString().slice(0, 10);
-  const ormHist = todayOrm > 0
+  // Only merge today's in-progress values when we're showing THIS lift's
+  // own data. If we're borrowing a sibling's history (e.g. Bench Dips
+  // pulling Band Tricep Pushdowns), today's Bench Dips reps shouldn't
+  // pollute the Pushdowns timeline.
+  const ormHist = (!sibling && todayOrm > 0)
     ? [...ormHistRaw.filter(d => d.date !== chartTodayDateStr), { date: chartTodayDateStr, orm: todayOrm }]
     : ormHistRaw;
-  const volHist = todayVol > 0
+  const volHist = (!sibling && todayVol > 0)
     ? [...volHistRaw.filter(d => d.date !== chartTodayDateStr), { date: chartTodayDateStr, vol: todayVol }]
     : volHistRaw;
   const bestOrm = ormHist.length ? Math.max(...ormHist.map(d => +d.orm || 0)) : 0;
@@ -2120,7 +2147,12 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
         </Section>
       )}
 
-      <Section label="PROGRESS · LAST 7 DAYS">
+      <Section label={sibling ? `PROGRESS · LAST 7 DAYS · ${sibling.toUpperCase()}` : "PROGRESS · LAST 7 DAYS"}>
+        {sibling && (
+          <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 9.5, marginBottom: 6, lineHeight: 1.4 }}>
+            {exercise.name} is new — showing your <span style={{ color: T.muted, fontWeight: 700 }}>{sibling}</span> history (same swap group).
+          </div>
+        )}
         <Sparkline data={ormHist} valueKey="orm" color="#60A5FA" label="1RM EST" fmt={v => `${Math.round(v)} lb`} />
         <Sparkline data={volHist} valueKey="vol" color="#34D399" label="VOLUME" fmt={v => `${Math.round(v).toLocaleString()} lb`} />
       </Section>
