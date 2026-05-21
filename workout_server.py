@@ -676,9 +676,24 @@ def call_claude_motivate(payload):
         "7. 1–2 emojis max, only if they add something. None is fine.\n"
         "8. 2–3 sentences. Hard cap 55 words."
     )
+    # The client omits prs entries (and sets stats_loaded=false) when the
+    # aggregate-stats fetch failed on its end. Tell the model explicitly so
+    # it doesn't write "no history exists" while the `previous` array clearly
+    # shows recent sessions — that mismatch produced confused/contradictory
+    # messages in the past.
+    stats_loaded = payload.get("stats_loaded", True)
+    stats_caveat = (
+        ""
+        if stats_loaded
+        else "\nNOTE: aggregated PR/trend data was unavailable for this request. "
+             "Do NOT claim 'no history' or 'first time doing this' — `previous` "
+             "and `current` below are accurate; just don't quote PR percentages "
+             "or session counts you can't see. Write from set-level evidence.\n"
+    )
     user_prompt = (
         f"Exercise just finished: {payload.get('exercise')}\n"
-        f"Muscles worked: {', '.join(payload.get('muscles') or []) or 'unknown'}\n\n"
+        f"Muscles worked: {', '.join(payload.get('muscles') or []) or 'unknown'}\n"
+        f"{stats_caveat}\n"
         f"Per sub-exercise data (PR flags + multi-week trend signals + "
         f"chronological history_timeseries — scan all of it before deciding "
         f"what to celebrate):\n"

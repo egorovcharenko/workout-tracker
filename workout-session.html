@@ -2471,11 +2471,28 @@ function App() {
     //      from `previous` AND "sessions_in_history: 0" from prs, called
     //      out the contradiction, and produced a confused message.
     // Dropping the filter aligns both data sources.
+    // Detect a global stats-fetch failure: if /api/1rm-history timed out on
+    // a Vercel cold-start (10s budget, retried once but still possible), the
+    // statHistory map is empty across all exercises. Sending the prs array
+    // anyway would produce `sessions_in_history: 0` for every lift — Claude
+    // would then "trust the database" and write a confused message
+    // contradicting `previous` (built from /api/history, which usually
+    // succeeds independently).
+    const statsFailed = Object.keys(statHistory.orm || {}).length === 0;
+
     const prs = subNames.map(subName => {
       const ormHist  = ((statHistory.orm  || {})[subName] || []);
       const wtHist   = ((statHistory.wt   || {})[subName] || []);
       const repsHist = ((statHistory.reps || {})[subName] || []);
       const volHist  = ((statHistory.vol  || {})[subName] || []);
+      // Per-sub coherence check: if stats are empty for this sub AND
+      // `previous` shows the user has done it recently, the stats fetch
+      // didn't include this lift — drop the prs entry rather than feed
+      // the model contradictory zeros. The model still has `current` and
+      // `previous` to reason from.
+      const allEmpty = !ormHist.length && !wtHist.length && !repsHist.length && !volHist.length;
+      const prevHasIt = (previous || []).some(p => (p.sets || []).some(s => s.sub === subName));
+      if (allEmpty && (statsFailed || prevHasIt)) return null;
       const prevMaxOrm  = ormHist.length  ? Math.max(...ormHist.map(d => +d.orm  || 0)) : 0;
       const prevMaxWt   = wtHist.length   ? Math.max(...wtHist.map(d => +d.wt    || 0)) : 0;
       const prevMaxReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps|| 0)) : 0;
@@ -2551,12 +2568,13 @@ function App() {
         tied_previous_best_orm: !!(curOrm && prevMaxOrm && curOrm === prevMaxOrm),
         history_timeseries: trimmed,
       };
-    });
+    }).filter(Boolean);
 
     return {
       session_id: sid,
       exercise: exercise.name,
       muscles: [...new Set(muscles)],
+      stats_loaded: !statsFailed,
       current,
       previous,
       prs,
