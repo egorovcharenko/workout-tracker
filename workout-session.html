@@ -339,6 +339,12 @@ const SWAP_GROUPS = [
     { name: "Band Tricep Pushdowns", sets: 3, reps: "12-15", notes: "Elbows glued to ribs, squeeze at bottom", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", rest: 60 },
     { name: "Bench Dips", sets: 3, reps: "10-15", notes: "Assisted tricep dip — hands on bench behind you, feet on floor, lower until elbows ~90°. Drape a band across your lap / over your knees for added resistance; leave bands empty for pure bodyweight.", equipment: "band", video: "https://www.youtube.com/shorts/0326dy_-CzM", rest: 60 },
   ],
+  // Squat variants — quad/glute compound. bandAddon on both so a band can
+  // stack on the DB load for extra resistance.
+  [
+    { name: "Goblet Squat", sets: 3, warmups: 2, reps: "10-12", notes: "Hold DB at chest, sit deep. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, rest: 120 },
+    { name: "Bulgarian Split Squat", sets: 3, warmups: 2, reps: "8-10", notes: "Rear foot on bench, DB in each hand — 8-10 per leg, controlled. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/2C-uNgKwPLE", bandAddon: true, rest: 120 },
+  ],
 ];
 function getSwapGroup(exerciseName) {
   return SWAP_GROUPS.find(g => g.some(e => e.name === exerciseName)) || null;
@@ -1832,25 +1838,64 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   const pickSiblingForStats = () => {
     const grp = getSwapGroup(exercise.name);
     if (!grp) return null;
-    const own = ((stat.orm || {})[exercise.name] || []).length
-              + ((stat.vol || {})[exercise.name] || []).length
-              + ((stat.wt  || {})[exercise.name] || []).length
-              + ((stat.reps|| {})[exercise.name] || []).length;
-    if (own > 0) return null;  // we have our own data, no need to borrow
+    // "Own data" = either an aggregated-stats entry OR any history session
+    // that logged this lift. Checking history too prevents borrowing a
+    // sibling for a lift that's only missing from the (cold-start-prone)
+    // statHistory but is clearly present in the history endpoint.
+    const statOwn = ((stat.orm || {})[exercise.name] || []).length;
+    const histOwn = (history || []).some(s =>
+      (s.sets || []).some(st => st.exercise === exercise.name && st.set_type === 'working'));
+    if (statOwn > 0 || histOwn) return null;
     let best = null, bestCount = 0;
     for (const member of grp) {
       if (member.name === exercise.name) continue;
-      const cnt = ((stat.orm || {})[member.name] || []).length;
+      const statCnt = ((stat.orm || {})[member.name] || []).length;
+      const histCnt = (history || []).filter(s =>
+        (s.sets || []).some(st => st.exercise === member.name && st.set_type === 'working')).length;
+      const cnt = statCnt + histCnt;
       if (cnt > bestCount) { bestCount = cnt; best = member.name; }
     }
     return bestCount > 0 ? best : null;
   };
   const sibling = pickSiblingForStats();
   const lookupName = sibling || exercise.name;
-  const ormHistRaw = (stat.orm || {})[lookupName] || [];
-  const wtHist  = (stat.wt  || {})[lookupName] || [];
-  const repsHist = (stat.reps || {})[lookupName] || [];
-  const volHistRaw = (stat.vol  || {})[lookupName] || [];
+  // Per-session orm / vol / wt / reps for this lift, derived PRIMARILY from
+  // `history` (set-level truth, same source the per-muscle chart uses) so the
+  // PROGRESS sparklines + PRs survive a /api/1rm-history cold-start failure.
+  // statHistory only AUGMENTS — it can extend the window past history(20),
+  // never replace it. Same bulletproof pattern as the motivate payload.
+  const histByDate = {};
+  (history || []).forEach(sess => {
+    if (!sess.date) return;
+    const sets = (sess.sets || []).filter(st => st.exercise === lookupName && st.set_type === 'working');
+    if (!sets.length) return;
+    let mo = 0, sv = 0, mw = 0, mr = 0;
+    sets.forEach(st => {
+      const w = +st.weight_lb || 0, r = parseInt(st.reps) || 0;
+      if (w > mw) mw = w;
+      if (r > mr) mr = r;
+      if (w > 0 && r > 0) {
+        const o = r > 1 ? w * (1 + r / 30) : w;
+        if (o > mo) mo = o;
+        sv += w * r;
+      }
+    });
+    histByDate[sess.date] = { date: sess.date, orm: mo, vol: sv, wt: mw, reps: mr };
+  });
+  // Merge: statHistory entry per date first, then history overrides (history
+  // is set-level and more authoritative for the recent window).
+  const mergeMetric = (statArr, key) => {
+    const byDate = {};
+    (statArr || []).forEach(d => { byDate[d.date] = +d[key] || 0; });
+    Object.values(histByDate).forEach(h => { byDate[h.date] = h[key]; });
+    return Object.entries(byDate)
+      .map(([date, v]) => ({ date, [key]: v }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  };
+  const ormHistRaw = mergeMetric((stat.orm || {})[lookupName], "orm");
+  const wtHist     = mergeMetric((stat.wt  || {})[lookupName], "wt");
+  const repsHist   = mergeMetric((stat.reps|| {})[lookupName], "reps");
+  const volHistRaw = mergeMetric((stat.vol || {})[lookupName], "vol");
   // Compute today's 1RM-est + total volume from the in-progress exercises[]
   // state so the sparkline reflects the user's current session immediately —
   // without it the rightmost dot can't appear until /api/1rm-history refetches
