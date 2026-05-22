@@ -452,16 +452,20 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
           templateExIdx: exIdx,
           subIdx,
           name: sub.name,
-          mode: undefined,
+          // Assist subs (e.g. Bench Dips swapped into a superset) need the
+          // bodyweight mode + must NOT be flagged bandsOnly — otherwise the
+          // active block hides the bodyweight stepper and treats Σbands as
+          // the load. Mirror the standalone branch exactly.
+          mode: subIsAssist ? "bodyweight" : undefined,
           superset: letter,
           supersetPos: subIdx + 1,
           repRange: sub.reps,
           note: sub.notes || ex.notes || "",
           rest: ex.rest || 60,
           grips: sub.grips ? sub.grips.map(g => ({ id: g, ...GRIP_LABELS[g] })) : null,
-          isBandsOnly: sub.equipment === "band" && !sub.bandAddon,
+          isBandsOnly: subIsBandOnly,
           bandAddon: !!sub.bandAddon,
-          assist: !!sub.assist,
+          assist: subIsAssist,
           session: ex.session || null,
           sets,
         });
