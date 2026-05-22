@@ -1,7 +1,13 @@
 workouts.db
 workouts.db.bak
+workout.db
 .fuse_hidden*
 __pycache__/
 *.pyc
 .vercel
 .env*.local
+node_modules/
+sports-modern/
+SESSION_HANDOFF.md
+workout_history.json
+workout_history.md
