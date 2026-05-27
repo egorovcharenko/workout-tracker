@@ -1011,7 +1011,34 @@ const Sparkline = ({ exerciseName, data, valueKey, color, label, fmt, showTip, h
 
   const futureDaysCount = 3;
   if (last > 0 && (valueKey === "orm" || valueKey === "vol")) {
-    const targetVal = last * 1.10;
+    // Calculate extrapolation slope if there are enough historical data points
+    let slope = 0;
+    const histDays = days.filter(d => d.value != null && d.value > 0);
+    if (histDays.length >= 2) {
+      const N = histDays.length;
+      let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+      days.forEach((d, idx) => {
+        if (d.value != null && d.value > 0) {
+          sumX += idx;
+          sumY += d.value;
+          sumXY += idx * d.value;
+          sumXX += idx * idx;
+        }
+      });
+      const denom = N * sumXX - sumX * sumX;
+      if (denom !== 0) {
+        const calculatedSlope = (N * sumXY - sumX * sumY) / denom;
+        // Cap the slope to be realistic:
+        // - Min: 0 (keep flat if trend is negative; don't project declines)
+        // - Max: 1% of last value per day (progressive, realistic growth)
+        const maxDailyIncrement = last * 0.01;
+        slope = Math.max(0, Math.min(calculatedSlope, maxDailyIncrement));
+      }
+    } else {
+      // Fallback for N < 2: project a very conservative 0.1% daily increase
+      slope = last * 0.001;
+    }
+
     for (let i = 1; i <= futureDaysCount; i++) {
       const ms = todayMs + i * DAY_MS;
       const d = new Date(ms);
@@ -1020,7 +1047,7 @@ const Sparkline = ({ exerciseName, data, valueKey, color, label, fmt, showTip, h
         label: String(d.getUTCDate()),
         isToday: false,
         isFuture: true,
-        value: last + (targetVal - last) * (i / futureDaysCount),
+        value: last + slope * i,
       });
     }
   }
@@ -1099,6 +1126,8 @@ const Sparkline = ({ exerciseName, data, valueKey, color, label, fmt, showTip, h
         ))}
         {presentPts.map((p, i) => {
           const isLastProjected = p.isFuture && i === presentPts.length - 1;
+          const pctInfo = valueKey === "orm" ? getStrengthPercentile(exerciseName, p.value) : null;
+          const pctStr = pctInfo ? ` (${pctInfo.percentile}%)` : "";
           return (
             <g key={`p${i}`}>
               {p.isFuture ? (
@@ -1117,13 +1146,13 @@ const Sparkline = ({ exerciseName, data, valueKey, color, label, fmt, showTip, h
               <circle cx={p.x} cy={p.y} r="8" fill="transparent"
                 style={{ cursor: "default" }}
                 onMouseEnter={(e) => showTip(e, p.isFuture
-                  ? `Projected trajectory: ${fmt(p.value)}`
-                  : `${p.date} · ${fmt(p.value)}${p.isToday ? " (today)" : ""}`
+                  ? `Projected: ${fmt(p.value)}${pctStr}`
+                  : `${p.date} · ${fmt(p.value)}${pctStr}${p.isToday ? " (today)" : ""}`
                 )}
                 onMouseLeave={hideTip} />
               {isLastProjected && (
                 <text x={p.x} y={p.y - 7} textAnchor="end" fill={color} style={{ fontSize: 8.5, fontFamily: T.mono, fontWeight: 800 }}>
-                  🎯 {fmt(p.value)}
+                  🎯 {fmt(p.value)}{pctStr}
                 </text>
               )}
             </g>
