@@ -945,23 +945,7 @@ const VolumeBar = ({ exerciseName, muscle, events, isPrimary, showTip, hideTip }
           }}>{d.label}</span>
         ))}
       </div>
-      {exerciseOrder.length > 0 && (
-        <div style={{ display: "flex", gap: 10, marginTop: 7, flexWrap: "wrap" }}>
-          {exerciseOrder.map((name, i) => (
-            <div key={name} style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
-              <div style={{
-                width: 9, height: 9, borderRadius: 2,
-                background: `hsl(${exerciseHue[name]}, 75%, 50%)`,
-                flexShrink: 0,
-              }} />
-              <span style={{
-                color: T.muted, fontFamily: T.mono, fontSize: 9.5, fontWeight: 600,
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              }}>{name}</span>
-            </div>
-          ))}
-        </div>
-      )}
+
     </div>
   );
 };
