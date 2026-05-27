@@ -80,7 +80,7 @@ const STRENGTH_STANDARDS = {
   "Single-Leg DB RDL": { beg: 20, nov: 35, int: 55, adv: 80, elite: 110 },
   "Dumbbell Bicep Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
   "Dumbbell Hammer Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
-  "Bench Dips": { beg: 0, nov: 20, int: 50, adv: 90, elite: 140 },
+  "Bench Dips": { beg: 100, nov: 130, int: 160, adv: 190, elite: 220 },
   "Assisted Pull-Ups": { beg: 90, nov: 125, int: 160, adv: 200, elite: 245 },
   "Band Row": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
   "Band Squat": { beg: 25, nov: 45, int: 75, adv: 105, elite: 135 },
