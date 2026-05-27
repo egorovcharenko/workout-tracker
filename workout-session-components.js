@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef } = React;
+var { useState, useEffect, useRef } = React;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UI primitives & Presentation Components

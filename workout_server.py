@@ -410,13 +410,28 @@ def get_history(limit=20):
 
 
 def get_last_session(workout_name):
-    """Get the most recent session data for a workout (for hints)."""
+    """Get the most recent session data for a workout (for hints), excluding the active today's session if it exists."""
     conn = get_db()
     c = conn.cursor()
+    # 1. Find today's session ID (if any)
     c.execute(
-        "SELECT id FROM sessions WHERE workout_name = ? ORDER BY date DESC, id DESC LIMIT 1",
-        (workout_name,),
+        "SELECT id FROM sessions WHERE workout_name = ? AND date >= ? ORDER BY id DESC LIMIT 1",
+        (workout_name, _yesterday()),
     )
+    today_row = c.fetchone()
+    today_session_id = today_row["id"] if today_row else None
+
+    # 2. Fetch the last session, excluding today's session if it exists
+    if today_session_id:
+        c.execute(
+            "SELECT id FROM sessions WHERE workout_name = ? AND id != ? ORDER BY date DESC, id DESC LIMIT 1",
+            (workout_name, today_session_id),
+        )
+    else:
+        c.execute(
+            "SELECT id FROM sessions WHERE workout_name = ? ORDER BY date DESC, id DESC LIMIT 1",
+            (workout_name,),
+        )
     row = c.fetchone()
     if not row:
         conn.close()
@@ -431,22 +446,40 @@ def get_last_session(workout_name):
 
 
 def get_exercise_hints():
-    """Get most recent weight/reps for every exercise across ALL workouts."""
+    """Get most recent weight/reps for every exercise across ALL workouts, excluding today's active sessions."""
     conn = get_db()
     c = conn.cursor()
-    # For each exercise+set_type+set_number combo, get the most recent entry
-    c.execute('''
-        SELECT s2.exercise, s2.set_type, s2.set_number, s2.weight_lb, s2.reps, s2.bands_json, s2.grip
-        FROM sets s2
-        INNER JOIN sessions sess ON sess.id = s2.session_id
-        WHERE s2.id IN (
-            SELECT s1.id FROM sets s1
-            INNER JOIN sessions ss ON ss.id = s1.session_id
-            WHERE s1.exercise = s2.exercise AND s1.set_type = s2.set_type AND s1.set_number = s2.set_number
-            ORDER BY ss.date DESC, ss.id DESC
-            LIMIT 1
-        )
-    ''')
+    c.execute("SELECT id FROM sessions WHERE date >= ?", (_yesterday(),))
+    today_ids = [r["id"] for r in c.fetchall()]
+    
+    if today_ids:
+        placeholders = ",".join("?" for _ in today_ids)
+        c.execute(f'''
+            SELECT s2.exercise, s2.set_type, s2.set_number, s2.weight_lb, s2.reps, s2.bands_json, s2.grip
+            FROM sets s2
+            INNER JOIN sessions sess ON sess.id = s2.session_id
+            WHERE sess.id NOT IN ({placeholders}) AND s2.id IN (
+                SELECT s1.id FROM sets s1
+                INNER JOIN sessions ss ON ss.id = s1.session_id
+                WHERE ss.id NOT IN ({placeholders}) AND s1.exercise = s2.exercise AND s1.set_type = s2.set_type AND s1.set_number = s2.set_number
+                ORDER BY ss.date DESC, ss.id DESC
+                LIMIT 1
+            )
+        ''', today_ids + today_ids)
+    else:
+        # For each exercise+set_type+set_number combo, get the most recent entry
+        c.execute('''
+            SELECT s2.exercise, s2.set_type, s2.set_number, s2.weight_lb, s2.reps, s2.bands_json, s2.grip
+            FROM sets s2
+            INNER JOIN sessions sess ON sess.id = s2.session_id
+            WHERE s2.id IN (
+                SELECT s1.id FROM sets s1
+                INNER JOIN sessions ss ON ss.id = s1.session_id
+                WHERE s1.exercise = s2.exercise AND s1.set_type = s2.set_type AND s1.set_number = s2.set_number
+                ORDER BY ss.date DESC, ss.id DESC
+                LIMIT 1
+            )
+        ''')
     data = {}
     for r in c.fetchall():
         key = f"{r['exercise']}|{r['set_type']}|{r['set_number']}"

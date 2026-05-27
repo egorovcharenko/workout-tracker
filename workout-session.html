@@ -118,7 +118,7 @@
 <div id="root"></div>
 
 <script type="text/babel" data-presets="react">
-const { useState, useEffect, useRef, useMemo, useCallback } = React;
+var { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 const SWAP_GROUPS = [
   [
@@ -167,7 +167,7 @@ const api = {
   motivations: (sid) => fetchT(`/api/motivations?session_id=${sid}`),
 };
 
-const BAND_VALUES = BANDS.map(b => b.lb);
+// BAND_VALUES is loaded from workout-shared.js
 
 // Each design Exercise is one row in the UI. A superset exercise from the
 // template becomes N flattened design Exercises sharing a `superset` letter.
