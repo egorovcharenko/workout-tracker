@@ -5522,10 +5522,23 @@ function renderStats() {
       return `${Math.floor(diff / 30)}mo`;
     })();
 
+    const mapping = EXERCISE_MUSCLES[ex.name] || { primary: [], secondary: [] };
+    const primaryBadges = (mapping.primary || []).map(m => {
+      const info = MUSCLE_GROUPS[m];
+      return `<span style="display:inline-block;font-size:9px;background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:4px;font-weight:500;white-space:nowrap">${info?.label || m}</span>`;
+    }).join('');
+    const secondaryBadges = (mapping.secondary || []).map(m => {
+      const info = MUSCLE_GROUPS[m];
+      return `<span style="display:inline-block;font-size:9px;background:#f1f5f9;color:#64748b;border:1px dashed #cbd5e1;padding:1px 5px;border-radius:4px;font-weight:500;white-space:nowrap">${info?.label || m} (½)</span>`;
+    }).join('');
+    const muscleBadgesHTML = (primaryBadges || secondaryBadges) ? `<div style="display:inline-flex;align-items:center;gap:4px;margin-left:6px;flex-wrap:wrap">${primaryBadges}${secondaryBadges}</div>` : '';
+
     return `
       <div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:6px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-          <div style="font-size:13px;font-weight:600;color:#111827;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}${prBadge}</div>
+          <div style="font-size:13px;font-weight:600;color:#111827;flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span>${ex.name}</span>${prBadge}${muscleBadgesHTML}
+          </div>
           ${spark(sparkVals, sparkColor)}
         </div>
         <div style="font-size:11px;color:#6b7280;margin-top:3px;display:flex;flex-wrap:wrap;gap:8px">

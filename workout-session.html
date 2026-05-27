@@ -1773,6 +1773,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   // "hardness" (weight × reps relative to the exercise's max in the window).
   const muscleSets7d = {};
   (muscleInfo.primary || []).forEach(m => muscleSets7d[m] = []);
+  (muscleInfo.secondary || []).forEach(m => muscleSets7d[m] = []);
   for (const sess of (history || [])) {
     if (!sess.date || sess.date === today) continue;
     const sessMs = Date.parse(sess.date + 'T00:00:00Z');
@@ -1787,6 +1788,16 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
           exercise: st.exercise,
           weight: +st.weight_lb || 0,
           reps: parseInt(st.reps) || 0,
+          weightage: 1.0,
+        });
+      }
+      for (const muscle of (mm.secondary || [])) {
+        if (muscle in muscleSets7d) muscleSets7d[muscle].push({
+          date: sess.date, isToday: false,
+          exercise: st.exercise,
+          weight: +st.weight_lb || 0,
+          reps: parseInt(st.reps) || 0,
+          weightage: 0.5,
         });
       }
     }
@@ -1812,6 +1823,16 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
           exercise: e.name,
           weight,
           reps: parseInt(s.reps) || 0,
+          weightage: 1.0,
+        });
+      }
+      for (const muscle of (em.secondary || [])) {
+        if (muscle in muscleSets7d) muscleSets7d[muscle].push({
+          date: chartTodayDate, isToday: true,
+          exercise: e.name,
+          weight,
+          reps: parseInt(s.reps) || 0,
+          weightage: 0.5,
         });
       }
     }
@@ -1941,9 +1962,9 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   // slice brightness encodes the set's HARDNESS — weight × reps relative to
   // the heaviest such product in the window for that exercise. Today's column
   // adds a small glow. Hovering a slice shows exercise / weight × reps / date.
-  const VolumeBar = ({ muscle, events }) => {
+  const VolumeBar = ({ muscle, events, isPrimary }) => {
     const TARGET_MIN = 10, TARGET_MAX = 20;
-    const sets = events.length;
+    const sets = events.reduce((a, ev) => a + (ev.weightage ?? 1.0), 0);
     const DAY_MS = 86400000;
     // Build 7 day-buckets, oldest → newest left → right.
     const days = [];
@@ -1993,21 +2014,33 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
       const hardness = Math.max(0.35, Math.min(1, score || 0.35));
       const sat = Math.round(55 + hardness * 35);   // 55–90%
       const light = Math.round(isToday ? (44 + hardness * 12) : (38 + hardness * 14));
-      const alpha = isToday ? 1 : 0.85;
+      const alpha = (isToday ? 1 : 0.85) * (ev.weightage === 0.5 ? 0.5 : 1.0);
       return {
         background: `hsla(${hue}, ${sat}%, ${light}%, ${alpha})`,
-        boxShadow: isToday ? `0 0 6px hsla(${hue}, ${sat}%, 60%, 0.5)` : "none",
+        boxShadow: isToday && ev.weightage !== 0.5 ? `0 0 6px hsla(${hue}, ${sat}%, 60%, 0.5)` : "none",
+        border: ev.weightage === 0.5 ? "1px dashed rgba(255,255,255,0.4)" : "none",
       };
+    };
+
+    const formatSets = (s) => {
+      if (Number.isInteger(s)) return String(s);
+      const integer = Math.floor(s);
+      return integer > 0 ? `${integer}½` : `½`;
+    };
+
+    const getSliceHeight = (ev) => {
+      const baseH = SLICE_H;
+      return ev.weightage === 0.5 ? Math.max(2, Math.floor(baseH * 0.5)) : baseH;
     };
 
     return (
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
           <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>
-            {muscle.replace("_", " ")}
+            {muscle.replace("_", " ")}{!isPrimary && " (½)"}
           </span>
           <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 800 }}>
-            <span style={{ color: countColor }}>{sets}</span>
+            <span style={{ color: countColor }}>{formatSets(sets)}</span>
             <span style={{ color: T.disabled, fontWeight: 500 }}> / 10-20</span>
           </span>
         </div>
@@ -2024,10 +2057,10 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
               ) : (
                 d.events.map((ev, j) => (
                   <div key={j}
-                    onMouseEnter={(e) => showTip(e, `${ev.exercise} · ${ev.weight}lb × ${ev.reps} · ${ev.date}`)}
+                    onMouseEnter={(e) => showTip(e, `${ev.exercise} · ${ev.weight}lb × ${ev.reps} · ${ev.date}${ev.weightage === 0.5 ? " (secondary target)" : ""}`)}
                     onMouseLeave={hideTip}
                     style={{
-                      height: SLICE_H,
+                      height: getSliceHeight(ev),
                       borderRadius: 2,
                       cursor: "default",
                       ...sliceStyle(ev, d.isToday),
@@ -2204,6 +2237,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
 
   const hasPRs = bestOrm > 0 || bestWt > 0 || bestVol > 0;
   const primaryList = (muscleInfo.primary || []);
+  const secondaryList = (muscleInfo.secondary || []);
 
   return (
     <div style={{
@@ -2214,7 +2248,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
       <div style={{ marginBottom: 12 }}>
         <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0, marginBottom: 4 }}>STATS</div>
         <div style={{ color: T.strong, fontSize: 16, fontWeight: 800, letterSpacing: -0.3, lineHeight: 1.2 }}>{exercise.name}</div>
-        {primaryList.length > 0 && (
+        {(primaryList.length > 0 || secondaryList.length > 0) && (
           <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 4 }}>
             {primaryList.map(m => (
               <span key={m} style={{
@@ -2224,14 +2258,25 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
                 padding: "2px 6px", borderRadius: 4, textTransform: "uppercase",
               }}>{m.replace("_", " ")}</span>
             ))}
+            {secondaryList.map(m => (
+              <span key={m} style={{
+                color: T.muted, background: "rgba(255,255,255,0.03)",
+                border: "1px dashed rgba(255,255,255,0.15)",
+                fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 0.4,
+                padding: "2px 6px", borderRadius: 4, textTransform: "uppercase",
+              }}>{m.replace("_", " ")} (½)</span>
+            ))}
           </div>
         )}
       </div>
 
-      {primaryList.length > 0 && (
+      {(primaryList.length > 0 || secondaryList.length > 0) && (
         <Section label="HARD SETS · LAST 7 DAYS">
           {primaryList.map(m => (
-            <VolumeBar key={m} muscle={m} events={muscleSets7d[m] || []} />
+            <VolumeBar key={m} muscle={m} events={muscleSets7d[m] || []} isPrimary={true} />
+          ))}
+          {secondaryList.map(m => (
+            <VolumeBar key={m} muscle={m} events={muscleSets7d[m] || []} isPrimary={false} />
           ))}
         </Section>
       )}
