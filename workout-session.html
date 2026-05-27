@@ -25,6 +25,7 @@
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.24.5/babel.min.js"></script>
 <script src="/workout-shared.js"></script>
+<script src="/workout-session-hooks.js"></script>
 <script type="text/babel" src="/workout-session-components.js" data-presets="react"></script>
 <style>
   /* Reset + dark theme — these tokens come from the design handoff README. */
@@ -714,10 +715,20 @@ function App() {
   const [sessionDate, setSessionDate] = useState(() => localDate());
   const [loaded, setLoaded] = useState(false);
   const [sessionId, setSessionId] = useState(null);
-  const [startedAt, setStartedAt] = useState(null);
-  const [elapsed, setElapsed] = useState(0);
-  const [running, setRunning] = useState(false);
-  const [rest, setRest] = useState(null);  // { total, left, eIdx, sIdx, kind, paused }
+  const {
+    elapsed,
+    running,
+    startedAt,
+    rest,
+    setElapsed,
+    setRunning,
+    setStartedAt,
+    setRest,
+    startTimer,
+    restAdd,
+    restSkip,
+    restToggle
+  } = useWorkoutTimers(workoutId, exercises);
   const [motivations, setMotivations] = useState({});  // exercise.id → message | "__loading__"
   // Used by requestMotivation to build the rich payload Claude needs to
   // recognize PRs, trends, layoffs. Fetched once on mount; refreshed on
@@ -747,10 +758,6 @@ function App() {
     setLoaded(false);
     setExercises([]);
     setSessionId(null);
-    setStartedAt(null);
-    setElapsed(0);
-    setRunning(false);
-    setRest(null);
     setMotivations({});
     setHistory([]);
     setStatHistory({});
@@ -852,21 +859,6 @@ function App() {
         }
         setExercises(exs);
         setLoaded(true);
-        // Restore rest timer from localStorage if it exists and hasn't expired (or is paused)
-        const savedRestRaw = localStorage.getItem(`v2-rest-timer:${workout.id}`);
-        if (savedRestRaw) {
-          try {
-            const savedRest = JSON.parse(savedRestRaw);
-            if (savedRest && (savedRest.paused || savedRest.endAt > Date.now())) {
-              const left = savedRest.paused ? savedRest.left : Math.max(0, Math.ceil((savedRest.endAt - Date.now()) / 1000));
-              if (left > 0) {
-                setRest({ ...savedRest, left });
-              }
-            } else {
-              localStorage.removeItem(`v2-rest-timer:${workout.id}`);
-            }
-          } catch (_) {}
-        }
       } catch (e) {
         console.error("[V2] mount failed:", e);
         setLoaded(true);
@@ -875,95 +867,7 @@ function App() {
     return () => { cancelled = true; };
   }, [workout]);
 
-  // Persist rest timer state to localStorage whenever it changes
-  useEffect(() => {
-    if (!workoutId) return;
-    const key = `v2-rest-timer:${workoutId}`;
-    if (rest) {
-      localStorage.setItem(key, JSON.stringify(rest));
-    } else {
-      localStorage.removeItem(key);
-    }
-  }, [rest, workoutId]);
 
-  // Elapsed timer. Monotonic — increments by 1s each tick, never derived
-  // from wall-clock. Auto-pauses if no interaction in IDLE_THRESHOLD_MS so
-  // idle time between two-a-day halves doesn't accumulate. Resumes the
-  // moment the user logs / picks / toggles anything (startTimer is called
-  // from every state-changing handler via markInteraction).
-  useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => {
-      const idleFor = Date.now() - lastInteractionRef.current;
-      if (idleFor > IDLE_THRESHOLD_MS) {
-        setRunning(false);
-        return;
-      }
-      setElapsed(e => e + 1);
-    }, 1000);
-    return () => clearInterval(id);
-  }, [running]);
-
-  // Rest timer ticks every 1s while not paused and not finished.
-  useEffect(() => {
-    if (!rest || rest.paused || rest.left === 0) return;
-    const id = setInterval(() => {
-      setRest(r => {
-        if (!r || r.paused || r.left === 0) return r;
-        const left = Math.max(0, Math.ceil((r.endAt - Date.now()) / 1000));
-        return { ...r, left };
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [
-    rest && rest.paused,
-    rest && rest.left === 0,
-    rest && rest.eIdx,
-    rest && rest.sIdx,
-    rest === null
-  ]);
-
-  // Immediately re-sync the rest timer when tab gains focus or screen turns on
-  useEffect(() => {
-    const resync = () => {
-      setRest(r => {
-        if (!r || r.paused || r.left === 0) return r;
-        const left = Math.max(0, Math.ceil((r.endAt - Date.now()) / 1000));
-        return { ...r, left };
-      });
-    };
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) resync(); });
-    window.addEventListener("focus", resync);
-    return () => {
-      document.removeEventListener("visibilitychange", resync);
-      window.removeEventListener("focus", resync);
-    };
-  }, []);
-
-  // Migrate the rest timer to wherever the active set currently lives. When
-  // you log a set, the 350ms-later advancement moves the active set into
-  // the next exercise — the rest timer should follow so it appears right
-  // above the next set's controls (matches the design handoff: "rest timer
-  // appears between strip and active set block" of the active card). If
-  // there's no active set anywhere (you just logged the final set of the
-  // workout), the timer stays put in the exercise card where it was
-  // started so you still see it counting down.
-  useEffect(() => {
-    if (!rest) return;
-    const activeExIdx = exercises.findIndex(e => e.sets.some(s => s.active));
-    if (activeExIdx === -1) return;
-    if (activeExIdx === rest.eIdx) return;
-    setRest(r => r ? { ...r, eIdx: activeExIdx } : r);
-  }, [exercises, rest && rest.eIdx]);
-
-  // Called from every state-changing handler. Stamps the interaction so the
-  // idle-threshold tick keeps going, and resumes the timer if it was paused
-  // (either auto-paused from idle, or never started yet on a fresh session).
-  const startTimer = () => {
-    lastInteractionRef.current = Date.now();
-    if (!running) setRunning(true);
-    if (!startedAt) setStartedAt(Date.now());
-  };
 
   // Save: serialize current exercises[] and POST. Debounced 400ms after the
   // last state edit. Single-in-flight + queue guard to prevent duplicate
@@ -1483,20 +1387,7 @@ function App() {
     updateAndSave(next);
   };
 
-  const restAdd = (sec) => setRest(r => {
-    if (!r) return r;
-    const newLeft = Math.max(0, r.left + sec);
-    const newTotal = Math.max(r.total, newLeft);
-    const endAt = r.paused ? 0 : Date.now() + newLeft * 1000;
-    return { ...r, left: newLeft, total: newTotal, endAt };
-  });
-  const restSkip = () => setRest(null);
-  const restToggle = () => setRest(r => {
-    if (!r) return r;
-    const paused = !r.paused;
-    const endAt = paused ? 0 : Date.now() + r.left * 1000;
-    return { ...r, paused, endAt };
-  });
+
 
   // Two-a-day: reveal the PM block and persist so a reload keeps it open.
   const onContinuePm = () => {
