@@ -1753,6 +1753,56 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
   );
 }
 
+// Strength Standards for a 175-180 lb male (1RM in lbs)
+const STRENGTH_STANDARDS = {
+  "Dumbbell Flat Bench Press": { beg: 25, nov: 45, int: 70, adv: 95, elite: 120 },
+  "Single-Arm Dumbbell Rows": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
+  "Dumbbell Bent-Over Rows": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
+  "Overhead Dumbbell Press": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
+  "Seated Overhead Press": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
+  "Goblet Squat": { beg: 35, nov: 60, int: 95, adv: 135, elite: 180 },
+  "Bulgarian Split Squat": { beg: 20, nov: 40, int: 65, adv: 95, elite: 125 },
+  "Dumbbell Romanian Deadlift": { beg: 30, nov: 55, int: 85, adv: 120, elite: 155 },
+  "Single-Leg DB RDL": { beg: 20, nov: 35, int: 55, adv: 80, elite: 110 },
+  "Dumbbell Bicep Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
+  "Dumbbell Hammer Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
+  "Bench Dips": { beg: 0, nov: 20, int: 50, adv: 90, elite: 140 },
+  "Assisted Pull-Ups": { beg: 90, nov: 125, int: 160, adv: 200, elite: 245 },
+  "Band Row": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
+  "Band Squat": { beg: 25, nov: 45, int: 75, adv: 105, elite: 135 },
+  "Band Romanian Deadlift": { beg: 25, nov: 45, int: 70, adv: 100, elite: 130 },
+  "Band Bicep Curls": { beg: 8, nov: 15, int: 25, adv: 38, elite: 52 },
+  "Band Tricep Pushdowns": { beg: 10, nov: 20, int: 35, adv: 52, elite: 70 },
+  "Pallof Press": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 }
+};
+
+function getStrengthPercentile(exerciseName, weight1RM) {
+  const stds = STRENGTH_STANDARDS[exerciseName];
+  if (!stds) return null;
+  const w = weight1RM || 0;
+  if (w <= 0) return { percentile: 0, tier: "Untrained" };
+  
+  if (w < stds.beg) {
+    const p = 0 + (w / stds.beg) * 5;
+    return { percentile: Math.round(p), tier: "Untrained" };
+  } else if (w < stds.nov) {
+    const p = 5 + ((w - stds.beg) / (stds.nov - stds.beg)) * 15;
+    return { percentile: Math.round(p), tier: "Beginner" };
+  } else if (w < stds.int) {
+    const p = 20 + ((w - stds.nov) / (stds.int - stds.nov)) * 30;
+    return { percentile: Math.round(p), tier: "Novice" };
+  } else if (w < stds.adv) {
+    const p = 50 + ((w - stds.int) / (stds.adv - stds.int)) * 30;
+    return { percentile: Math.round(p), tier: "Intermediate" };
+  } else if (w < stds.elite) {
+    const p = 80 + ((w - stds.adv) / (stds.elite - stds.adv)) * 15;
+    return { percentile: Math.round(p), tier: "Advanced" };
+  } else {
+    const p = 95 + Math.min(4, ((w - stds.elite) / stds.elite) * 5);
+    return { percentile: Math.round(p), tier: "Elite" };
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // StatsPane — desktop sidebar showing context for the currently-active
 // exercise: weekly volume per primary muscle (with the 10-20-sets hypertrophy
@@ -2138,6 +2188,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
         date: d.toISOString().slice(0, 10),
         label: String(d.getUTCDate()),
         isToday: i === 0,
+        isFuture: false,
         value: null,
       });
     }
@@ -2145,8 +2196,9 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
       const day = days.find(x => x.date === d.date);
       if (day) day.value = +d[valueKey] || 0;
     });
-    const presentVals = days.filter(d => d.value != null && d.value > 0).map(d => d.value);
-    if (presentVals.length === 0) {
+
+    const historicalVals = days.filter(d => d.value != null && d.value > 0).map(d => d.value);
+    if (historicalVals.length === 0) {
       return (
         <div style={{ marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
@@ -2162,33 +2214,74 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
         </div>
       );
     }
+
+    const first = historicalVals[0], last = historicalVals[historicalVals.length - 1];
+
+    // Project trajectory: 3 future days reaching the next 10% milestone
+    const futureDaysCount = 3;
+    if (last > 0 && (valueKey === "orm" || valueKey === "vol")) {
+      const targetVal = last * 1.10;
+      for (let i = 1; i <= futureDaysCount; i++) {
+        const ms = todayMs + i * DAY_MS;
+        const d = new Date(ms);
+        days.push({
+          date: d.toISOString().slice(0, 10),
+          label: String(d.getUTCDate()),
+          isToday: false,
+          isFuture: true,
+          value: last + (targetVal - last) * (i / futureDaysCount),
+        });
+      }
+    }
+
+    const presentVals = days.filter(d => d.value != null && d.value > 0).map(d => d.value);
     const min = Math.min(...presentVals);
     const max = Math.max(...presentVals);
     const range = max - min || max || 1;
     const w = 280, h = 38, padX = 8, padY = 4;
-    const dayX = (i) => padX + (i * (w - 2 * padX)) / 6;
+    const totalSlots = days.length - 1;
+    const dayX = (i) => padX + (i * (w - 2 * padX)) / totalSlots;
     const yFor = (v) => h - padY - ((v - min) / range) * (h - 2 * padY);
+
     const pts = days.map((d, i) => d.value != null && d.value > 0 ? {
-      x: dayX(i), y: yFor(d.value), value: d.value, isToday: d.isToday, date: d.date,
+      x: dayX(i), y: yFor(d.value), value: d.value, isToday: d.isToday, isFuture: d.isFuture, date: d.date,
     } : null);
     const presentPts = pts.filter(Boolean);
-    const linePath = presentPts.length > 1
-      ? presentPts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ")
+
+    const historicalPts = presentPts.filter(p => !p.isFuture);
+    const projectedPts = presentPts.filter(p => p.isFuture);
+
+    const linePath = historicalPts.length > 1
+      ? historicalPts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ")
       : "";
-    const areaPath = presentPts.length > 1
-      ? `${linePath} L ${presentPts[presentPts.length-1].x.toFixed(1)} ${h} L ${presentPts[0].x.toFixed(1)} ${h} Z`
+    const areaPath = historicalPts.length > 1
+      ? `${linePath} L ${historicalPts[historicalPts.length-1].x.toFixed(1)} ${h} L ${historicalPts[0].x.toFixed(1)} ${h} Z`
       : "";
-    const first = presentVals[0], last = presentVals[presentVals.length - 1];
+
+    let projectedLinePath = "";
+    if (historicalPts.length > 0 && projectedPts.length > 0) {
+      const startPt = historicalPts[historicalPts.length - 1];
+      projectedLinePath = `M ${startPt.x.toFixed(1)} ${startPt.y.toFixed(1)} ` +
+        projectedPts.map(p => `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+    }
+
     const delta = first ? Math.round(((last - first) / first) * 100) : 0;
     const deltaColor = delta > 0 ? T.green : delta < 0 ? T.red : T.faint;
     const gradId = `spark-${label}-${color.replace(/[^a-z0-9]/gi, "")}`;
+    const pctInfo = valueKey === "orm" ? getStrengthPercentile(exercise.name, last) : null;
+
     return (
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 5 }}>
           <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.3 }}>{label}</span>
           <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 800, color: T.strong }}>
             {fmt(last)}
-            {presentVals.length > 1 && (
+            {pctInfo && (
+              <span style={{ color: T.muted, fontSize: 9.5, fontWeight: 600, marginLeft: 6 }}>
+                ({pctInfo.tier} · {pctInfo.percentile}%)
+              </span>
+            )}
+            {historicalVals.length > 1 && (
               <span style={{ color: deltaColor, fontWeight: 700, marginLeft: 6, fontSize: 10 }}>
                 {delta > 0 ? "↑" : delta < 0 ? "↓" : "→"} {Math.abs(delta)}%
               </span>
@@ -2204,33 +2297,62 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
           </defs>
           {areaPath && <path d={areaPath} fill={`url(#${gradId})`} />}
           {linePath && <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
+          {projectedLinePath && (
+            <path d={projectedLinePath} fill="none" stroke={color} strokeWidth="1.5" strokeDasharray="3 3" strokeLinecap="round" strokeLinejoin="round" />
+          )}
           {/* Faint vertical guide lines per day (visual day markers under the curve) */}
           {days.map((d, i) => (
             <line key={`g${i}`} x1={dayX(i)} y1={padY} x2={dayX(i)} y2={h - padY}
-              stroke={d.isToday ? "rgba(96,165,250,0.18)" : "rgba(255,255,255,0.04)"}
+              stroke={d.isToday ? "rgba(96,165,250,0.18)" : d.isFuture ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)"}
               strokeWidth={d.isToday ? 1 : 0.5}
               strokeDasharray={d.isToday ? "" : "2 3"} />
           ))}
           {/* Dots per actual data point — invisible bigger hit-area sits
               behind the visible dot so the hover tooltip is easier to land. */}
-          {presentPts.map((p, i) => (
-            <g key={`p${i}`}>
-              <circle cx={p.x} cy={p.y} r={p.isToday ? 3.2 : 2.4} fill={color}
-                stroke={p.isToday ? "rgba(11,15,20,0.9)" : "none"} strokeWidth={p.isToday ? 1 : 0} />
-              <circle cx={p.x} cy={p.y} r="8" fill="transparent"
-                style={{ cursor: "default" }}
-                onMouseEnter={(e) => showTip(e, `${p.date} · ${fmt(p.value)}${p.isToday ? " (today)" : ""}`)}
-                onMouseLeave={hideTip} />
-            </g>
-          ))}
+          {presentPts.map((p, i) => {
+            const isLastProjected = p.isFuture && i === presentPts.length - 1;
+            return (
+              <g key={`p${i}`}>
+                {p.isFuture ? (
+                  isLastProjected ? (
+                    <>
+                      {/* Outer target ring */}
+                      <circle cx={p.x} cy={p.y} r="5" fill="none" stroke={color} strokeWidth="1" />
+                      {/* Inner solid target dot */}
+                      <circle cx={p.x} cy={p.y} r="2.4" fill={color} />
+                    </>
+                  ) : (
+                    /* Future intermediate dots: small hollow circles */
+                    <circle cx={p.x} cy={p.y} r="1.8" fill="none" stroke={color} strokeWidth="1" />
+                  )
+                ) : (
+                  /* Historical dots */
+                  <circle cx={p.x} cy={p.y} r={p.isToday ? 3.2 : 2.4} fill={color}
+                    stroke={p.isToday ? "rgba(11,15,20,0.9)" : "none"} strokeWidth={p.isToday ? 1 : 0} />
+                )}
+                <circle cx={p.x} cy={p.y} r="8" fill="transparent"
+                  style={{ cursor: "default" }}
+                  onMouseEnter={(e) => showTip(e, p.isFuture
+                    ? `Projected trajectory: ${fmt(p.value)}`
+                    : `${p.date} · ${fmt(p.value)}${p.isToday ? " (today)" : ""}`
+                  )}
+                  onMouseLeave={hideTip} />
+                {isLastProjected && (
+                  <text x={p.x} y={p.y - 7} textAnchor="end" fill={color} style={{ fontSize: 8.5, fontFamily: T.mono, fontWeight: 800 }}>
+                    🎯 {fmt(p.value)}
+                  </text>
+                )}
+              </g>
+            );
+          })}
         </svg>
         <div style={{ display: "flex", gap: 3, marginTop: 5 }}>
           {days.map((d, i) => (
             <span key={i} style={{
               flex: 1, textAlign: "center",
-              color: d.isToday ? T.accentLight : (d.value != null && d.value > 0 ? T.muted : T.disabled),
+              color: d.isToday ? T.accentLight : d.isFuture ? T.disabled : (d.value != null && d.value > 0 ? T.muted : T.disabled),
               fontFamily: T.mono, fontSize: 9,
-              fontWeight: d.isToday ? 800 : (d.value != null && d.value > 0 ? 600 : 500),
+              fontWeight: d.isToday ? 800 : d.isFuture ? 500 : (d.value != null && d.value > 0 ? 600 : 500),
             }}>{d.label}</span>
           ))}
         </div>
