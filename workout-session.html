@@ -2591,18 +2591,41 @@ function App() {
     return () => clearInterval(id);
   }, [running]);
 
-  // Rest timer ticks every 1s while not paused.
+  // Rest timer ticks every 1s while not paused and not finished.
   useEffect(() => {
-    if (!rest || rest.paused) return;
+    if (!rest || rest.paused || rest.left === 0) return;
     const id = setInterval(() => {
       setRest(r => {
-        if (!r) return r;
-        if (r.left <= 1) return { ...r, left: 0 };
-        return { ...r, left: r.left - 1 };
+        if (!r || r.paused || r.left === 0) return r;
+        const left = Math.max(0, Math.ceil((r.endAt - Date.now()) / 1000));
+        return { ...r, left };
       });
     }, 1000);
     return () => clearInterval(id);
-  }, [rest && rest.paused, rest === null]);
+  }, [
+    rest && rest.paused,
+    rest && rest.left === 0,
+    rest && rest.eIdx,
+    rest && rest.sIdx,
+    rest === null
+  ]);
+
+  // Immediately re-sync the rest timer when tab gains focus or screen turns on
+  useEffect(() => {
+    const resync = () => {
+      setRest(r => {
+        if (!r || r.paused || r.left === 0) return r;
+        const left = Math.max(0, Math.ceil((r.endAt - Date.now()) / 1000));
+        return { ...r, left };
+      });
+    };
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) resync(); });
+    window.addEventListener("focus", resync);
+    return () => {
+      document.removeEventListener("visibilitychange", resync);
+      window.removeEventListener("focus", resync);
+    };
+  }, []);
 
   // Migrate the rest timer to wherever the active set currently lives. When
   // you log a set, the 350ms-later advancement moves the active set into
@@ -2706,7 +2729,7 @@ function App() {
     );
     if (!partnerHasMore) {
       const total = kind === "warmup" ? 30 : (ex.rest || 90);
-      setRest({ total, left: total, eIdx, sIdx, kind, paused: false });
+      setRest({ total, left: total, endAt: Date.now() + total * 1000, eIdx, sIdx, kind, paused: false });
     } else {
       setRest(null);
     }
@@ -3130,9 +3153,20 @@ function App() {
     updateAndSave(next);
   };
 
-  const restAdd = (sec) => setRest(r => r ? { ...r, left: Math.max(0, r.left + sec), total: Math.max(r.total, r.left + sec) } : r);
+  const restAdd = (sec) => setRest(r => {
+    if (!r) return r;
+    const newLeft = Math.max(0, r.left + sec);
+    const newTotal = Math.max(r.total, newLeft);
+    const endAt = r.paused ? 0 : Date.now() + newLeft * 1000;
+    return { ...r, left: newLeft, total: newTotal, endAt };
+  });
   const restSkip = () => setRest(null);
-  const restToggle = () => setRest(r => r ? { ...r, paused: !r.paused } : r);
+  const restToggle = () => setRest(r => {
+    if (!r) return r;
+    const paused = !r.paused;
+    const endAt = paused ? 0 : Date.now() + r.left * 1000;
+    return { ...r, paused, endAt };
+  });
 
   // Two-a-day: reveal the PM block and persist so a reload keeps it open.
   const onContinuePm = () => {
