@@ -834,6 +834,21 @@ function App() {
         }
         setExercises(exs);
         setLoaded(true);
+        // Restore rest timer from localStorage if it exists and hasn't expired (or is paused)
+        const savedRestRaw = localStorage.getItem(`v2-rest-timer:${workout.id}`);
+        if (savedRestRaw) {
+          try {
+            const savedRest = JSON.parse(savedRestRaw);
+            if (savedRest && (savedRest.paused || savedRest.endAt > Date.now())) {
+              const left = savedRest.paused ? savedRest.left : Math.max(0, Math.ceil((savedRest.endAt - Date.now()) / 1000));
+              if (left > 0) {
+                setRest({ ...savedRest, left });
+              }
+            } else {
+              localStorage.removeItem(`v2-rest-timer:${workout.id}`);
+            }
+          } catch (_) {}
+        }
       } catch (e) {
         console.error("[V2] mount failed:", e);
         setLoaded(true);
@@ -841,6 +856,17 @@ function App() {
     })();
     return () => { cancelled = true; };
   }, [workout]);
+
+  // Persist rest timer state to localStorage whenever it changes
+  useEffect(() => {
+    if (!workoutId) return;
+    const key = `v2-rest-timer:${workoutId}`;
+    if (rest) {
+      localStorage.setItem(key, JSON.stringify(rest));
+    } else {
+      localStorage.removeItem(key);
+    }
+  }, [rest, workoutId]);
 
   // Elapsed timer. Monotonic — increments by 1s each tick, never derived
   // from wall-clock. Auto-pauses if no interaction in IDLE_THRESHOLD_MS so
