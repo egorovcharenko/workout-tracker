@@ -957,7 +957,7 @@ const Sparkline = ({ exerciseName, data, valueKey, color, label, fmt, showTip, h
   const todayMs = Date.parse(today + 'T00:00:00Z');
 
   const days = [];
-  for (let i = 6; i >= 0; i--) {
+  for (let i = 29; i >= 0; i--) {
     const ms = todayMs - i * DAY_MS;
     const d = new Date(ms);
     days.push({
@@ -981,11 +981,10 @@ const Sparkline = ({ exerciseName, data, valueKey, color, label, fmt, showTip, h
           <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.3 }}>{label}</span>
           <span style={{ color: T.disabled, fontFamily: T.mono, fontSize: 10 }}>—</span>
         </div>
-        <div style={{ height: 38, display: "flex", alignItems: "center", justifyContent: "center", color: T.disabled, fontFamily: T.mono, fontSize: 10, border: `1px dashed ${T.cardBorder}`, borderRadius: 4 }}>no data this week</div>
-        <div style={{ display: "flex", gap: 3, marginTop: 5 }}>
-          {days.map((d, i) => (
-            <span key={i} style={{ flex: 1, textAlign: "center", color: d.isToday ? T.accentLight : T.disabled, fontFamily: T.mono, fontSize: 9, fontWeight: d.isToday ? 800 : 500 }}>{d.label}</span>
-          ))}
+        <div style={{ height: 38, display: "flex", alignItems: "center", justifyContent: "center", color: T.disabled, fontFamily: T.mono, fontSize: 10, border: `1px dashed ${T.cardBorder}`, borderRadius: 4 }}>no data in last 30 days</div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
+          <span style={{ color: T.disabled, fontFamily: T.mono, fontSize: 9 }}>{days[0].date.slice(5)}</span>
+          <span style={{ color: T.accentLight, fontFamily: T.mono, fontSize: 9, fontWeight: 800 }}>Today</span>
         </div>
       </div>
     );
@@ -1046,12 +1045,16 @@ const Sparkline = ({ exerciseName, data, valueKey, color, label, fmt, showTip, h
         </defs>
         {areaPath && <path d={areaPath} fill={`url(#${gradId})`} />}
         {linePath && <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
-        {days.map((d, i) => (
-          <line key={`g${i}`} x1={dayX(i)} y1={padY} x2={dayX(i)} y2={h - padY}
-            stroke={d.isToday ? "rgba(96,165,250,0.18)" : "rgba(255,255,255,0.04)"}
-            strokeWidth={d.isToday ? 1 : 0.5}
-            strokeDasharray={d.isToday ? "" : "2 3"} />
-        ))}
+        {[0, 7, 14, 21, 28].map(d => {
+          const slotIdx = 29 - d;
+          if (slotIdx < 0) return null;
+          return (
+            <line key={`g${d}`} x1={dayX(slotIdx)} y1={padY} x2={dayX(slotIdx)} y2={h - padY}
+              stroke={d === 0 ? "rgba(96,165,250,0.18)" : "rgba(255,255,255,0.04)"}
+              strokeWidth={d === 0 ? 1 : 0.5}
+              strokeDasharray={d === 0 ? "" : "2 3"} />
+          );
+        })}
         {presentPts.map((p, i) => {
           const pctInfo = valueKey === "orm" ? getStrengthPercentile(exerciseName, p.value) : null;
           const pctStr = pctInfo ? ` (${pctInfo.percentile}%)` : "";
@@ -1067,15 +1070,9 @@ const Sparkline = ({ exerciseName, data, valueKey, color, label, fmt, showTip, h
           );
         })}
       </svg>
-      <div style={{ display: "flex", gap: 3, marginTop: 5 }}>
-        {days.map((d, i) => (
-          <span key={i} style={{
-            flex: 1, textAlign: "center",
-            color: d.isToday ? T.accentLight : (d.value != null && d.value > 0 ? T.muted : T.disabled),
-            fontFamily: T.mono, fontSize: 9,
-            fontWeight: d.isToday ? 800 : (d.value != null && d.value > 0 ? 600 : 500),
-          }}>{d.label}</span>
-        ))}
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
+        <span style={{ color: T.disabled, fontFamily: T.mono, fontSize: 9 }}>{days[0].date.slice(5)}</span>
+        <span style={{ color: T.accentLight, fontFamily: T.mono, fontSize: 9, fontWeight: 800 }}>Today</span>
       </div>
     </div>
   );
@@ -1500,7 +1497,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
         </Section>
       )}
 
-      <Section label={sibling ? `PROGRESS · LAST 7 DAYS · ${sibling.toUpperCase()}` : "PROGRESS · LAST 7 DAYS"}>
+      <Section label={sibling ? `PROGRESS · OVER LAST 30 DAYS · ${sibling.toUpperCase()}` : "PROGRESS · OVER LAST 30 DAYS"}>
         {sibling && (
           <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 9.5, marginBottom: 6, lineHeight: 1.4 }}>
             {exercise.name} is new — showing your <span style={{ color: T.muted, fontWeight: 700 }}>{sibling}</span> history (same swap group).

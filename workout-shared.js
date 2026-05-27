@@ -216,3 +216,23 @@ function saveSkippedExercises(workoutName, date, namesSet) {
     console.warn("[V2-SKIPPED] localStorage save failed:", e);
   }
 }
+
+const SETS_LS_KEY = (workoutName, date) => `v2-session-sets:${workoutName}:${date}`;
+function loadSessionSets(workoutName, date) {
+  try {
+    const raw = localStorage.getItem(SETS_LS_KEY(workoutName, date));
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+function saveSessionSets(workoutName, date, exercises) {
+  try {
+    const map = {};
+    exercises.forEach(ex => {
+      map[ex.name] = ex.sets;
+    });
+    localStorage.setItem(SETS_LS_KEY(workoutName, date), JSON.stringify(map));
+  } catch (e) {
+    console.warn("[V2-SESSION-SETS] localStorage save failed:", e);
+  }
+}
+

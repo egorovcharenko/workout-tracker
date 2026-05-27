@@ -449,7 +449,6 @@ const safeJSON = (s) => { try { return JSON.parse(s); } catch (_) { return []; }
 // Apply today-session sets onto the freshly-built exercises[] (mark completed,
 // restore actual reps/weight/bands the user already logged this session).
 function hydrateToday(exercises, todaySets) {
-  if (!todaySets || !todaySets.length) return exercises;
   // Index design exercises by name+setNumber for O(N) hydration.
   const map = new Map();
   exercises.forEach((ex, eIdx) => {
@@ -458,31 +457,36 @@ function hydrateToday(exercises, todaySets) {
       map.set(key, { eIdx, sIdx });
     });
   });
-  const next = exercises.map(ex => ({ ...ex, sets: ex.sets.map(s => ({ ...s })) }));
-  todaySets.forEach(row => {
-    const key = `${row.exercise}|${row.set_type}|${row.set_number}`;
-    const ref = map.get(key);
-    if (!ref) return;
-    const ex = next[ref.eIdx];
-    const set = ex.sets[ref.sIdx];
-    set.reps = parseInt(row.reps) || null;
-    set.completed = true;
-    const bands = row.bands_json ? safeJSON(row.bands_json) : [];
-    set.bands = bands;
-    const bandSum = bands.reduce((a, b) => a + b, 0);
-    const savedLb = row.weight_lb || 0;
-    // Same mode-specific inversion as buildSet — see comment there.
-    if (ex.assist) {
-      set.bodyweight = savedLb + bandSum;
-    } else if (ex.bandAddon) {
-      set.weight = Math.max(0, savedLb - bandSum);
-    } else if (ex.isBandsOnly) {
-      set.weight = 0;
-    } else {
-      set.weight = savedLb;
-    }
-    if (row.grip) set.grip = row.grip;
-  });
+  const next = exercises.map(ex => ({
+    ...ex,
+    sets: ex.sets.map(s => ({ ...s, completed: false, active: false }))
+  }));
+  if (todaySets && todaySets.length) {
+    todaySets.forEach(row => {
+      const key = `${row.exercise}|${row.set_type}|${row.set_number}`;
+      const ref = map.get(key);
+      if (!ref) return;
+      const ex = next[ref.eIdx];
+      const set = ex.sets[ref.sIdx];
+      set.reps = parseInt(row.reps) || null;
+      set.completed = true;
+      const bands = row.bands_json ? safeJSON(row.bands_json) : [];
+      set.bands = bands;
+      const bandSum = bands.reduce((a, b) => a + b, 0);
+      const savedLb = row.weight_lb || 0;
+      // Same mode-specific inversion as buildSet — see comment there.
+      if (ex.assist) {
+        set.bodyweight = savedLb + bandSum;
+      } else if (ex.bandAddon) {
+        set.weight = Math.max(0, savedLb - bandSum);
+      } else if (ex.isBandsOnly) {
+        set.weight = 0;
+      } else {
+        set.weight = savedLb;
+      }
+      if (row.grip) set.grip = row.grip;
+    });
+  }
   return activateNextSet(next);
 }
 
@@ -509,7 +513,7 @@ function activateNextSet(exercises) {
       if (ex.sets[i].completed) highestCompleted = i;
     }
     for (let i = highestCompleted + 1; i < ex.sets.length; i++) {
-      if (!ex.sets[i].completed) {
+      if (!ex.sets[i].completed && !ex.sets[i].userSkipped) {
         ex.sets[i].active = true;
         activated = true;
         break;
@@ -615,7 +619,7 @@ function applySwaps(workout, swapMap) {
 // Save: serialize state into the shared /api/save shape and POST. Single-
 // in-flight + queue pattern guards against an autoSave race.
 // ─────────────────────────────────────────────────────────────────────────────
-function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed) {
+function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed, activeDate) {
   const sets = [];
   exercises.forEach(ex => {
     ex.sets.forEach(s => {
@@ -653,7 +657,7 @@ function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed)
   });
   return {
     workout: workoutName,
-    date: localDate(),
+    date: activeDate || localDate(),
     duration_sec: elapsed,
     session_id: sessionId || null,
     started_at: startedAt ? new Date(startedAt).toISOString() : null,
@@ -707,6 +711,7 @@ function App() {
   };
 
   const [exercises, setExercises] = useState([]);
+  const [sessionDate, setSessionDate] = useState(() => localDate());
   const [loaded, setLoaded] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [startedAt, setStartedAt] = useState(null);
@@ -780,11 +785,24 @@ function App() {
         setStatHistory(stat1rm || {});
         // Cache the lookup maps so a mid-session swap can re-flatten locally.
         dataRef.current = { last: last || {}, hints: hints || {} };
+        const activeDate = (today && today.date) ? today.date : localDate();
+        setSessionDate(activeDate);
         // Apply any persisted exercise swaps before flattening so the swapped
         // slot builds with the chosen exercise's template + its own history.
-        const swapMap = loadSwaps(workout.name, localDate());
+        const swapMap = loadSwaps(workout.name, activeDate);
         setSwaps(swapMap);
         let exs = flattenTemplate(applySwaps(workout, swapMap), last || {}, hints || {});
+        // Restore custom sets structure (added/removed/skipped sets) from localStorage
+        const savedSetsMap = loadSessionSets(workout.name, activeDate);
+        if (savedSetsMap && Object.keys(savedSetsMap).length) {
+          exs = exs.map(ex => {
+            const saved = savedSetsMap[ex.name];
+            if (saved) {
+              return { ...ex, sets: saved.map(s => ({ ...s })) };
+            }
+            return ex;
+          });
+        }
         if (today && today.id) {
           exs = hydrateToday(exs, today.sets || []);
           setSessionId(today.id);
@@ -817,7 +835,7 @@ function App() {
         // can rerun the activate-next pass — if the currently-active set sits
         // on a newly-skipped exercise, focus jumps forward to the next valid
         // candidate. Survives page reload across the same (workout, date).
-        const skippedNames = loadSkippedExercises(workout.name, localDate());
+        const skippedNames = loadSkippedExercises(workout.name, activeDate);
         if (skippedNames.size) {
           exs = exs.map(e => skippedNames.has(e.name) ? { ...e, skipped: true } : e);
           activateNextSet(exs);
@@ -828,7 +846,7 @@ function App() {
         // state so the gate doesn't reappear blocking already-active work.
         const hasSplit = exs.some(e => e.session);
         if (hasSplit) {
-          const persisted = loadPmStarted(workout.name, localDate());
+          const persisted = loadPmStarted(workout.name, activeDate);
           const pmHasProgress = exs.some(e => e.session === "PM" && e.sets.some(s => s.completed));
           setPmStarted(persisted || pmHasProgress);
         }
@@ -954,7 +972,7 @@ function App() {
   const queueSave = (currentExercises, currentSessionId, currentStartedAt, currentElapsed) => {
     clearTimeout(saveDebounceRef.current);
     saveDebounceRef.current = setTimeout(() => {
-      const payload = serializeForSave(currentExercises, workout.name, currentSessionId, currentStartedAt, currentElapsed);
+      const payload = serializeForSave(currentExercises, workout.name, currentSessionId, currentStartedAt, currentElapsed, sessionDate);
       if (payload.sets.length === 0) return;
       autoSavePayload(payload, (newId) => {
         if (!currentSessionId && newId) setSessionId(newId);
@@ -974,6 +992,7 @@ function App() {
   const updateAndSave = (next) => {
     setExercises(next);
     queueSave(next, sessionId, startedAt, elapsed);
+    saveSessionSets(workout.name, sessionDate, next);
   };
 
   // Field handlers — narrow patches so React renders only the active branch.
@@ -1109,7 +1128,7 @@ function App() {
     // is one design exercise = one sub from the template), exercise.name
     // is already the sub-name. For non-supersets, it's the exercise name.
     const subNames = [exercise.name];
-    const today = localDate();
+    const today = sessionDate;
     const todayMs = Date.parse(today + 'T00:00:00Z');
 
     // Current session's completed sets for this exercise.
@@ -1331,7 +1350,7 @@ function App() {
       return {
         ...e,
         sets: e.sets.map((s, j) => {
-          if (j === sIdx) return { ...s, active: true, completed: false };
+          if (j === sIdx) return { ...s, active: true, completed: false, userSkipped: false };
           if (s.active) return { ...s, active: false };
           return s;
         }),
@@ -1349,7 +1368,7 @@ function App() {
   const onSkipWarmup = (eIdx) => {
     const next = exercises.map((e, i) => {
       if (i !== eIdx) return e;
-      const sets = e.sets.map(s => s.kind === "warmup" ? { ...s, active: false, completed: false } : s);
+      const sets = e.sets.map(s => s.kind === "warmup" ? { ...s, active: false, completed: false, userSkipped: true } : s);
       const firstWork = sets.findIndex(s => s.kind === "work" && !s.completed);
       if (firstWork !== -1) sets[firstWork] = { ...sets[firstWork], active: true };
       return { ...e, sets };
@@ -1375,11 +1394,9 @@ function App() {
     });
     activateNextSet(next);
     const skippedNames = new Set(next.filter(e => e.skipped).map(e => e.name));
-    saveSkippedExercises(workout.name, localDate(), skippedNames);
-    // No /api/save round-trip needed — skipped sets are still completed:false
-    // so serializeForSave would emit the same payload as before. We just need
-    // local state to reflect the new focus.
-    setExercises(next);
+    saveSkippedExercises(workout.name, sessionDate, skippedNames);
+    // Save sets structure to localStorage
+    updateAndSave(next);
   };
 
   // Swap an exercise for an alternative in its SWAP_GROUP. Re-flattens the
@@ -1405,18 +1422,22 @@ function App() {
     const nextSwaps = { ...swaps };
     if (newName === originalName) delete nextSwaps[swapKey];
     else nextSwaps[swapKey] = newName;
-    saveSwaps(workout.name, localDate(), nextSwaps);
+    saveSwaps(workout.name, sessionDate, nextSwaps);
     setSwaps(nextSwaps);
     // Rebuild against the swapped template.
     const { last, hints } = dataRef.current;
     let exs = flattenTemplate(applySwaps(workout, nextSwaps), last, hints);
-    // Re-hydrate from this session's logged sets so the swap doesn't wipe
-    // progress on other exercises. The swapped exercise's old sets won't match
-    // (different name) — it correctly comes back blank.
-    const todaySets = serializeForSave(exercises, workout.name, sessionId, startedAt, elapsed).sets;
-    exs = hydrateToday(exs, todaySets);
+    // Copy sets from previous exercises state for all non-swapped slots
+    exs = exs.map((item, i) => {
+      if (i === eIdx) return item;
+      const prevEx = exercises[i];
+      if (prevEx && prevEx.name === item.name) {
+        return { ...item, sets: prevEx.sets.map(s => ({ ...s })) };
+      }
+      return item;
+    });
     // Re-apply skip flags, then recompute focus.
-    const skippedNames = loadSkippedExercises(workout.name, localDate());
+    const skippedNames = loadSkippedExercises(workout.name, sessionDate);
     if (skippedNames.size) exs = exs.map(e => skippedNames.has(e.name) ? { ...e, skipped: true } : e);
     activateNextSet(exs);
     updateAndSave(exs);
@@ -1480,7 +1501,7 @@ function App() {
   // Two-a-day: reveal the PM block and persist so a reload keeps it open.
   const onContinuePm = () => {
     setPmStarted(true);
-    savePmStarted(workout.name, localDate(), true);
+    savePmStarted(workout.name, sessionDate, true);
   };
 
   // Set counts for header. A skipped exercise counts its sets as "done" so the

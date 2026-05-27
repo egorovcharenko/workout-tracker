@@ -617,13 +617,13 @@ def get_today_session(workout_name, today=None):
     conn = get_db()
     c = conn.cursor()
     c.execute(
-        "SELECT id, duration_sec, started_at FROM sessions WHERE workout_name = ? AND date >= ? ORDER BY id DESC LIMIT 1",
+        "SELECT id, duration_sec, started_at, date FROM sessions WHERE workout_name = ? AND date >= ? ORDER BY id DESC LIMIT 1",
         (workout_name, _yesterday()),
     )
     row = c.fetchone()
     if not row:
-        conn.close()
-        return None
+      conn.close()
+      return None
     # Normalize started_at to ISO with explicit "Z" so the JS client parses as
     # UTC. SQLite returns the literal string we stored (already has "Z");
     # Postgres returns a naive datetime that default=str renders as
@@ -644,6 +644,7 @@ def get_today_session(workout_name, today=None):
         "id": row["id"],
         "duration_sec": row["duration_sec"],
         "started_at": started_at_str,
+        "date": row["date"],
         "sets": [],
     }
     c.execute("SELECT exercise, set_type, set_number, weight_lb, reps, bands_json, grip FROM sets WHERE session_id = ? ORDER BY id", (row["id"],))
