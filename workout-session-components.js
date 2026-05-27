@@ -1116,11 +1116,11 @@ const PercentileProjectionSparkline = ({ exerciseName, ormHistory, color, label,
     const denom = N * sumXX - sumX * sumX;
     if (denom !== 0) {
       const calculatedSlope = (N * sumXY - sumX * sumY) / denom;
-      const maxDailyIncrement = last * 0.01;
+      const maxDailyIncrement = last * 0.0015; // Realistic cap of 0.15% daily (4.5% monthly) progress
       slope = Math.max(0, Math.min(calculatedSlope, maxDailyIncrement));
     }
   } else {
-    slope = last * 0.001; // default 0.1% daily increase
+    slope = last * 0.0005; // default conservative 0.05% daily increase (1.5% monthly) for sparse data
   }
 
   const today = localDate();
