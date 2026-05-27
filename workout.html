@@ -2636,78 +2636,8 @@ function applyBandSelection(exIdx, setKey, bandsCSV) {
 
 
 // ----- Measurements screen -----
-// Body measurements feature: stored cm values from a smart-tape app (FitDays
-// style) or manual entry. Each row carries chest/waist/hip/arms/thighs/calves
-// + neck + shoulder. Latest snapshot, per-metric trend graphs, and a history
-// list, plus an inline form for adding the next reading.
-const MEASUREMENT_METRICS = [
-  // group: 'core' | 'limbs' | 'composite' — used to group graphs
-  { id: 'chest_cm',    label: 'Chest',     group: 'core',     direction: 'up',    color: '#ef4444' },
-  { id: 'shoulder_cm', label: 'Shoulder',  group: 'core',     direction: 'up',    color: '#f59e0b' },
-  { id: 'waist_cm',    label: 'Waist',     group: 'core',     direction: 'down',  color: '#3b82f6' },
-  { id: 'hip_cm',      label: 'Hip',       group: 'core',     direction: 'flat',  color: '#8b5cf6' },
-  { id: 'neck_cm',     label: 'Neck',      group: 'core',     direction: 'up',    color: '#0891b2' },
-  { id: 'l_arm_cm',    label: 'L Arm',     group: 'limbs',    direction: 'up',    color: '#dc2626' },
-  { id: 'r_arm_cm',    label: 'R Arm',     group: 'limbs',    direction: 'up',    color: '#dc2626' },
-  { id: 'l_thigh_cm',  label: 'L Thigh',   group: 'limbs',    direction: 'up',    color: '#7c3aed' },
-  { id: 'r_thigh_cm',  label: 'R Thigh',   group: 'limbs',    direction: 'up',    color: '#7c3aed' },
-  { id: 'l_calf_cm',   label: 'L Calf',    group: 'limbs',    direction: 'up',    color: '#15803d' },
-  { id: 'r_calf_cm',   label: 'R Calf',    group: 'limbs',    direction: 'up',    color: '#15803d' },
-  { id: 'head_cm',     label: 'Head',      group: 'misc',     direction: 'flat',  color: '#9ca3af' },
-  { id: 'weight_kg',   label: 'Weight',    group: 'misc',     direction: 'flat',  color: '#1f2937', unit: 'kg' },
-];
+// Handled by workout-ui-measurements.js
 
-// Paired L/R sparkline — both lines on one chart, shared y-axis so the gap
-// between them reads as actual asymmetry. Solid = right, dashed = left.
-
-
-
-
-
-
-async function submitMeasurement() {
-  const dateEl = document.getElementById('meas-date');
-  const date = dateEl?.value || new Date().toISOString().slice(0, 10);
-  const taken_at = `${date}T${new Date().toTimeString().slice(0, 8)}Z`;
-  const payload = { taken_at, date };
-  let any = false;
-  for (const m of MEASUREMENT_METRICS) {
-    const el = document.getElementById(`meas-${m.id}`);
-    const v = parseFloat(el?.value);
-    if (!isNaN(v) && v > 0) {
-      payload[m.id] = v;
-      any = true;
-    }
-  }
-  if (!any) {
-    alert('Enter at least one measurement.');
-    return;
-  }
-  try {
-    const res = await fetch('/api/measurements', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    state.measurements = undefined; // force re-fetch
-    await showMeasurements();
-  } catch (e) {
-    alert('Save failed: ' + e.message);
-  }
-}
-
-async function deleteMeasurement(id) {
-  if (!confirm('Delete this measurement?')) return;
-  try {
-    const res = await fetch(`/api/measurements/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    state.measurements = undefined;
-    await showMeasurements();
-  } catch (e) {
-    alert('Delete failed: ' + e.message);
-  }
-}
 
 // ----- Stats screen -----
 
