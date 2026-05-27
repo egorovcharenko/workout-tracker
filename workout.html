@@ -261,33 +261,40 @@ const WORKOUTS = [
   },
 ];
 
-// Exercise → muscle group mappings (primary muscles get full load, secondary get half)
 const EXERCISE_MUSCLES = {
-  "Overhead Dumbbell Press": { primary: ["shoulders"], secondary: ["triceps"] },
-  "Dumbbell Bicep Curls": { primary: ["biceps"], secondary: ["forearms"] },
-  "Band Bicep Curls": { primary: ["biceps"], secondary: ["forearms"] },
-  "Overhead Tricep Extension": { primary: ["triceps"], secondary: [] },
-  "Band Tricep Pushdowns": { primary: ["triceps"], secondary: [] },
-  "Dumbbell Hammer Curls": { primary: ["biceps"], secondary: ["forearms"] },
-  "Bench Dips": { primary: ["triceps"], secondary: ["chest", "shoulders"] },
-  "Dumbbell Bent-Over Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
-  "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
-  "Assisted Pull-Ups": { primary: ["lats"], secondary: ["biceps", "upper_back", "rear_delts"] },
-  "Reverse Flyes": { primary: ["rear_delts"], secondary: ["upper_back"] },
-  "Goblet Squat": { primary: ["quads", "glutes"], secondary: ["core"] },
-  "Bulgarian Split Squat": { primary: ["quads", "glutes"], secondary: ["hamstrings", "core"] },
-  "Dumbbell Flat Bench Press": { primary: ["chest"], secondary: ["triceps", "shoulders"] },
-  "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
-  "Dumbbell Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"] },
-  "Seated Overhead Press": { primary: ["shoulders"], secondary: ["triceps"] },
-  "Band Squat": { primary: ["quads", "glutes"], secondary: ["core"] },
-  "Band Row": { primary: ["lats", "upper_back"], secondary: ["biceps"] },
-  "Band Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"] },
-  "Pallof Press": { primary: ["core"], secondary: [] },
-  // Future
-  "Lunges": { primary: ["quads", "glutes"], secondary: ["hamstrings"] },
-  "Calf Raises": { primary: ["calves"], secondary: [] },
+  "Overhead Dumbbell Press": { primary: ["shoulders"], secondary: ["triceps"], ratios: { shoulders: 1.0, triceps: 0.4 } },
+  "Dumbbell Bicep Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.3 } },
+  "Band Bicep Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.3 } },
+  "Overhead Tricep Extension": { primary: ["triceps"], secondary: [], ratios: { triceps: 1.0 } },
+  "Band Tricep Pushdowns": { primary: ["triceps"], secondary: [], ratios: { triceps: 1.0 } },
+  "Dumbbell Hammer Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.4 } },
+  "Bench Dips": { primary: ["triceps"], secondary: ["chest", "shoulders"], ratios: { triceps: 1.0, chest: 0.4, shoulders: 0.4 } },
+  "Dumbbell Bent-Over Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"], ratios: { lats: 1.0, biceps: 0.3, rear_delts: 0.4 } },
+  "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"], ratios: { lats: 1.0, biceps: 0.3, rear_delts: 0.4 } },
+  "Assisted Pull-Ups": { primary: ["lats"], secondary: ["biceps", "upper_back", "rear_delts"], ratios: { lats: 1.0, biceps: 0.35, upper_back: 0.5, rear_delts: 0.3 } },
+  "Reverse Flyes": { primary: ["rear_delts"], secondary: ["upper_back"], ratios: { rear_delts: 1.0, upper_back: 0.4 } },
+  "Goblet Squat": { primary: ["quads", "glutes"], secondary: ["core"], ratios: { quads: 1.0, glutes: 1.0, core: 0.3 } },
+  "Bulgarian Split Squat": { primary: ["quads", "glutes"], secondary: ["hamstrings", "core"], ratios: { quads: 1.0, glutes: 1.0, hamstrings: 0.4, core: 0.2 } },
+  "Dumbbell Flat Bench Press": { primary: ["chest"], secondary: ["triceps", "shoulders"], ratios: { chest: 1.0, triceps: 0.4, shoulders: 0.4 } },
+  "Dumbbell Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.5 } },
+  "Seated Overhead Press": { primary: ["shoulders"], secondary: ["triceps"], ratios: { shoulders: 1.0, triceps: 0.4 } },
+  "Band Squat": { primary: ["quads", "glutes"], secondary: ["core"], ratios: { quads: 1.0, glutes: 1.0, core: 0.3 } },
+  "Band Row": { primary: ["lats", "upper_back"], secondary: ["biceps"], ratios: { lats: 1.0, upper_back: 1.0, biceps: 0.3 } },
+  "Band Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.4 } },
+  "Pallof Press": { primary: ["core"], secondary: [], ratios: { core: 1.0 } },
+  "Lunges": { primary: ["quads", "glutes"], secondary: ["hamstrings"], ratios: { quads: 1.0, glutes: 1.0, hamstrings: 0.3 } },
+  "Calf Raises": { primary: ["calves"], secondary: [], ratios: { calves: 1.0 } },
+  "Single-Leg DB RDL": { primary: ["hamstrings", "glutes"], secondary: ["lower_back", "core"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.4, core: 0.3 } }
 };
+
+function getMuscleImpact(exName, muscle, isPrimary) {
+  const mapping = EXERCISE_MUSCLES[exName];
+  if (!mapping) return isPrimary ? 1.0 : 0.5;
+  if (mapping.ratios && mapping.ratios[muscle] !== undefined) {
+    return mapping.ratios[muscle];
+  }
+  return isPrimary ? 1.0 : 0.5;
+}
 
 // Band resistance levels (Tribe set: 5 stackable bands)
 const BANDS = [
@@ -575,14 +582,15 @@ function computeMuscleStatus(history) {
       const reps = parseInt(set.reps) || 0;
       const volume = load * reps;
       for (const m of mapping.primary) {
+        const vol = volume * getMuscleImpact(set.exercise, m, true);
         if (!status[m] || hoursAgo < status[m].hoursAgo) {
-          status[m] = { hoursAgo, volume, date: session.date, workout: session.workout_name };
+          status[m] = { hoursAgo, volume: vol, date: session.date, workout: session.workout_name };
         } else if (hoursAgo === status[m].hoursAgo) {
-          status[m].volume += volume;
+          status[m].volume += vol;
         }
       }
       for (const m of mapping.secondary) {
-        const vol = volume * 0.5;
+        const vol = volume * getMuscleImpact(set.exercise, m, false);
         if (!status[m] || hoursAgo < status[m].hoursAgo) {
           status[m] = { hoursAgo, volume: vol, date: session.date, workout: session.workout_name };
         } else if (hoursAgo === status[m].hoursAgo) {
@@ -2585,8 +2593,8 @@ function renderWorkoutSummaryCard() {
   for (const ex of exercises) {
     const map = EXERCISE_MUSCLES[ex.name];
     if (!map) continue;
-    for (const m of (map.primary || [])) muscleSums[m] = (muscleSums[m] || 0) + ex.volume;
-    for (const m of (map.secondary || [])) muscleSums[m] = (muscleSums[m] || 0) + ex.volume * 0.5;
+    for (const m of (map.primary || [])) muscleSums[m] = (muscleSums[m] || 0) + ex.volume * getMuscleImpact(ex.name, m, true);
+    for (const m of (map.secondary || [])) muscleSums[m] = (muscleSums[m] || 0) + ex.volume * getMuscleImpact(ex.name, m, false);
   }
   const maxMuscle = Math.max(0, ...Object.values(muscleSums));
   const MUSCLE_LABEL = {
@@ -5003,8 +5011,8 @@ function renderSessionList() {
         const m = EXERCISE_MUSCLES[st.exercise];
         if (!m) return;
         const setVol = wt * r;
-        (m.primary || []).forEach(mu => { volByMuscle[mu] = (volByMuscle[mu] || 0) + setVol; });
-        (m.secondary || []).forEach(mu => { volByMuscle[mu] = (volByMuscle[mu] || 0) + setVol * 0.5; });
+        (m.primary || []).forEach(mu => { volByMuscle[mu] = (volByMuscle[mu] || 0) + setVol * getMuscleImpact(st.exercise, mu, true); });
+        (m.secondary || []).forEach(mu => { volByMuscle[mu] = (volByMuscle[mu] || 0) + setVol * getMuscleImpact(st.exercise, mu, false); });
       });
       const topMuscles = Object.entries(volByMuscle).sort((a, b) => b[1] - a[1]).slice(0, 5);
       const maxMuscleVol = topMuscles.length ? topMuscles[0][1] : 0;
@@ -5549,7 +5557,8 @@ function renderStats() {
     }).join('');
     const secondaryBadges = (mapping.secondary || []).map(m => {
       const info = MUSCLE_GROUPS[m];
-      return `<span style="display:inline-block;font-size:9px;background:#f1f5f9;color:#64748b;border:1px dashed #cbd5e1;padding:1px 5px;border-radius:4px;font-weight:500;white-space:nowrap">${info?.label || m} (½)</span>`;
+      const pct = Math.round(getMuscleImpact(ex.name, m, false) * 100);
+      return `<span style="display:inline-block;font-size:9px;background:#f1f5f9;color:#64748b;border:1px dashed #cbd5e1;padding:1px 5px;border-radius:4px;font-weight:500;white-space:nowrap">${info?.label || m} (${pct}%)</span>`;
     }).join('');
     const muscleBadgesHTML = (primaryBadges || secondaryBadges) ? `<div style="display:inline-flex;align-items:center;gap:4px;margin-left:6px;flex-wrap:wrap">${primaryBadges}${secondaryBadges}</div>` : '';
 

@@ -296,27 +296,39 @@ const api = {
 // Claude knows what muscles a lift hits without an extra lookup table on
 // the server. Primary muscles drive the headline; secondary fills context.
 const EXERCISE_MUSCLES = {
-  "Overhead Dumbbell Press": { primary: ["shoulders"], secondary: ["triceps"] },
-  "Dumbbell Bicep Curls": { primary: ["biceps"], secondary: ["forearms"] },
-  "Overhead Tricep Extension": { primary: ["triceps"], secondary: [] },
-  "Dumbbell Bent-Over Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
-  "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"] },
-  "Assisted Pull-Ups": { primary: ["lats"], secondary: ["biceps", "upper_back", "rear_delts"] },
-  "Reverse Flyes": { primary: ["rear_delts"], secondary: ["upper_back"] },
-  "Goblet Squat": { primary: ["quads", "glutes"], secondary: ["core"] },
-  "Bulgarian Split Squat": { primary: ["quads", "glutes"], secondary: ["hamstrings", "core"] },
-  "Dumbbell Flat Bench Press": { primary: ["chest"], secondary: ["triceps", "shoulders"] },
-  "Band Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"] },
-  "Dumbbell Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"] },
-  "Single-Leg DB RDL": { primary: ["hamstrings", "glutes"], secondary: ["lower_back", "core"] },
-  "Pallof Press": { primary: ["core"], secondary: [] },
-  "Seated Overhead Press": { primary: ["shoulders"], secondary: ["triceps"] },
-  "Band Squat": { primary: ["quads", "glutes"], secondary: ["core"] },
-  "Band Row": { primary: ["lats", "upper_back"], secondary: ["biceps"] },
-  "Band Tricep Pushdowns": { primary: ["triceps"], secondary: [] },
-  "Bench Dips": { primary: ["triceps"], secondary: ["chest", "shoulders"] },
-  "Dumbbell Hammer Curls": { primary: ["biceps"], secondary: ["forearms"] },
+  "Overhead Dumbbell Press": { primary: ["shoulders"], secondary: ["triceps"], ratios: { shoulders: 1.0, triceps: 0.4 } },
+  "Dumbbell Bicep Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.3 } },
+  "Band Bicep Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.3 } },
+  "Overhead Tricep Extension": { primary: ["triceps"], secondary: [], ratios: { triceps: 1.0 } },
+  "Band Tricep Pushdowns": { primary: ["triceps"], secondary: [], ratios: { triceps: 1.0 } },
+  "Dumbbell Hammer Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.4 } },
+  "Bench Dips": { primary: ["triceps"], secondary: ["chest", "shoulders"], ratios: { triceps: 1.0, chest: 0.4, shoulders: 0.4 } },
+  "Dumbbell Bent-Over Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"], ratios: { lats: 1.0, biceps: 0.3, rear_delts: 0.4 } },
+  "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"], ratios: { lats: 1.0, biceps: 0.3, rear_delts: 0.4 } },
+  "Assisted Pull-Ups": { primary: ["lats"], secondary: ["biceps", "upper_back", "rear_delts"], ratios: { lats: 1.0, biceps: 0.35, upper_back: 0.5, rear_delts: 0.3 } },
+  "Reverse Flyes": { primary: ["rear_delts"], secondary: ["upper_back"], ratios: { rear_delts: 1.0, upper_back: 0.4 } },
+  "Goblet Squat": { primary: ["quads", "glutes"], secondary: ["core"], ratios: { quads: 1.0, glutes: 1.0, core: 0.3 } },
+  "Bulgarian Split Squat": { primary: ["quads", "glutes"], secondary: ["hamstrings", "core"], ratios: { quads: 1.0, glutes: 1.0, hamstrings: 0.4, core: 0.2 } },
+  "Dumbbell Flat Bench Press": { primary: ["chest"], secondary: ["triceps", "shoulders"], ratios: { chest: 1.0, triceps: 0.4, shoulders: 0.4 } },
+  "Dumbbell Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.5 } },
+  "Seated Overhead Press": { primary: ["shoulders"], secondary: ["triceps"], ratios: { shoulders: 1.0, triceps: 0.4 } },
+  "Band Squat": { primary: ["quads", "glutes"], secondary: ["core"], ratios: { quads: 1.0, glutes: 1.0, core: 0.3 } },
+  "Band Row": { primary: ["lats", "upper_back"], secondary: ["biceps"], ratios: { lats: 1.0, upper_back: 1.0, biceps: 0.3 } },
+  "Band Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.4 } },
+  "Pallof Press": { primary: ["core"], secondary: [], ratios: { core: 1.0 } },
+  "Lunges": { primary: ["quads", "glutes"], secondary: ["hamstrings"], ratios: { quads: 1.0, glutes: 1.0, hamstrings: 0.3 } },
+  "Calf Raises": { primary: ["calves"], secondary: [], ratios: { calves: 1.0 } },
+  "Single-Leg DB RDL": { primary: ["hamstrings", "glutes"], secondary: ["lower_back", "core"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.4, core: 0.3 } }
 };
+
+function getMuscleImpact(exName, muscle, isPrimary) {
+  const mapping = EXERCISE_MUSCLES[exName];
+  if (!mapping) return isPrimary ? 1.0 : 0.5;
+  if (mapping.ratios && mapping.ratios[muscle] !== undefined) {
+    return mapping.ratios[muscle];
+  }
+  return isPrimary ? 1.0 : 0.5;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Swappable exercise groups — any exercise in a group can be swapped for any
@@ -1762,6 +1774,11 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
     setTip({ content, x: r.left + r.width / 2, y: r.top - 4 });
   };
   const hideTip = () => setTip(null);
+
+  useEffect(() => {
+    setTip(null);
+  }, [exercise]);
+
   const muscleInfo = EXERCISE_MUSCLES[exercise.name] || { primary: [], secondary: [] };
 
   // Working sets per primary muscle of this exercise, last 7 days inclusive
@@ -1788,7 +1805,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
           exercise: st.exercise,
           weight: +st.weight_lb || 0,
           reps: parseInt(st.reps) || 0,
-          weightage: 1.0,
+          weightage: getMuscleImpact(st.exercise, muscle, true),
         });
       }
       for (const muscle of (mm.secondary || [])) {
@@ -1797,7 +1814,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
           exercise: st.exercise,
           weight: +st.weight_lb || 0,
           reps: parseInt(st.reps) || 0,
-          weightage: 0.5,
+          weightage: getMuscleImpact(st.exercise, muscle, false),
         });
       }
     }
@@ -1823,7 +1840,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
           exercise: e.name,
           weight,
           reps: parseInt(s.reps) || 0,
-          weightage: 1.0,
+          weightage: getMuscleImpact(e.name, muscle, true),
         });
       }
       for (const muscle of (em.secondary || [])) {
@@ -1832,7 +1849,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
           exercise: e.name,
           weight,
           reps: parseInt(s.reps) || 0,
-          weightage: 0.5,
+          weightage: getMuscleImpact(e.name, muscle, false),
         });
       }
     }
@@ -2014,30 +2031,32 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
       const hardness = Math.max(0.35, Math.min(1, score || 0.35));
       const sat = Math.round(55 + hardness * 35);   // 55–90%
       const light = Math.round(isToday ? (44 + hardness * 12) : (38 + hardness * 14));
-      const alpha = (isToday ? 1 : 0.85) * (ev.weightage === 0.5 ? 0.5 : 1.0);
+      const alpha = (isToday ? 1 : 0.85) * (ev.weightage < 1.0 ? 0.55 : 1.0);
       return {
         background: `hsla(${hue}, ${sat}%, ${light}%, ${alpha})`,
-        boxShadow: isToday && ev.weightage !== 0.5 ? `0 0 6px hsla(${hue}, ${sat}%, 60%, 0.5)` : "none",
-        border: ev.weightage === 0.5 ? "1px dashed rgba(255,255,255,0.4)" : "none",
+        boxShadow: isToday && ev.weightage === 1.0 ? `0 0 6px hsla(${hue}, ${sat}%, 60%, 0.5)` : "none",
+        border: ev.weightage < 1.0 ? "1px dashed rgba(255,255,255,0.4)" : "none",
       };
     };
 
     const formatSets = (s) => {
       if (Number.isInteger(s)) return String(s);
-      const integer = Math.floor(s);
-      return integer > 0 ? `${integer}½` : `½`;
+      return s.toFixed(1);
     };
 
     const getSliceHeight = (ev) => {
       const baseH = SLICE_H;
-      return ev.weightage === 0.5 ? Math.max(2, Math.floor(baseH * 0.5)) : baseH;
+      if (ev.weightage < 1.0) {
+        return Math.max(2, Math.floor(baseH * ev.weightage));
+      }
+      return baseH;
     };
 
     return (
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
           <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>
-            {muscle.replace("_", " ")}{!isPrimary && " (½)"}
+            {muscle.replace("_", " ")}{!isPrimary && ` (${Math.round(getMuscleImpact(exercise.name, muscle, false) * 100)}%)`}
           </span>
           <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 800 }}>
             <span style={{ color: countColor }}>{formatSets(sets)}</span>
@@ -2057,7 +2076,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
               ) : (
                 d.events.map((ev, j) => (
                   <div key={j}
-                    onMouseEnter={(e) => showTip(e, `${ev.exercise} · ${ev.weight}lb × ${ev.reps} · ${ev.date}${ev.weightage === 0.5 ? " (secondary target)" : ""}`)}
+                    onMouseEnter={(e) => showTip(e, `${ev.exercise} · ${ev.weight}lb × ${ev.reps} · ${ev.date}${ev.weightage < 1.0 ? ` (secondary: ${Math.round(ev.weightage * 100)}%)` : ""}`)}
                     onMouseLeave={hideTip}
                     style={{
                       height: getSliceHeight(ev),
@@ -2240,11 +2259,14 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   const secondaryList = (muscleInfo.secondary || []);
 
   return (
-    <div style={{
-      padding: 14, borderRadius: 14,
-      background: T.cardBg, border: `1px solid ${T.cardBorder}`,
-      color: T.text,
-    }}>
+    <div
+      onMouseLeave={hideTip}
+      style={{
+        padding: 14, borderRadius: 14,
+        background: T.cardBg, border: `1px solid ${T.cardBorder}`,
+        color: T.text,
+      }}
+    >
       <div style={{ marginBottom: 12 }}>
         <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0, marginBottom: 4 }}>STATS</div>
         <div style={{ color: T.strong, fontSize: 16, fontWeight: 800, letterSpacing: -0.3, lineHeight: 1.2 }}>{exercise.name}</div>
@@ -2264,7 +2286,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
                 border: "1px dashed rgba(255,255,255,0.15)",
                 fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 0.4,
                 padding: "2px 6px", borderRadius: 4, textTransform: "uppercase",
-              }}>{m.replace("_", " ")} (½)</span>
+              }}>{m.replace("_", " ")} ({Math.round(getMuscleImpact(exercise.name, m, false) * 100)}%)</span>
             ))}
           </div>
         )}
@@ -2728,8 +2750,22 @@ function App() {
       j !== eIdx && e2.superset === ex.superset && e2.sets.some(s => !s.completed)
     );
     if (!partnerHasMore) {
-      const total = kind === "warmup" ? 30 : (ex.rest || 90);
-      setRest({ total, left: total, endAt: Date.now() + total * 1000, eIdx, sIdx, kind, paused: false });
+      // Find next set to determine rest duration: rest is 30s before a warmup set,
+      // and full rest (ex.rest) before a working set.
+      let nextSet = null;
+      const sameExNextIdx = ex.sets.findIndex((s, k) => k > sIdx && !s.completed);
+      if (sameExNextIdx !== -1) {
+        nextSet = ex.sets[sameExNextIdx];
+      } else {
+        const nextExIdx = next.findIndex((e, k) => k > eIdx && e.sets.some(s => !s.completed));
+        if (nextExIdx !== -1) {
+          nextSet = next[nextExIdx].sets.find(s => !s.completed);
+        }
+      }
+
+      const restKind = (nextSet && nextSet.kind === "warmup") ? "warmup" : "work";
+      const total = restKind === "warmup" ? 30 : (ex.rest || 90);
+      setRest({ total, left: total, endAt: Date.now() + total * 1000, eIdx, sIdx, kind: restKind, paused: false });
     } else {
       setRest(null);
     }
