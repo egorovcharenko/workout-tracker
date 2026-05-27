@@ -987,9 +987,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(json.dumps(data, default=str).encode())
+        elif parsed.path.endswith(".js"):
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), parsed.path.lstrip("/"))
+            if os.path.exists(filepath):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/javascript")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                with open(filepath, "rb") as f:
+                    self.wfile.write(f.read())
+            else:
+                self.send_response(404)
+                self.end_headers()
+        elif parsed.path.endswith(".css"):
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), parsed.path.lstrip("/"))
+            if os.path.exists(filepath):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/css")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                with open(filepath, "rb") as f:
+                    self.wfile.write(f.read())
+            else:
+                self.send_response(404)
+                self.end_headers()
         else:
             self.send_response(404)
             self.end_headers()
+
 
     def do_POST(self):
         if self.path == "/api/motivate":
