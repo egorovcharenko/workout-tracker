@@ -1294,8 +1294,17 @@ if __name__ == "__main__":
     print(f"\n  🏋️  Workout Tracker running at http://localhost:{PORT}")
     print(f"  📁  Database: {DB_PATH}")
     print(f"  Press Ctrl+C to stop\n")
-    server = http.server.HTTPServer(("", PORT), Handler)
+
+    import socket
+    class DualStackHTTPServer(http.server.HTTPServer):
+        address_family = socket.AF_INET6
+        def server_bind(self):
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            super().server_bind()
+
+    server = DualStackHTTPServer(("", PORT), Handler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\n  Stopped.")
+

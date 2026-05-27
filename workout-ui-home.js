@@ -435,6 +435,225 @@ function renderLastFinishCard() {
     </div>`;
 }
 
+function renderPercentilesCard() {
+  const history = state.history || [];
+  if (!history.length) return '';
+
+  const todayStr = localDate();
+  const todayMs = Date.parse(todayStr + 'T00:00:00');
+  const cutoffMs = todayMs - 30 * 24 * 60 * 60 * 1000;
+
+  // Grouping structure: { exerciseName: { dateStr: maxOrm } }
+  const exerciseDates = {};
+
+  history.forEach(sess => {
+    if (!sess.date) return;
+    const sessMs = Date.parse(sess.date + 'T00:00:00');
+    if (sessMs < cutoffMs) return;
+
+    (sess.sets || []).forEach(st => {
+      if (st.set_type !== 'working' || !st.reps) return;
+      const w = parseFloat(st.weight_lb) || 0;
+      const r = parseInt(st.reps) || 0;
+      if (w <= 0 || r <= 0) return;
+      const orm = r > 1 ? w * (1 + r / 30) : w;
+
+      if (!exerciseDates[st.exercise]) {
+        exerciseDates[st.exercise] = {};
+      }
+      if (!exerciseDates[st.exercise][sess.date] || orm > exerciseDates[st.exercise][sess.date]) {
+        exerciseDates[st.exercise][sess.date] = orm;
+      }
+    });
+  });
+
+  const exerciseHistory = {};
+  const activeExercises = new Set();
+
+  Object.entries(exerciseDates).forEach(([exName, datesObj]) => {
+    const sortedDates = Object.keys(datesObj).sort();
+    const pts = [];
+
+    sortedDates.forEach(date => {
+      const orm = datesObj[date];
+      const pctInfo = getStrengthPercentile(exName, orm);
+      if (!pctInfo) return;
+
+      pts.push({
+        date: date,
+        ms: Date.parse(date + 'T00:00:00'),
+        orm: orm,
+        percentile: pctInfo.percentile,
+        tier: pctInfo.tier
+      });
+    });
+
+    if (pts.length > 0) {
+      activeExercises.add(exName);
+      exerciseHistory[exName] = pts;
+    }
+  });
+
+  if (activeExercises.size === 0) {
+    return `
+      <div class="card" style="padding:16px;margin-bottom:16px">
+        <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0 0 4px">Strength Percentiles (Last 30 Days)</h3>
+        <p style="font-size:11px;color:#6b7280;margin:0 0 12px">Track your strength tier progress across exercises done this month.</p>
+        <div style="text-align:center;padding:24px 0;color:#9ca3af;font-size:12px;border:1px dashed #e5e7eb;border-radius:8px">
+          No strength exercises logged in the last 30 days.
+        </div>
+      </div>
+    `;
+  }
+
+  const exercisesList = Array.from(activeExercises).map(exName => {
+    const pts = exerciseHistory[exName];
+    const latest = pts[pts.length - 1];
+    const first = pts[0];
+    const diffPct = latest.percentile - first.percentile;
+    
+    return {
+      name: exName,
+      latestPct: latest.percentile,
+      latestTier: latest.tier,
+      latestOrm: latest.orm,
+      diffPct: diffPct,
+      pts: pts
+    };
+  }).sort((a, b) => b.latestPct - a.latestPct);
+
+  const width = 350;
+  const height = 150;
+  const paddingLeft = 30;
+  const paddingRight = 10;
+  const paddingTop = 10;
+  const paddingBottom = 20;
+
+  const COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4", "#f43f5e", "#14b8a6"];
+  const exColors = {};
+  exercisesList.forEach((ex, idx) => {
+    exColors[ex.name] = COLORS[idx % COLORS.length];
+  });
+
+  const getX = (ms) => {
+    const range = todayMs - cutoffMs || 1;
+    const ratio = (ms - cutoffMs) / range;
+    return paddingLeft + ratio * (width - paddingLeft - paddingRight);
+  };
+
+  const getY = (pct) => {
+    const ratio = pct / 100;
+    return (height - paddingBottom) - ratio * (height - paddingTop - paddingBottom);
+  };
+
+  const gridLines = [];
+  const yTicks = [0, 25, 50, 75, 100];
+  yTicks.forEach(tick => {
+    const yVal = getY(tick);
+    gridLines.push(`
+      <line x1="${paddingLeft}" y1="${yVal}" x2="${width - paddingRight}" y2="${yVal}" stroke="rgba(255,255,255,0.08)" stroke-width="1" stroke-dasharray="3,3" />
+      <text x="${paddingLeft - 6}" y="${yVal + 3}" text-anchor="end" font-size="8" fill="#9ca3af" font-family="${T.mono}">${tick}%</text>
+    `);
+  });
+
+  const xTicks = [];
+  const tickDays = [30, 20, 10, 0];
+  tickDays.forEach(d => {
+    const tickMs = todayMs - d * 24 * 60 * 60 * 1000;
+    const xVal = getX(tickMs);
+    const label = d === 0 ? 'Today' : `-${d}d`;
+    xTicks.push(`
+      <line x1="${xVal}" y1="130" x2="${xVal}" y2="134" stroke="rgba(255,255,255,0.15)" stroke-width="1" />
+      <text x="${xVal}" y="${144}" text-anchor="middle" font-size="8" fill="#9ca3af" font-family="${T.mono}">${label}</text>
+    `);
+  });
+
+  const paths = [];
+  exercisesList.forEach(ex => {
+    const pts = ex.pts;
+    if (pts.length < 1) return;
+    const color = exColors[ex.name];
+    
+    if (pts.length >= 2) {
+      const pathD = pts.map((p, idx) => {
+        const x = getX(p.ms);
+        const y = getY(p.percentile);
+        return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
+      }).join(' ');
+      
+      paths.push(`
+        <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" />
+      `);
+    }
+    
+    pts.forEach(p => {
+      const x = getX(p.ms);
+      const y = getY(p.percentile);
+      paths.push(`
+        <circle cx="${x}" cy="${y}" r="2.8" fill="${color}" stroke="#111827" stroke-width="0.8" />
+      `);
+    });
+  });
+
+  function getTierStyle(tier) {
+    switch (tier) {
+      case 'Elite':
+        return 'background:#fee2e2;color:#b91c1c;';
+      case 'Advanced':
+        return 'background:#ffedd5;color:#c2410c;';
+      case 'Intermediate':
+        return 'background:#dcfce7;color:#15803d;';
+      case 'Novice':
+        return 'background:#e0f2fe;color:#0369a1;';
+      case 'Beginner':
+        return 'background:#f3f4f6;color:#4b5563;';
+      default:
+        return 'background:#f9fafb;color:#9ca3af;';
+    }
+  }
+
+  const rowsHTML = exercisesList.map(ex => {
+    const color = exColors[ex.name];
+    const sign = ex.diffPct >= 0 ? '+' : '';
+    const diffColor = ex.diffPct > 0 ? '#10b981' : ex.diffPct < 0 ? '#ef4444' : '#9ca3af';
+    const diffText = ex.pts.length > 1 ? `<span style="font-size:10px;font-weight:700;color:${diffColor};margin-left:4px">${sign}${ex.diffPct}%</span>` : '';
+    const tierStyle = getTierStyle(ex.latestTier);
+    
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid #f3f4f6;gap:8px">
+        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
+          <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
+          <span style="color:#374151;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <span style="font-size:10px;color:#9ca3af">${Math.round(ex.latestOrm)} lb est</span>
+          <span style="font-weight:700;color:#111827;font-family:${T.mono}">${ex.latestPct}%</span>
+          <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;min-width:70px;text-align:center;${tierStyle}">${ex.latestTier}</span>
+          ${diffText}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="card" style="padding:16px;margin-bottom:16px">
+      <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0 0 4px">Strength Percentiles (Last 30 Days)</h3>
+      <p style="font-size:11px;color:#6b7280;margin:0 0 12px">Track your strength tier progress across exercises done this month.</p>
+      
+      <div style="margin:0 auto 12px;display:block;width:100%;overflow-x:auto;scrollbar-width:none">
+        <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="display:block;margin:0 auto">
+          <line x1="${paddingLeft}" y1="130" x2="${width - paddingRight}" y2="130" stroke="rgba(255,255,255,0.15)" stroke-width="1.2" />
+          ${gridLines.join("")}
+          ${xTicks.join("")}
+          ${paths.join("")}
+        </svg>
+      </div>
+
+      <div style="border-top:1px solid #f3f4f6;padding-top:8px">${rowsHTML}</div>
+    </div>
+  `;
+}
+
 function renderHome() {
   const getExpectedSets = (w) => {
     let count = 0;
@@ -550,6 +769,7 @@ function renderHome() {
 
       ${renderLastFinishCard()}
       ${renderWorkoutSummaryCard()}
+      ${renderPercentilesCard()}
 
       <div style="margin-bottom:8px"><h4 style="font-size:11px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin:0">Active Program</h4></div>
       ${cardsHTML}
