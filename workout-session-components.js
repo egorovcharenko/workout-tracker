@@ -993,49 +993,6 @@ const Sparkline = ({ exerciseName, data, valueKey, color, label, fmt, showTip, h
 
   const first = historicalVals[0], last = historicalVals[historicalVals.length - 1];
 
-  const futureDaysCount = 3;
-  if (last > 0 && (valueKey === "orm" || valueKey === "vol")) {
-    // Calculate extrapolation slope if there are enough historical data points
-    let slope = 0;
-    const histDays = days.filter(d => d.value != null && d.value > 0);
-    if (histDays.length >= 2) {
-      const N = histDays.length;
-      let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-      days.forEach((d, idx) => {
-        if (d.value != null && d.value > 0) {
-          sumX += idx;
-          sumY += d.value;
-          sumXY += idx * d.value;
-          sumXX += idx * idx;
-        }
-      });
-      const denom = N * sumXX - sumX * sumX;
-      if (denom !== 0) {
-        const calculatedSlope = (N * sumXY - sumX * sumY) / denom;
-        // Cap the slope to be realistic:
-        // - Min: 0 (keep flat if trend is negative; don't project declines)
-        // - Max: 1% of last value per day (progressive, realistic growth)
-        const maxDailyIncrement = last * 0.01;
-        slope = Math.max(0, Math.min(calculatedSlope, maxDailyIncrement));
-      }
-    } else {
-      // Fallback for N < 2: project a very conservative 0.1% daily increase
-      slope = last * 0.001;
-    }
-
-    for (let i = 1; i <= futureDaysCount; i++) {
-      const ms = todayMs + i * DAY_MS;
-      const d = new Date(ms);
-      days.push({
-        date: d.toISOString().slice(0, 10),
-        label: String(d.getUTCDate()),
-        isToday: false,
-        isFuture: true,
-        value: last + slope * i,
-      });
-    }
-  }
-
   const presentVals = days.filter(d => d.value != null && d.value > 0).map(d => d.value);
   const min = Math.min(...presentVals);
   const max = Math.max(...presentVals);
@@ -1050,22 +1007,12 @@ const Sparkline = ({ exerciseName, data, valueKey, color, label, fmt, showTip, h
   } : null);
   const presentPts = pts.filter(Boolean);
 
-  const historicalPts = presentPts.filter(p => !p.isFuture);
-  const projectedPts = presentPts.filter(p => p.isFuture);
-
-  const linePath = historicalPts.length > 1
-    ? historicalPts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ")
+  const linePath = presentPts.length > 1
+    ? presentPts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ")
     : "";
-  const areaPath = historicalPts.length > 1
-    ? `${linePath} L ${historicalPts[historicalPts.length-1].x.toFixed(1)} ${h} L ${historicalPts[0].x.toFixed(1)} ${h} Z`
+  const areaPath = presentPts.length > 1
+    ? `${linePath} L ${presentPts[presentPts.length-1].x.toFixed(1)} ${h} L ${presentPts[0].x.toFixed(1)} ${h} Z`
     : "";
-
-  let projectedLinePath = "";
-  if (historicalPts.length > 0 && projectedPts.length > 0) {
-    const startPt = historicalPts[historicalPts.length - 1];
-    projectedLinePath = `M ${startPt.x.toFixed(1)} ${startPt.y.toFixed(1)} ` +
-      projectedPts.map(p => `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-  }
 
   const delta = first ? Math.round(((last - first) / first) * 100) : 0;
   const deltaColor = delta > 0 ? T.green : delta < 0 ? T.red : T.faint;
@@ -1099,46 +1046,23 @@ const Sparkline = ({ exerciseName, data, valueKey, color, label, fmt, showTip, h
         </defs>
         {areaPath && <path d={areaPath} fill={`url(#${gradId})`} />}
         {linePath && <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
-        {projectedLinePath && (
-          <path d={projectedLinePath} fill="none" stroke={color} strokeWidth="1.5" strokeDasharray="3 3" strokeLinecap="round" strokeLinejoin="round" />
-        )}
         {days.map((d, i) => (
           <line key={`g${i}`} x1={dayX(i)} y1={padY} x2={dayX(i)} y2={h - padY}
-            stroke={d.isToday ? "rgba(96,165,250,0.18)" : d.isFuture ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)"}
+            stroke={d.isToday ? "rgba(96,165,250,0.18)" : "rgba(255,255,255,0.04)"}
             strokeWidth={d.isToday ? 1 : 0.5}
             strokeDasharray={d.isToday ? "" : "2 3"} />
         ))}
         {presentPts.map((p, i) => {
-          const isLastProjected = p.isFuture && i === presentPts.length - 1;
           const pctInfo = valueKey === "orm" ? getStrengthPercentile(exerciseName, p.value) : null;
           const pctStr = pctInfo ? ` (${pctInfo.percentile}%)` : "";
           return (
             <g key={`p${i}`}>
-              {p.isFuture ? (
-                isLastProjected ? (
-                  <>
-                    <circle cx={p.x} cy={p.y} r="5" fill="none" stroke={color} strokeWidth="1" />
-                    <circle cx={p.x} cy={p.y} r="2.4" fill={color} />
-                  </>
-                ) : (
-                  <circle cx={p.x} cy={p.y} r="1.8" fill="none" stroke={color} strokeWidth="1" />
-                )
-              ) : (
-                <circle cx={p.x} cy={p.y} r={p.isToday ? 3.2 : 2.4} fill={color}
-                  stroke={p.isToday ? "rgba(11,15,20,0.9)" : "none"} strokeWidth={p.isToday ? 1 : 0} />
-              )}
+              <circle cx={p.x} cy={p.y} r={p.isToday ? 3.2 : 2.4} fill={color}
+                stroke={p.isToday ? "rgba(11,15,20,0.9)" : "none"} strokeWidth={p.isToday ? 1 : 0} />
               <circle cx={p.x} cy={p.y} r="8" fill="transparent"
                 style={{ cursor: "default" }}
-                onMouseEnter={(e) => showTip(e, p.isFuture
-                  ? `Projected: ${fmt(p.value)}${pctStr}`
-                  : `${p.date} · ${fmt(p.value)}${pctStr}${p.isToday ? " (today)" : ""}`
-                )}
+                onMouseEnter={(e) => showTip(e, `${p.date} · ${fmt(p.value)}${pctStr}${p.isToday ? " (today)" : ""}`)}
                 onMouseLeave={hideTip} />
-              {isLastProjected && (
-                <text x={p.x} y={p.y - 7} textAnchor="end" fill={color} style={{ fontSize: 8.5, fontFamily: T.mono, fontWeight: 800 }}>
-                  🎯 {fmt(p.value)}{pctStr}
-                </text>
-              )}
             </g>
           );
         })}
@@ -1147,10 +1071,143 @@ const Sparkline = ({ exerciseName, data, valueKey, color, label, fmt, showTip, h
         {days.map((d, i) => (
           <span key={i} style={{
             flex: 1, textAlign: "center",
-            color: d.isToday ? T.accentLight : d.isFuture ? T.disabled : (d.value != null && d.value > 0 ? T.muted : T.disabled),
+            color: d.isToday ? T.accentLight : (d.value != null && d.value > 0 ? T.muted : T.disabled),
             fontFamily: T.mono, fontSize: 9,
-            fontWeight: d.isToday ? 800 : d.isFuture ? 500 : (d.value != null && d.value > 0 ? 600 : 500),
+            fontWeight: d.isToday ? 800 : (d.value != null && d.value > 0 ? 600 : 500),
           }}>{d.label}</span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const PercentileProjectionSparkline = ({ exerciseName, ormHistory, color, label, showTip, hideTip }) => {
+  const sortedHistory = [...(ormHistory || [])]
+    .filter(h => h.date && h.orm > 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (sortedHistory.length === 0) {
+    return (
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+          <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.3 }}>{label}</span>
+          <span style={{ color: T.disabled, fontFamily: T.mono, fontSize: 10 }}>—</span>
+        </div>
+        <div style={{ height: 38, display: "flex", alignItems: "center", justifyContent: "center", color: T.disabled, fontFamily: T.mono, fontSize: 10, border: `1px dashed ${T.cardBorder}`, borderRadius: 4 }}>no history for projection</div>
+      </div>
+    );
+  }
+
+  const N = sortedHistory.length;
+  let slope = 0;
+  const last = sortedHistory[N - 1].orm;
+  
+  if (N >= 2) {
+    const d0 = Date.parse(sortedHistory[0].date + 'T00:00:00Z');
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    sortedHistory.forEach(h => {
+      const xi = (Date.parse(h.date + 'T00:00:00Z') - d0) / 86400000;
+      const yi = h.orm;
+      sumX += xi;
+      sumY += yi;
+      sumXY += xi * yi;
+      sumXX += xi * xi;
+    });
+    const denom = N * sumXX - sumX * sumX;
+    if (denom !== 0) {
+      const calculatedSlope = (N * sumXY - sumX * sumY) / denom;
+      const maxDailyIncrement = last * 0.01;
+      slope = Math.max(0, Math.min(calculatedSlope, maxDailyIncrement));
+    }
+  } else {
+    slope = last * 0.001; // default 0.1% daily increase
+  }
+
+  const today = localDate();
+  const todayMs = Date.parse(today + 'T00:00:00Z');
+  const projectionDays = [];
+  for (let i = 0; i <= 30; i++) {
+    const ms = todayMs + i * 86400000;
+    const d = new Date(ms);
+    const projectedOrm = last + slope * i;
+    const pctInfo = getStrengthPercentile(exerciseName, projectedOrm) || { percentile: 0, tier: "Untrained" };
+    projectionDays.push({
+      idx: i,
+      label: i === 0 ? "Today" : `+${i}d`,
+      percentile: pctInfo.percentile,
+      tier: pctInfo.tier,
+    });
+  }
+
+  const percentiles = projectionDays.map(d => d.percentile);
+  const minPct = Math.min(...percentiles);
+  const maxPct = Math.max(...percentiles);
+  const range = maxPct - minPct || 10;
+  const w = 280, h = 38, padX = 8, padY = 4;
+  
+  const dayX = (i) => padX + (i * (w - 2 * padX)) / 30;
+  const yFor = (v) => h - padY - ((v - minPct) / range) * (h - 2 * padY);
+
+  const linePath = projectionDays.map((d, i) => `${i === 0 ? "M" : "L"} ${dayX(i).toFixed(1)} ${yFor(d.percentile).toFixed(1)}`).join(" ");
+  const areaPath = `${linePath} L ${dayX(30).toFixed(1)} ${h} L ${dayX(0).toFixed(1)} ${h} Z`;
+  const gradId = `spark-proj-pct-${color.replace(/[^a-z0-9]/gi, "")}`;
+
+  const lastDay = projectionDays[30];
+  const markers = [0, 7, 14, 21, 28, 30].map(i => projectionDays[i]);
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 5 }}>
+        <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: 0.3 }}>{label}</span>
+        <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 800, color: T.strong }}>
+          {projectionDays[0].percentile}%
+          <span style={{ color: T.muted, fontWeight: 600, fontSize: 9.5, marginLeft: 6 }}>
+            ({projectionDays[0].tier})
+          </span>
+        </span>
+      </div>
+      <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block", height: h }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill={`url(#${gradId})`} />
+        <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeDasharray="3 3" strokeLinecap="round" strokeLinejoin="round" />
+        
+        {/* Weekly grid lines */}
+        {[0, 7, 14, 21, 28, 30].map(i => (
+          <line key={`g${i}`} x1={dayX(i)} y1={padY} x2={dayX(i)} y2={h - padY}
+            stroke="rgba(255,255,255,0.03)" strokeWidth={0.5} strokeDasharray="2 3" />
+        ))}
+
+        {/* Hover/Interactive points at weekly intervals */}
+        {markers.map((d) => (
+          <g key={`m${d.idx}`}>
+            <circle cx={dayX(d.idx)} cy={yFor(d.percentile)} r={d.idx === 30 ? 2.4 : 1.8} fill={color} />
+            {d.idx === 30 && (
+              <circle cx={dayX(d.idx)} cy={yFor(d.percentile)} r="5" fill="none" stroke={color} strokeWidth="1" />
+            )}
+            <circle cx={dayX(d.idx)} cy={yFor(d.percentile)} r="8" fill="transparent"
+              style={{ cursor: "default" }}
+              onMouseEnter={(e) => showTip(e, `Projected ${d.label}: ${d.percentile}% (${d.tier})`)}
+              onMouseLeave={hideTip} />
+          </g>
+        ))}
+
+        <text x={dayX(30)} y={yFor(lastDay.percentile) - 7} textAnchor="end" fill={color} style={{ fontSize: 8.5, fontFamily: T.mono, fontWeight: 800 }}>
+          🎯 {lastDay.percentile}%
+        </text>
+      </svg>
+      <div style={{ display: "flex", gap: 3, marginTop: 5 }}>
+        {[0, 7, 14, 21, 28, 30].map(i => (
+          <span key={i} style={{
+            flex: i === 30 ? 0.5 : 1, textAlign: i === 30 ? "right" : "center",
+            color: i === 0 ? T.accentLight : T.disabled,
+            fontFamily: T.mono, fontSize: 9,
+            fontWeight: i === 0 ? 800 : 500,
+          }}>{i === 0 ? "Today" : i === 30 ? "+30d" : `+${i}d`}</span>
         ))}
       </div>
     </div>
@@ -1382,6 +1439,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
         )}
         <Sparkline exerciseName={lookupName} data={ormHist} valueKey="orm" color="#60A5FA" label="1RM EST" fmt={v => `${Math.round(v)} lb`} showTip={showTip} hideTip={hideTip} />
         <Sparkline exerciseName={lookupName} data={volHist} valueKey="vol" color="#34D399" label="VOLUME" fmt={v => `${Math.round(v).toLocaleString()} lb`} showTip={showTip} hideTip={hideTip} />
+        <PercentileProjectionSparkline exerciseName={lookupName} ormHistory={ormHist} color="#FBBF24" label="PROJECTED PERCENTILE (30D)" showTip={showTip} hideTip={hideTip} />
       </Section>
 
       {hasPRs && (

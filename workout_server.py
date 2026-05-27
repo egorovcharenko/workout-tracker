@@ -57,50 +57,136 @@ class _PGConn:
     def close(self): self._conn.close()
 
 
+DB_INITIALIZED = False
+
+
 def get_db():
+    global DB_INITIALIZED
     if PG_URL:
         import psycopg
         from psycopg.rows import dict_row
         raw = psycopg.connect(PG_URL, row_factory=dict_row, autocommit=False)
         conn = _PGConn(raw)
-        # Postgres-flavored schema
+        if not DB_INITIALIZED:
+            # Check if sessions table already exists in postgres to avoid concurrent DDL deadlocks on cold starts
+            cur = conn.execute("SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'sessions')")
+            exists = cur.fetchone()["exists"]
+            if not exists:
+                # Postgres-flavored schema
+                conn.execute('''CREATE TABLE IF NOT EXISTS sessions (
+                    id SERIAL PRIMARY KEY,
+                    workout_name TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    duration_sec INTEGER,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )''')
+                conn.execute('''CREATE TABLE IF NOT EXISTS sets (
+                    id SERIAL PRIMARY KEY,
+                    session_id INTEGER NOT NULL REFERENCES sessions(id),
+                    exercise TEXT NOT NULL,
+                    set_type TEXT NOT NULL DEFAULT 'working',
+                    set_number INTEGER,
+                    reps TEXT,
+                    weight_lb REAL,
+                    bands_json TEXT,
+                    completed INTEGER DEFAULT 1
+                )''')
+                conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS bands_json TEXT")
+                conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS grip TEXT")
+                conn.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMP")
+                conn.execute('''CREATE TABLE IF NOT EXISTS motivations (
+                    id SERIAL PRIMARY KEY,
+                    session_id INTEGER NOT NULL REFERENCES sessions(id),
+                    exercise TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    model TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )''')
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_motivations_session ON motivations(session_id)")
+                # Body measurements (FitDays-style). All values in cm, nullable so a
+                # partial entry (just chest/waist, say) is fine. `taken_at` is an ISO
+                # string with date+time; `date` denormalized for index/filtering.
+                conn.execute('''CREATE TABLE IF NOT EXISTS measurements (
+                    id SERIAL PRIMARY KEY,
+                    taken_at TIMESTAMP NOT NULL,
+                    date TEXT NOT NULL,
+                    head_cm REAL, neck_cm REAL, shoulder_cm REAL, chest_cm REAL,
+                    waist_cm REAL, hip_cm REAL,
+                    l_arm_cm REAL, r_arm_cm REAL,
+                    l_thigh_cm REAL, r_thigh_cm REAL,
+                    l_calf_cm REAL, r_calf_cm REAL,
+                    weight_kg REAL,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )''')
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_measurements_date ON measurements(date)")
+                # Per-exercise notes (markdown body). One row per exercise name; upsert
+                # on save. Keeps user-authored coaching cues with the exercise without
+                # bloating the workout-template definitions.
+                conn.execute('''CREATE TABLE IF NOT EXISTS exercise_notes (
+                    exercise TEXT PRIMARY KEY,
+                    body TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )''')
+                conn.commit()
+            else:
+                conn.commit()
+            DB_INITIALIZED = True
+        return conn
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    if not DB_INITIALIZED:
         conn.execute('''CREATE TABLE IF NOT EXISTS sessions (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             workout_name TEXT NOT NULL,
             date TEXT NOT NULL,
             duration_sec INTEGER,
             notes TEXT,
-            created_at TIMESTAMP DEFAULT NOW()
+            created_at TEXT DEFAULT (datetime('now'))
         )''')
         conn.execute('''CREATE TABLE IF NOT EXISTS sets (
-            id SERIAL PRIMARY KEY,
-            session_id INTEGER NOT NULL REFERENCES sessions(id),
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
             exercise TEXT NOT NULL,
             set_type TEXT NOT NULL DEFAULT 'working',
             set_number INTEGER,
             reps TEXT,
             weight_lb REAL,
             bands_json TEXT,
-            completed INTEGER DEFAULT 1
+            completed INTEGER DEFAULT 1,
+            FOREIGN KEY (session_id) REFERENCES sessions(id)
         )''')
-        conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS bands_json TEXT")
-        conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS grip TEXT")
-        conn.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMP")
+        try:
+            conn.execute("ALTER TABLE sets ADD COLUMN bands_json TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE sets ADD COLUMN grip TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN started_at TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
         conn.execute('''CREATE TABLE IF NOT EXISTS motivations (
-            id SERIAL PRIMARY KEY,
-            session_id INTEGER NOT NULL REFERENCES sessions(id),
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
             exercise TEXT NOT NULL,
             message TEXT NOT NULL,
             model TEXT,
-            created_at TIMESTAMP DEFAULT NOW()
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (session_id) REFERENCES sessions(id)
         )''')
         conn.execute("CREATE INDEX IF NOT EXISTS idx_motivations_session ON motivations(session_id)")
-        # Body measurements (FitDays-style). All values in cm, nullable so a
-        # partial entry (just chest/waist, say) is fine. `taken_at` is an ISO
-        # string with date+time; `date` denormalized for index/filtering.
         conn.execute('''CREATE TABLE IF NOT EXISTS measurements (
-            id SERIAL PRIMARY KEY,
-            taken_at TIMESTAMP NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            taken_at TEXT NOT NULL,
             date TEXT NOT NULL,
             head_cm REAL, neck_cm REAL, shoulder_cm REAL, chest_cm REAL,
             waist_cm REAL, hip_cm REAL,
@@ -109,88 +195,16 @@ def get_db():
             l_calf_cm REAL, r_calf_cm REAL,
             weight_kg REAL,
             notes TEXT,
-            created_at TIMESTAMP DEFAULT NOW()
+            created_at TEXT DEFAULT (datetime('now'))
         )''')
         conn.execute("CREATE INDEX IF NOT EXISTS idx_measurements_date ON measurements(date)")
-        # Per-exercise notes (markdown body). One row per exercise name; upsert
-        # on save. Keeps user-authored coaching cues with the exercise without
-        # bloating the workout-template definitions.
         conn.execute('''CREATE TABLE IF NOT EXISTS exercise_notes (
             exercise TEXT PRIMARY KEY,
             body TEXT NOT NULL,
-            updated_at TIMESTAMP DEFAULT NOW()
+            updated_at TEXT DEFAULT (datetime('now'))
         )''')
         conn.commit()
-        return conn
-
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute('''CREATE TABLE IF NOT EXISTS sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        workout_name TEXT NOT NULL,
-        date TEXT NOT NULL,
-        duration_sec INTEGER,
-        notes TEXT,
-        created_at TEXT DEFAULT (datetime('now'))
-    )''')
-    conn.execute('''CREATE TABLE IF NOT EXISTS sets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id INTEGER NOT NULL,
-        exercise TEXT NOT NULL,
-        set_type TEXT NOT NULL DEFAULT 'working',
-        set_number INTEGER,
-        reps TEXT,
-        weight_lb REAL,
-        bands_json TEXT,
-        completed INTEGER DEFAULT 1,
-        FOREIGN KEY (session_id) REFERENCES sessions(id)
-    )''')
-    try:
-        conn.execute("ALTER TABLE sets ADD COLUMN bands_json TEXT")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("ALTER TABLE sets ADD COLUMN grip TEXT")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("ALTER TABLE sessions ADD COLUMN started_at TEXT")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-    conn.execute('''CREATE TABLE IF NOT EXISTS motivations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id INTEGER NOT NULL,
-        exercise TEXT NOT NULL,
-        message TEXT NOT NULL,
-        model TEXT,
-        created_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (session_id) REFERENCES sessions(id)
-    )''')
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_motivations_session ON motivations(session_id)")
-    conn.execute('''CREATE TABLE IF NOT EXISTS measurements (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        taken_at TEXT NOT NULL,
-        date TEXT NOT NULL,
-        head_cm REAL, neck_cm REAL, shoulder_cm REAL, chest_cm REAL,
-        waist_cm REAL, hip_cm REAL,
-        l_arm_cm REAL, r_arm_cm REAL,
-        l_thigh_cm REAL, r_thigh_cm REAL,
-        l_calf_cm REAL, r_calf_cm REAL,
-        weight_kg REAL,
-        notes TEXT,
-        created_at TEXT DEFAULT (datetime('now'))
-    )''')
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_measurements_date ON measurements(date)")
-    conn.execute('''CREATE TABLE IF NOT EXISTS exercise_notes (
-        exercise TEXT PRIMARY KEY,
-        body TEXT NOT NULL,
-        updated_at TEXT DEFAULT (datetime('now'))
-    )''')
-    conn.commit()
+        DB_INITIALIZED = True
     return conn
 
 
