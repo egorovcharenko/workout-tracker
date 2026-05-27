@@ -201,3 +201,18 @@ function localDate() {
 }
 
 const interleavedSetNumber = (round, subIdx, subCount) => round * subCount + subIdx + 1;
+
+const SKIPPED_LS_KEY = (workoutName, date) => `v2-skipped:${workoutName}:${date}`;
+function loadSkippedExercises(workoutName, date) {
+  try {
+    const raw = localStorage.getItem(SKIPPED_LS_KEY(workoutName, date));
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch { return new Set(); }
+}
+function saveSkippedExercises(workoutName, date, namesSet) {
+  try {
+    localStorage.setItem(SKIPPED_LS_KEY(workoutName, date), JSON.stringify([...namesSet]));
+  } catch (e) {
+    console.warn("[V2-SKIPPED] localStorage save failed:", e);
+  }
+}

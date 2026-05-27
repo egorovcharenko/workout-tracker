@@ -522,26 +522,8 @@ function activateNextSet(exercises) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Skipped-exercise persistence — survives page reload, scoped to a
 // (workout, date) tuple so a fresh day starts with a clean slate without
-// caring whether the session got a server-side `id` yet.
-//
-// NOTE: the "v2-" localStorage key prefix is a legacy name kept stable so
-// existing in-flight data is not orphaned. It does NOT mean an app version —
-// it is just an opaque key string, also read by the shell (workout.html).
-// ─────────────────────────────────────────────────────────────────────────────
-const SKIPPED_LS_KEY = (workoutName, date) => `v2-skipped:${workoutName}:${date}`;
-function loadSkippedExercises(workoutName, date) {
-  try {
-    const raw = localStorage.getItem(SKIPPED_LS_KEY(workoutName, date));
-    return new Set(raw ? JSON.parse(raw) : []);
-  } catch { return new Set(); }
-}
-function saveSkippedExercises(workoutName, date, namesSet) {
-  try {
-    localStorage.setItem(SKIPPED_LS_KEY(workoutName, date), JSON.stringify([...namesSet]));
-  } catch (e) {
-    console.warn("[V2-SKIPPED] localStorage save failed:", e);
-  }
-}
+// SKIPPED_LS_KEY, loadSkippedExercises, saveSkippedExercises are loaded from workout-shared.js
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Swapped-exercise persistence — a map { templateExIdx: chosenName } scoped to
