@@ -588,11 +588,11 @@ function renderPercentilesCard() {
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);gap:8px">
           <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
             <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
-            <span style="color:${T.text};font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
+            <span style="color:#111827;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-            <span style="font-size:10px;color:${T.muted}">${Math.round(ex.latestOrm)} lb est</span>
-            <span style="font-weight:700;color:${T.strong};font-family:${T.mono}">${ex.latestPct}%</span>
+            <span style="font-size:10px;color:#9ca3af">${Math.round(ex.latestOrm)} lb est</span>
+            <span style="font-weight:700;color:#111827;font-family:${T.mono}">${ex.latestPct}%</span>
             <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;min-width:70px;text-align:center;${tierStyle}">${ex.latestTier}</span>
             ${diffText}
           </div>
@@ -610,10 +610,10 @@ function renderPercentilesCard() {
   return `
     <div class="card" style="padding:16px;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px">
-        <h3 style="font-size:14px;font-weight:600;color:${T.strong};margin:0">Strength Progress (${monthName})</h3>
+        <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0">Strength Progress (${monthName})</h3>
         <div style="display:flex;gap:4px">
-          <button onclick="changePercentileMonth(-1)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:${T.strong};cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center">&lt;</button>
-          <button onclick="changePercentileMonth(1)" ${offset === 0 ? 'disabled style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.2);cursor:default;border-radius:6px;display:flex;align-items:center;justify-content:center"' : 'style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:'+T.strong+';cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center"'} onclick="changePercentileMonth(1)">&gt;</button>
+          <button onclick="changePercentileMonth(-1)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center">&lt;</button>
+          <button onclick="changePercentileMonth(1)" ${offset === 0 ? 'disabled style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.2);cursor:default;border-radius:6px;display:flex;align-items:center;justify-content:center"' : 'style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center"'} onclick="changePercentileMonth(1)">&gt;</button>
         </div>
       </div>
       ${cardBody}
@@ -849,10 +849,10 @@ function renderCalendar() {
   return `
     <div class="card" style="padding:16px;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px">
-        <h3 style="font-size:14px;font-weight:600;color:${T.strong};margin:0">${monthName}</h3>
+        <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0">${monthName}</h3>
         <div style="display:flex;gap:4px">
-          <button onclick="changeCalendarMonth(-1)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:${T.strong};cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center">&lt;</button>
-          <button onclick="changeCalendarMonth(1)" ${offset === 0 ? 'disabled style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.2);cursor:default;border-radius:6px;display:flex;align-items:center;justify-content:center"' : 'style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:'+T.strong+';cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center"'} onclick="changeCalendarMonth(1)">&gt;</button>
+          <button onclick="changeCalendarMonth(-1)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center">&lt;</button>
+          <button onclick="changeCalendarMonth(1)" ${offset === 0 ? 'disabled style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.2);cursor:default;border-radius:6px;display:flex;align-items:center;justify-content:center"' : 'style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center"'} onclick="changeCalendarMonth(1)">&gt;</button>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:8px">
