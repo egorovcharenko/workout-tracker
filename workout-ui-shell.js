@@ -1680,16 +1680,11 @@ function render() {
   const app = document.getElementById("app");
   if (state.screen === "home") app.innerHTML = renderHome();
   else if (state.screen === "workout") app.innerHTML = renderWorkout();
-  else if (state.screen === "stats") app.innerHTML = renderStats();
   else if (state.screen === "measurements") app.innerHTML = renderMeasurements();
   requestAnimationFrame(scrollToSelected);
 }
 
-function showStats() {
-  state.screen = "stats";
-  history.replaceState(null, '', '#stats');
-  render();
-}
+
 
 async function showMeasurements() {
   state.screen = "measurements";
@@ -2219,10 +2214,6 @@ const initHash = location.hash.replace('#', '');
 const initWorkout = initHash ? WORKOUTS.find(w => w.id === initHash) : null;
 if (initWorkout) {
   startWorkout(initWorkout);
-} else if (initHash === 'stats') {
-  state.screen = 'stats';
-  render();
-  loadHomeData();
 } else {
   render();
   loadHomeData();

@@ -14,85 +14,7 @@ function microSparkline(vals, color) {
   </svg>`;
 }
 
-function renderMuscleMap() {
-  function muscleRect(id, x, y, w, h, rx) {
-    const s = muscleStatus[id];
-    const r = getRecoveryColor(s?.hoursAgo);
-    const info = MUSCLE_GROUPS[id];
-    const tip = s ? `${Math.round(s.hoursAgo)}h ago` : "—";
-    return `
-      <g>
-        <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx || 4}" fill="${r.bg}" stroke="${r.fg}" stroke-width="1.2" opacity="0.85"/>
-        <text x="${x + w/2}" y="${y + h/2 + 1}" text-anchor="middle" dominant-baseline="middle" font-size="7" font-weight="600" fill="${r.fg}">${info.label}</text>
-        <text x="${x + w/2}" y="${y + h - 2}" text-anchor="middle" font-size="5" fill="${r.fg}" opacity="0.7">${tip}</text>
-      </g>
-    `;
-  }
 
-  const legendItems = [
-    { color: "#fecaca", border: "#dc2626", label: "<24h" },
-    { color: "#fed7aa", border: "#ea580c", label: "24-48h" },
-    { color: "#fef08a", border: "#ca8a04", label: "48-72h" },
-    { color: "#bbf7d0", border: "#16a34a", label: "72h+" },
-    { color: "#f3f4f6", border: "#9ca3af", label: "No data" },
-  ];
-  const legendHTML = legendItems.map(l => `
-    <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#6b7280">
-      <span style="width:10px;height:10px;border-radius:2px;background:${l.color};border:1px solid ${l.border};display:inline-block"></span>${l.label}
-    </span>
-  `).join("");
-
-  return `
-    <div class="card" style="padding:16px;margin-bottom:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0">Muscle Recovery Map</h3>
-      </div>
-      <div style="display:flex;justify-content:center;gap:8px;margin-bottom:8px">
-        <div style="text-align:center">
-          <p style="font-size:10px;color:#9ca3af;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Front</p>
-          <svg viewBox="0 0 100 170" width="130" height="220" style="display:block">
-            <ellipse cx="50" cy="14" rx="12" ry="13" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
-            <path d="M35,28 Q30,30 26,40 L20,65 Q18,70 22,70 L32,60 L32,75 L30,120 Q29,125 34,125 L42,125 L44,90 L50,80 L56,90 L58,125 L66,125 Q71,125 70,120 L68,75 L68,60 L78,70 Q82,70 80,65 L74,40 Q70,30 65,28 Z" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
-            <path d="M30,125 L28,155 Q27,160 33,160 L40,160 L41,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
-            <path d="M59,125 L60,160 L67,160 Q73,160 72,155 L70,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
-            ${muscleRect("shoulders", 28, 28, 17, 14, 3)}
-            ${muscleRect("shoulders", 55, 28, 17, 14, 3)}
-            ${muscleRect("chest", 36, 38, 28, 16, 4)}
-            ${muscleRect("biceps", 22, 44, 13, 18, 3)}
-            ${muscleRect("biceps", 65, 44, 13, 18, 3)}
-            ${muscleRect("forearms", 20, 55, 11, 14, 3)}
-            ${muscleRect("forearms", 69, 55, 11, 14, 3)}
-            ${muscleRect("core", 38, 56, 24, 20, 4)}
-            ${muscleRect("quads", 32, 90, 15, 30, 4)}
-            ${muscleRect("quads", 53, 90, 15, 30, 4)}
-          </svg>
-        </div>
-        <div style="text-align:center">
-          <p style="font-size:10px;color:#9ca3af;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Back</p>
-          <svg viewBox="0 0 100 170" width="130" height="220" style="display:block">
-            <ellipse cx="50" cy="14" rx="12" ry="13" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
-            <path d="M35,28 Q30,30 26,40 L20,65 Q18,70 22,70 L32,60 L32,75 L30,120 Q29,125 34,125 L42,125 L44,90 L50,80 L56,90 L58,125 L66,125 Q71,125 70,120 L68,75 L68,60 L78,70 Q82,70 80,65 L74,40 Q70,30 65,28 Z" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
-            <path d="M30,125 L28,155 Q27,160 33,160 L40,160 L41,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
-            <path d="M59,125 L60,160 L67,160 Q73,160 72,155 L70,125" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
-            ${muscleRect("rear_delts", 28, 28, 17, 12, 3)}
-            ${muscleRect("rear_delts", 55, 28, 17, 12, 3)}
-            ${muscleRect("upper_back", 36, 33, 28, 13, 4)}
-            ${muscleRect("triceps", 22, 44, 13, 18, 3)}
-            ${muscleRect("triceps", 65, 44, 13, 18, 3)}
-            ${muscleRect("lats", 34, 48, 32, 16, 4)}
-            ${muscleRect("lower_back", 38, 66, 24, 14, 4)}
-            ${muscleRect("glutes", 34, 82, 32, 16, 4)}
-            ${muscleRect("hamstrings", 32, 100, 15, 24, 4)}
-            ${muscleRect("hamstrings", 53, 100, 15, 24, 4)}
-            ${muscleRect("calves", 32, 130, 13, 22, 4)}
-            ${muscleRect("calves", 55, 130, 13, 22, 4)}
-          </svg>
-        </div>
-      </div>
-      <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">${legendHTML}</div>
-    </div>
-  `;
-}
 
 function computeSessionVolumePerMuscle() {
   if (!state.workout) return {};
@@ -457,50 +379,60 @@ function renderLastFinishCard() {
 
 function renderPercentilesCard() {
   const history = state.history || [];
-  if (!history.length) return '';
-
-  const todayStr = localDate();
-  const todayMs = Date.parse(todayStr + 'T00:00:00');
-  const cutoffMs = todayMs - 30 * 24 * 60 * 60 * 1000;
-
-  // Grouping structure: { exerciseName: { dateStr: maxOrm } }
+  const offset = state.percentilesMonthOffset || 0;
+  
+  const baseDate = new Date();
+  const targetMonthDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + offset, 1);
+  const targetYear = targetMonthDate.getFullYear();
+  const targetMonth = targetMonthDate.getMonth();
+  
+  const startMs = Date.parse(`${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-01T00:00:00`);
+  const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+  
+  const endMs = (offset === 0)
+    ? Date.parse(localDate() + 'T23:59:59')
+    : Date.parse(`${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59`);
+    
+  const monthName = targetMonthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  
   const exerciseDates = {};
 
-  history.forEach(sess => {
-    if (!sess.date) return;
-    const sessMs = Date.parse(sess.date + 'T00:00:00');
-    if (sessMs < cutoffMs) return;
+  if (history.length > 0) {
+    history.forEach(sess => {
+      if (!sess.date) return;
+      const sessMs = Date.parse(sess.date + 'T00:00:00');
+      if (sessMs < startMs || sessMs > endMs) return;
 
-    (sess.sets || []).forEach(st => {
-      if (st.set_type !== 'working' || !st.reps) return;
-      const w = parseFloat(st.weight_lb) || 0;
-      const r = parseInt(st.reps) || 0;
-      if (w <= 0 || r <= 0) return;
-      
-      const isAssist = st.exercise === "Bench Dips" || st.exercise === "Assisted Pull-Ups";
-      let orm;
-      if (isAssist) {
-        let bandSum = 0;
-        if (st.bands_json) {
-          try {
-            const b = JSON.parse(st.bands_json);
-            if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
-          } catch(e){}
+      (sess.sets || []).forEach(st => {
+        if (st.set_type !== 'working' || !st.reps) return;
+        const w = parseFloat(st.weight_lb) || 0;
+        const r = parseInt(st.reps) || 0;
+        if (w <= 0 || r <= 0) return;
+        
+        const isAssist = st.exercise === "Bench Dips" || st.exercise === "Assisted Pull-Ups";
+        let orm;
+        if (isAssist) {
+          let bandSum = 0;
+          if (st.bands_json) {
+            try {
+              const b = JSON.parse(st.bands_json);
+              if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
+            } catch(e){}
+          }
+          orm = w * (r / 30.0) - bandSum;
+        } else {
+          orm = r > 1 ? w * (1 + r / 30) : w;
         }
-        // Added 1RM = Total Load * (Reps / 30.0) - Assistance
-        orm = w * (r / 30.0) - bandSum;
-      } else {
-        orm = r > 1 ? w * (1 + r / 30) : w;
-      }
 
-      if (!exerciseDates[st.exercise]) {
-        exerciseDates[st.exercise] = {};
-      }
-      if (!exerciseDates[st.exercise][sess.date] || orm > exerciseDates[st.exercise][sess.date]) {
-        exerciseDates[st.exercise][sess.date] = orm;
-      }
+        if (!exerciseDates[st.exercise]) {
+          exerciseDates[st.exercise] = {};
+        }
+        if (!exerciseDates[st.exercise][sess.date] || orm > exerciseDates[st.exercise][sess.date]) {
+          exerciseDates[st.exercise][sess.date] = orm;
+        }
+      });
     });
-  });
+  }
 
   const exerciseHistory = {};
   const activeExercises = new Set();
@@ -529,34 +461,6 @@ function renderPercentilesCard() {
     }
   });
 
-  if (activeExercises.size === 0) {
-    return `
-      <div class="card" style="padding:16px;margin-bottom:16px">
-        <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0 0 4px">Strength Percentiles (Last 30 Days)</h3>
-        <p style="font-size:11px;color:#6b7280;margin:0 0 12px">Track your strength tier progress across exercises done this month.</p>
-        <div style="text-align:center;padding:24px 0;color:#9ca3af;font-size:12px;border:1px dashed #e5e7eb;border-radius:8px">
-          No strength exercises logged in the last 30 days.
-        </div>
-      </div>
-    `;
-  }
-
-  const exercisesList = Array.from(activeExercises).map(exName => {
-    const pts = exerciseHistory[exName];
-    const latest = pts[pts.length - 1];
-    const first = pts[0];
-    const diffPct = latest.percentile - first.percentile;
-    
-    return {
-      name: exName,
-      latestPct: latest.percentile,
-      latestTier: latest.tier,
-      latestOrm: latest.orm,
-      diffPct: diffPct,
-      pts: pts
-    };
-  }).sort((a, b) => b.latestPct - a.latestPct);
-
   const width = 350;
   const height = 150;
   const paddingLeft = 30;
@@ -566,13 +470,10 @@ function renderPercentilesCard() {
 
   const COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4", "#f43f5e", "#14b8a6"];
   const exColors = {};
-  exercisesList.forEach((ex, idx) => {
-    exColors[ex.name] = COLORS[idx % COLORS.length];
-  });
 
   const getX = (ms) => {
-    const range = todayMs - cutoffMs || 1;
-    const ratio = (ms - cutoffMs) / range;
+    const range = endMs - startMs || 1;
+    const ratio = (ms - startMs) / range;
     return paddingLeft + ratio * (width - paddingLeft - paddingRight);
   };
 
@@ -592,42 +493,16 @@ function renderPercentilesCard() {
   });
 
   const xTicks = [];
-  const tickDays = [30, 20, 10, 0];
+  const tickDays = [1, 10, 20, lastDay];
   tickDays.forEach(d => {
-    const tickMs = todayMs - d * 24 * 60 * 60 * 1000;
+    const dateStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const tickMs = Date.parse(dateStr + 'T00:00:00');
     const xVal = getX(tickMs);
-    const label = d === 0 ? 'Today' : `-${d}d`;
+    const label = targetMonthDate.toLocaleDateString("en-US", { month: "short" }) + ` ${d}`;
     xTicks.push(`
       <line x1="${xVal}" y1="130" x2="${xVal}" y2="134" stroke="rgba(255,255,255,0.15)" stroke-width="1" />
       <text x="${xVal}" y="${144}" text-anchor="middle" font-size="8" fill="#9ca3af" font-family="${T.mono}">${label}</text>
     `);
-  });
-
-  const paths = [];
-  exercisesList.forEach(ex => {
-    const pts = ex.pts;
-    if (pts.length < 1) return;
-    const color = exColors[ex.name];
-    
-    if (pts.length >= 2) {
-      const pathD = pts.map((p, idx) => {
-        const x = getX(p.ms);
-        const y = getY(p.percentile);
-        return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
-      }).join(' ');
-      
-      paths.push(`
-        <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" />
-      `);
-    }
-    
-    pts.forEach(p => {
-      const x = getX(p.ms);
-      const y = getY(p.percentile);
-      paths.push(`
-        <circle cx="${x}" cy="${y}" r="2.8" fill="${color}" stroke="#111827" stroke-width="0.8" />
-      `);
-    });
   });
 
   function getTierStyle(tier) {
@@ -647,35 +522,85 @@ function renderPercentilesCard() {
     }
   }
 
-  const rowsHTML = exercisesList.map(ex => {
-    const color = exColors[ex.name];
-    const sign = ex.diffPct >= 0 ? '+' : '';
-    const diffColor = ex.diffPct > 0 ? '#10b981' : ex.diffPct < 0 ? '#ef4444' : '#9ca3af';
-    const diffText = ex.pts.length > 1 ? `<span style="font-size:10px;font-weight:700;color:${diffColor};margin-left:4px">${sign}${ex.diffPct}%</span>` : '';
-    const tierStyle = getTierStyle(ex.latestTier);
-    
-    return `
-      <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid #f3f4f6;gap:8px">
-        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
-          <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
-          <span style="color:#374151;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          <span style="font-size:10px;color:#9ca3af">${Math.round(ex.latestOrm)} lb est</span>
-          <span style="font-weight:700;color:#111827;font-family:${T.mono}">${ex.latestPct}%</span>
-          <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;min-width:70px;text-align:center;${tierStyle}">${ex.latestTier}</span>
-          ${diffText}
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  return `
-    <div class="card" style="padding:16px;margin-bottom:16px">
-      <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0 0 4px">Strength Percentiles (Last 30 Days)</h3>
-      <p style="font-size:11px;color:#6b7280;margin:0 0 12px">Track your strength tier progress across exercises done this month.</p>
+  let cardBody = '';
+  if (activeExercises.size === 0) {
+    cardBody = `
+      <div style="text-align:center;padding:24px 0;color:#9ca3af;font-size:12px;border:1px dashed rgba(255,255,255,0.1);border-radius:8px;margin-top:12px">
+        No strength exercises logged in ${monthName}.
+      </div>`;
+  } else {
+    const exercisesList = Array.from(activeExercises).map(exName => {
+      const pts = exerciseHistory[exName];
+      const latest = pts[pts.length - 1];
+      const first = pts[0];
+      const diffPct = latest.percentile - first.percentile;
       
-      <div style="margin:0 auto 12px;display:block;width:100%;overflow-x:auto;scrollbar-width:none">
+      return {
+        name: exName,
+        latestPct: latest.percentile,
+        latestTier: latest.tier,
+        latestOrm: latest.orm,
+        diffPct: diffPct,
+        pts: pts
+      };
+    }).sort((a, b) => b.latestPct - a.latestPct);
+
+    exercisesList.forEach((ex, idx) => {
+      exColors[ex.name] = COLORS[idx % COLORS.length];
+    });
+
+    const paths = [];
+    exercisesList.forEach(ex => {
+      const pts = ex.pts;
+      if (pts.length < 1) return;
+      const color = exColors[ex.name];
+      
+      if (pts.length >= 2) {
+        const pathD = pts.map((p, idx) => {
+          const x = getX(p.ms);
+          const y = getY(p.percentile);
+          return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
+        }).join(' ');
+        
+        paths.push(`
+          <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" />
+        `);
+      }
+      
+      pts.forEach(p => {
+        const x = getX(p.ms);
+        const y = getY(p.percentile);
+        paths.push(`
+          <circle cx="${x}" cy="${y}" r="2.8" fill="${color}" stroke="#111827" stroke-width="0.8" />
+        `);
+      });
+    });
+
+    const rowsHTML = exercisesList.map(ex => {
+      const color = exColors[ex.name];
+      const sign = ex.diffPct >= 0 ? '+' : '';
+      const diffColor = ex.diffPct > 0 ? '#10b981' : ex.diffPct < 0 ? '#ef4444' : '#9ca3af';
+      const diffText = ex.pts.length > 1 ? `<span style="font-size:10px;font-weight:700;color:${diffColor};margin-left:4px">${sign}${ex.diffPct}%</span>` : '';
+      const tierStyle = getTierStyle(ex.latestTier);
+      
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);gap:8px">
+          <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
+            <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
+            <span style="color:${T.text};font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+            <span style="font-size:10px;color:${T.muted}">${Math.round(ex.latestOrm)} lb est</span>
+            <span style="font-weight:700;color:${T.strong};font-family:${T.mono}">${ex.latestPct}%</span>
+            <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;min-width:70px;text-align:center;${tierStyle}">${ex.latestTier}</span>
+            ${diffText}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    cardBody = `
+      <div style="margin:12px auto;display:block;width:100%;overflow-x:auto;scrollbar-width:none">
         <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="display:block;margin:0 auto">
           <line x1="${paddingLeft}" y1="130" x2="${width - paddingRight}" y2="130" stroke="rgba(255,255,255,0.15)" stroke-width="1.2" />
           ${gridLines.join("")}
@@ -683,13 +608,6 @@ function renderPercentilesCard() {
           ${paths.join("")}
         </svg>
       </div>
-
-      <div style="border-top:1px solid #f3f4f6;padding-top:8px">${rowsHTML}</div>
-    </div>
-  `;
-}
-
-function renderHome() {
   const getExpectedSets = (w) => {
     let count = 0;
     w.exercises.forEach(ex => {
@@ -779,10 +697,6 @@ function renderHome() {
         <span style="font-size:18px">🏠</span>
         <span style="font-size:10px;font-weight:700">Home</span>
       </button>
-      <button onclick="showStats()" style="background:none;border:none;color:#9ca3af;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
-        <span style="font-size:18px">📈</span>
-        <span style="font-size:10px;font-weight:700">Stats</span>
-      </button>
       <button onclick="showMeasurements()" style="background:none;border:none;color:#9ca3af;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
         <span style="font-size:18px">📏</span>
         <span style="font-size:10px;font-weight:700">Size</span>
@@ -806,13 +720,9 @@ function renderHome() {
       ${renderWorkoutSummaryCard()}
       ${renderPercentilesCard()}
 
-      <div style="margin-bottom:8px"><h4 style="font-size:11px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin:0">Active Program</h4></div>
+      <div style="margin-bottom:8px"><h4 style="font-size:11px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin:0">Routines</h4></div>
       ${cardsHTML}
 
-      <div style="margin:20px 0 8px"><h4 style="font-size:11px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin:0">Other Routines</h4></div>
-      ${hiddenHTML}
-
-      ${renderMuscleMap()}
       ${renderCalendar()}
       ${menuHTML}
     </div>
@@ -870,12 +780,14 @@ function renderMotivationBanner() {
 }
 
 function renderCalendar() {
+  const offset = state.calendarMonthOffset || 0;
   const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
+  const targetDate = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+  const year = targetDate.getFullYear();
+  const month = targetDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
-  const monthName = today.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const monthName = targetDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   const WORKOUT_COLORS = {
     "Arms & Shoulders": "#8b5cf6",
@@ -900,7 +812,7 @@ function renderCalendar() {
   }
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    const isToday = d === today.getDate();
+    const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
     const workouts = dateMap[dateStr] || [];
     const dots = workouts.map(w =>
       `<span style="width:5px;height:5px;border-radius:50%;background:${WORKOUT_COLORS[w] || '#6b7280'};display:inline-block"></span>`
@@ -921,7 +833,13 @@ function renderCalendar() {
 
   return `
     <div class="card" style="padding:16px;margin-bottom:16px">
-      <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0 0 12px">${monthName}</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px">
+        <h3 style="font-size:14px;font-weight:600;color:${T.strong};margin:0">${monthName}</h3>
+        <div style="display:flex;gap:4px">
+          <button onclick="changeCalendarMonth(-1)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:${T.strong};cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center">&lt;</button>
+          <button onclick="changeCalendarMonth(1)" ${offset === 0 ? 'disabled style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.2);cursor:default;border-radius:6px;display:flex;align-items:center;justify-content:center"' : 'style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:'+T.strong+';cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center"'} onclick="changeCalendarMonth(1)">&gt;</button>
+        </div>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:8px">
         ${dayHeaders}
         ${cells}
@@ -930,3 +848,13 @@ function renderCalendar() {
     </div>
   `;
 }
+
+window.changePercentileMonth = function(delta) {
+  state.percentilesMonthOffset = (state.percentilesMonthOffset || 0) + delta;
+  render();
+};
+
+window.changeCalendarMonth = function(delta) {
+  state.calendarMonthOffset = (state.calendarMonthOffset || 0) + delta;
+  render();
+};
