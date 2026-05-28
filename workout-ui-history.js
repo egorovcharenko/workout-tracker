@@ -184,18 +184,33 @@ function renderSessionList() {
       const prevSession = history.find((ps, pi) => pi > history.indexOf(s) && ps.workout_name === s.workout_name);
       let highlightHTML = '';
       if (prevSession) {
-        function calcE1RM(w, r) { return r > 1 ? w * (1 + r / 30.0) : w; }
+        function calcE1RM(exName, w, r, bandSum) {
+          const isAssist = exName === "Bench Dips" || exName === "Assisted Pull-Ups";
+          if (isAssist) {
+            return (w * r / 30.0) - bandSum;
+          }
+          return r > 1 ? w * (1 + r / 30.0) : w;
+        }
         function exStats(sets) {
           const m = {};
           sets.forEach(st => {
             if (st.set_type !== 'working') return;
-            if (!m[st.exercise]) m[st.exercise] = { vol: 0, reps: 0, maxW: 0, best1RM: 0 };
+            const isAssist = st.exercise === "Bench Dips" || st.exercise === "Assisted Pull-Ups";
+            if (!m[st.exercise]) m[st.exercise] = { vol: 0, reps: 0, maxW: isAssist ? -Infinity : 0, best1RM: -Infinity };
             const r = parseInt(st.reps) || 0;
             const w = st.weight_lb || 0;
+            let bandSum = 0;
+            if (isAssist && st.bands_json) {
+              try {
+                const b = JSON.parse(st.bands_json);
+                if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
+              } catch(e){}
+            }
             m[st.exercise].vol += w * r;
             m[st.exercise].reps += r;
-            m[st.exercise].maxW = Math.max(m[st.exercise].maxW, w);
-            if (w > 0 && r > 0) m[st.exercise].best1RM = Math.max(m[st.exercise].best1RM, calcE1RM(w, r));
+            const displayW = isAssist ? -bandSum : w;
+            m[st.exercise].maxW = Math.max(m[st.exercise].maxW, displayW);
+            if (w > 0 && r > 0) m[st.exercise].best1RM = Math.max(m[st.exercise].best1RM, calcE1RM(st.exercise, w, r, bandSum));
           });
           return m;
         }

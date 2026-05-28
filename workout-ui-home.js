@@ -276,7 +276,16 @@ function renderWorkoutSummaryCard() {
     const sum = exerciseSummary[ex];
     sum.totalVol += vol;
     sum.setsCount++;
-    const est = w * (1 + r / 30);
+    const isAssist = ex === "Bench Dips" || ex === "Assisted Pull-Ups";
+    let bandSum = 0;
+    if (isAssist && set.bands_json) {
+      try {
+        const b = JSON.parse(set.bands_json);
+        if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
+      } catch(e){}
+    }
+    const est = isAssist ? (r > 1 ? (w * r / 30.0) - bandSum : -bandSum) : (r > 1 ? w * (1 + r / 30) : w);
+    if (sum.best1RM === 0 && isAssist) sum.best1RM = -Infinity;
     if (est > sum.best1RM) {
       sum.bestW = w;
       sum.bestR = r;
@@ -334,11 +343,22 @@ function renderWorkoutSummaryCard() {
         if (set.exercise === exName && set.set_type === 'working' && set.reps) {
           const w = parseFloat(set.weight_lb) || 0;
           const r = parseInt(set.reps) || 0;
-          const est = w * (1 + r / 30);
+          const isAssist = exName === "Bench Dips" || exName === "Assisted Pull-Ups";
+          let bandSum = 0;
+          if (isAssist && set.bands_json) {
+            try {
+              const b = JSON.parse(set.bands_json);
+              if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
+            } catch(e){}
+          }
+          const est = isAssist ? (r > 1 ? (w * r / 30.0) - bandSum : -bandSum) : (r > 1 ? w * (1 + r / 30) : w);
           if (s.date !== latest.date) {
             historicList.push(est);
           }
-          if (!exercisePRs[exName] || est > exercisePRs[exName]) {
+          if (exercisePRs[exName] === undefined) {
+            exercisePRs[exName] = isAssist ? -Infinity : 0;
+          }
+          if (est > exercisePRs[exName]) {
             exercisePRs[exName] = est;
           }
         }
@@ -456,7 +476,22 @@ function renderPercentilesCard() {
       const w = parseFloat(st.weight_lb) || 0;
       const r = parseInt(st.reps) || 0;
       if (w <= 0 || r <= 0) return;
-      const orm = r > 1 ? w * (1 + r / 30) : w;
+      
+      const isAssist = st.exercise === "Bench Dips" || st.exercise === "Assisted Pull-Ups";
+      let orm;
+      if (isAssist) {
+        let bandSum = 0;
+        if (st.bands_json) {
+          try {
+            const b = JSON.parse(st.bands_json);
+            if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
+          } catch(e){}
+        }
+        // Added 1RM = Total Load * (Reps / 30.0) - Assistance
+        orm = w * (r / 30.0) - bandSum;
+      } else {
+        orm = r > 1 ? w * (1 + r / 30) : w;
+      }
 
       if (!exerciseDates[st.exercise]) {
         exerciseDates[st.exercise] = {};

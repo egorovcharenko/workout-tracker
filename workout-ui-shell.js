@@ -1721,8 +1721,9 @@ function scrollToSelected() {
 function getExerciseStatsFromHistory(exName) {
   const history = state.history || [];
   const perSession = [];
+  const isAssist = exName === "Bench Dips" || exName === "Assisted Pull-Ups";
   for (const s of history) {
-    let bestOrm = 0, maxReps = 0, didLog = false;
+    let bestOrm = isAssist ? -Infinity : 0, maxReps = 0, didLog = false;
     for (const st of (s.sets || [])) {
       if (st.exercise !== exName || st.set_type !== 'working') continue;
       const r = parseInt(st.reps) || 0;
@@ -1730,16 +1731,23 @@ function getExerciseStatsFromHistory(exName) {
       if (r <= 0) continue;
       didLog = true;
       if (w > 0) {
-        const orm = r > 1 ? w * (1 + r / 30) : w;
+        let bandSum = 0;
+        if (isAssist && st.bands_json) {
+          try {
+            const b = JSON.parse(st.bands_json);
+            if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
+          } catch(e){}
+        }
+        const orm = isAssist ? (r > 1 ? (w * r / 30.0) - bandSum : -bandSum) : (r > 1 ? w * (1 + r / 30) : w);
         if (orm > bestOrm) bestOrm = orm;
       }
       if (r > maxReps) maxReps = r;
     }
-    if (didLog) perSession.push({ date: s.date, orm: bestOrm, reps: maxReps });
+    if (didLog) perSession.push({ date: s.date, orm: bestOrm === -Infinity ? 0 : bestOrm, reps: maxReps });
   }
   perSession.reverse();
   if (!perSession.length) return null;
-  const ormVals = perSession.map(p => p.orm).filter(v => v > 0);
+  const ormVals = perSession.map(p => p.orm).filter(v => isAssist ? v > -1000 : v > 0);
   const repsVals = perSession.map(p => p.reps);
   const series = ormVals.length >= 2 ? ormVals : repsVals;
   if (series.length < 1) return null;

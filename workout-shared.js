@@ -80,8 +80,8 @@ const STRENGTH_STANDARDS = {
   "Single-Leg DB RDL": { beg: 20, nov: 35, int: 55, adv: 80, elite: 110 },
   "Dumbbell Bicep Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
   "Dumbbell Hammer Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
-  "Bench Dips": { beg: 100, nov: 130, int: 160, adv: 190, elite: 220 },
-  "Assisted Pull-Ups": { beg: 90, nov: 125, int: 160, adv: 200, elite: 245 },
+  "Bench Dips": { beg: -17, nov: 38, int: 106, adv: 183, elite: 267 },
+  "Assisted Pull-Ups": { beg: -28, nov: 18, int: 75, adv: 138, elite: 206 },
   "Band Row": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
   "Band Squat": { beg: 25, nov: 45, int: 75, adv: 105, elite: 135 },
   "Band Romanian Deadlift": { beg: 25, nov: 45, int: 70, adv: 100, elite: 130 },
@@ -172,10 +172,11 @@ function getStrengthPercentile(exerciseName, weight1RM) {
   const stds = STRENGTH_STANDARDS[exerciseName];
   if (!stds) return null;
   const w = weight1RM || 0;
-  if (w <= 0) return { percentile: 0, tier: "Untrained" };
   
   if (w < stds.beg) {
-    const p = 0 + (w / stds.beg) * 5;
+    const minW = stds.beg < 0 ? stds.beg * 2 : 0;
+    if (w <= minW) return { percentile: 0, tier: "Untrained" };
+    const p = 0 + ((w - minW) / (stds.beg - minW)) * 5;
     return { percentile: Math.round(p), tier: "Untrained" };
   } else if (w < stds.nov) {
     const p = 5 + ((w - stds.beg) / (stds.nov - stds.beg)) * 15;
@@ -190,7 +191,7 @@ function getStrengthPercentile(exerciseName, weight1RM) {
     const p = 80 + ((w - stds.adv) / (stds.elite - stds.adv)) * 15;
     return { percentile: Math.round(p), tier: "Advanced" };
   } else {
-    const p = 95 + Math.min(4, ((w - stds.elite) / stds.elite) * 5);
+    const p = 95 + Math.min(4, ((w - stds.elite) / (stds.elite || 1)) * 5);
     return { percentile: Math.round(p), tier: "Elite" };
   }
 }

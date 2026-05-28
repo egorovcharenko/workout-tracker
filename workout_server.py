@@ -524,8 +524,22 @@ def get_exercise_1rm_history():
         reps_raw[(r["exercise"], r["date"])].append(reps)
         if r["weight_lb"] and float(r["weight_lb"]) > 0:
             w = float(r["weight_lb"])
-            wt_raw[(r["exercise"], r["date"])].append(w)
-            orm = w * (1 + reps / 30.0) if reps > 1 else w
+            is_assist = r["exercise"] in ("Bench Dips", "Assisted Pull-Ups")
+            if is_assist:
+                band_sum = 0.0
+                if r["bands_json"]:
+                    try:
+                        import json
+                        bands = json.loads(r["bands_json"])
+                        if isinstance(bands, list):
+                            band_sum = float(sum(bands))
+                    except:
+                        pass
+                orm = w * (reps / 30.0) - band_sum if reps > 1 else -band_sum
+                wt_raw[(r["exercise"], r["date"])].append(-band_sum)
+            else:
+                wt_raw[(r["exercise"], r["date"])].append(w)
+                orm = w * (1 + reps / 30.0) if reps > 1 else w
             orm_raw[(r["exercise"], r["date"])].append(round(orm, 1))
     result = defaultdict(list)
     vol_raw = defaultdict(float)

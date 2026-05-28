@@ -17,19 +17,27 @@ function _iterCurrentSessionSets(exerciseName, fn) {
       const w = state.weights[`${exIdx}-${i}`] || 0;
       const r = parseInt(state.reps[`${exIdx}-${i}`]) || 0;
       if (r <= 0) continue;
-      fn({ w, r });
+      const bands = (state.bands || {})[`${exIdx}-${i}-bands`] || [];
+      fn({ w, r, bands });
     }
   });
 }
 
 function currentSessionOrm(exerciseName) {
-  let best = 0;
-  _iterCurrentSessionSets(exerciseName, ({ w, r }) => {
+  const isAssist = exerciseName === "Bench Dips" || exerciseName === "Assisted Pull-Ups";
+  let best = isAssist ? -Infinity : 0;
+  _iterCurrentSessionSets(exerciseName, ({ w, r, bands }) => {
     if (!w) return;
-    const orm = r > 1 ? w * (1 + r / 30) : w;
+    let orm;
+    if (isAssist) {
+      const bandSum = (bands || []).reduce((sum, b) => sum + b, 0);
+      orm = r > 1 ? (w * r / 30.0) - bandSum : -bandSum;
+    } else {
+      orm = r > 1 ? w * (1 + r / 30) : w;
+    }
     if (orm > best) best = orm;
   });
-  return Math.round(best * 10) / 10;
+  return best === -Infinity ? 0 : Math.round(best * 10) / 10;
 }
 
 function currentSessionBestReps(exerciseName) {
@@ -41,11 +49,19 @@ function currentSessionBestReps(exerciseName) {
 }
 
 function currentSessionMaxWeight(exerciseName) {
-  let best = 0;
-  _iterCurrentSessionSets(exerciseName, ({ w, r }) => {
-    if (w > 0 && r > 0 && w > best) best = w;
+  const isAssist = exerciseName === "Bench Dips" || exerciseName === "Assisted Pull-Ups";
+  let best = isAssist ? -Infinity : 0;
+  _iterCurrentSessionSets(exerciseName, ({ w, r, bands }) => {
+    if (w > 0 && r > 0) {
+      if (isAssist) {
+        const bandSum = (bands || []).reduce((sum, b) => sum + b, 0);
+        if (-bandSum > best) best = -bandSum;
+      } else {
+        if (w > best) best = w;
+      }
+    }
   });
-  return best;
+  return best === -Infinity ? 0 : best;
 }
 
 function currentSessionVolume(exerciseName) {
@@ -363,16 +379,35 @@ function renderStats() {
       const reps = parseInt(st.reps) || 0;
       const w = st.weight_lb || 0;
       if (reps === 0 && w === 0) continue;
-      (exSetsInSess[st.exercise] ||= []).push({ w, r: reps });
+      const isAssist = st.exercise === "Bench Dips" || st.exercise === "Assisted Pull-Ups";
+      let bandSum = 0;
+      if (isAssist && st.bands_json) {
+        try {
+          const b = JSON.parse(st.bands_json);
+          if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
+        } catch(e){}
+      }
+      (exSetsInSess[st.exercise] ||= []).push({ w, r: reps, bandSum, isAssist });
     }
     for (const [name, sets] of Object.entries(exSetsInSess)) {
       const vol = sets.reduce((a, s) => a + s.w * s.r, 0);
       const reps = sets.reduce((a, s) => a + s.r, 0);
-      const maxWt = sets.reduce((a, s) => Math.max(a, s.w), 0);
-      const bestOrm = sets.reduce((a, s) => Math.max(a, s.w * (1 + s.r / 30)), 0);
-      const topSet = sets.reduce((a, s) => (!a || s.w > a.w || (s.w === a.w && s.r > a.r)) ? s : a, null);
+      const isExAssist = name === "Bench Dips" || name === "Assisted Pull-Ups";
+      const maxWt = sets.reduce((a, s) => {
+        const displayW = s.isAssist ? -s.bandSum : s.w;
+        return Math.max(a, displayW);
+      }, isExAssist ? -Infinity : 0);
+      const bestOrm = sets.reduce((a, s) => {
+        const orm = s.isAssist ? (s.r > 1 ? (s.w * s.r / 30.0) - s.bandSum : -s.bandSum) : (s.r > 1 ? s.w * (1 + s.r / 30) : s.w);
+        return Math.max(a, orm);
+      }, isExAssist ? -Infinity : 0);
+      const topSet = sets.reduce((a, s) => {
+        const displayW = s.isAssist ? -s.bandSum : s.w;
+        const aDisplayW = a ? (a.isAssist ? -a.bandSum : a.w) : -Infinity;
+        return (!a || displayW > aDisplayW || (displayW === aDisplayW && s.r > a.r)) ? s : a;
+      }, null);
       (byEx[name] ||= { perSession: [], totalSets: 0, lastDate: null, name }).perSession.push(
-        { date: sess.date, vol, reps, maxWt, bestOrm, topSet, sets: sets.length }
+        { date: sess.date, vol, reps, maxWt: maxWt === -Infinity ? 0 : maxWt, bestOrm: bestOrm === -Infinity ? 0 : bestOrm, topSet, sets: sets.length }
       );
       byEx[name].totalSets += sets.length;
       byEx[name].lastDate = sess.date;
@@ -393,23 +428,19 @@ function renderStats() {
     const w_hist = 62;
     const w_proj = w - pad;
     
-    const points = vals.map((v, i) => {
-      const x = pad + (i / (vals.length - 1)) * (w_hist - pad);
-      const y = pad + (1 - (v - min) / range) * (h - pad * 2);
+    const pts = vals.map((v, i) => {
+      const x = (i / (vals.length - 1)) * w_hist;
+      const y = h - pad - ((v - min) / range) * (h - 2 * pad);
       return `${x},${y}`;
     }).join(' ');
-    
-    const yL = pad + (1 - (latest - min) / range) * (h - pad * 2);
-    const yT = pad + (1 - (target - min) / range) * (h - pad * 2);
-    
-    const prev = vals[vals.length - 2];
-    const trend = latest >= prev ? color : '#ef4444';
-    
-    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;overflow:visible">
-      <polyline points="${points}" fill="none" stroke="${trend}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
-      <circle cx="${w_hist}" cy="${yL}" r="2" fill="${trend}"/>
-      <line x1="${w_hist}" y1="${yL}" x2="${w_proj}" y2="${yT}" stroke="#3b82f6" stroke-width="1.2" stroke-dasharray="2,2" stroke-linecap="round" opacity="0.8"/>
-      <circle cx="${w_proj}" cy="${yT}" r="2" fill="#2563eb"/>
+
+    const proj_y = h - pad - ((latest - min) / range) * (h - 2 * pad);
+    const target_y = h - pad - ((target - min) / range) * (h - 2 * pad);
+
+    return `<svg width="${w}" height="${h}" style="overflow:visible;flex-shrink:0">
+      <polyline fill="none" stroke="${color}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" points="${pts}" />
+      <line x1="${w_hist}" y1="${proj_y}" x2="${w_proj}" y2="${target_y}" stroke="#9ca3af" stroke-width="1" stroke-dasharray="2,2" />
+      <circle cx="${w_proj}" cy="${target_y}" r="2" fill="#3b82f6" />
     </svg>`;
   }
 
@@ -420,17 +451,18 @@ function renderStats() {
 
   const rows = exList.map(ex => {
     const ps = ex.perSession;
-    const last = ps[ps.length - 1];
     const first = ps[0];
-    const ormVals = ps.map(p => p.bestOrm).filter(v => v > 0);
+    const last = ps[ps.length - 1];
+    const isExAssist = ex.name === "Bench Dips" || ex.name === "Assisted Pull-Ups";
+    const ormVals = ps.map(p => p.bestOrm).filter(v => isExAssist ? v > -1000 : v > 0);
     const volVals = ps.map(p => p.vol).filter(v => v > 0);
-    const latestOrm = ormVals.length ? ormVals[ormVals.length - 1] : 0;
-    const peakOrm = ormVals.length ? Math.max(...ormVals) : 0;
-    const isPR = latestOrm > 0 && Math.abs(latestOrm - peakOrm) < 0.01 && ps.length >= 2;
+    const latestOrm = ormVals.length ? ormVals[ormVals.length - 1] : (isExAssist ? -Infinity : 0);
+    const peakOrm = ormVals.length ? Math.max(...ormVals) : (isExAssist ? -Infinity : 0);
+    const isPR = (isExAssist ? latestOrm !== -Infinity : latestOrm > 0) && Math.abs(latestOrm - peakOrm) < 0.01 && ps.length >= 2;
     const hasWeight = last.topSet && last.topSet.w > 0;
-    const topSetStr = hasWeight
-      ? `${last.topSet.w}lb × ${last.topSet.r}`
-      : `${last.reps} reps`;
+    const topSetStr = isExAssist
+      ? (last.topSet ? `–${last.topSet.bandSum}lb assist × ${last.topSet.r}` : '0 reps')
+      : (hasWeight ? `${last.topSet.w}lb × ${last.topSet.r}` : `${last.reps} reps`);
     const sparkVals = ormVals.length >= 2 ? ormVals : volVals;
     const sparkColor = ormVals.length >= 2 ? '#3b82f6' : '#22c55e';
     const dV = pctChange(first.vol, last.vol);
@@ -438,7 +470,7 @@ function renderStats() {
       : dV > 0 ? `<span style="color:#15803d;font-weight:600">+${dV}%</span>`
       : dV < 0 ? `<span style="color:#dc2626;font-weight:600">${dV}%</span>`
       : `<span style="color:#6b7280">±0%</span>`;
-    const ormStr = latestOrm > 0 ? `1RM ${Math.round(latestOrm)}` : '';
+    const ormStr = (isExAssist ? latestOrm !== -Infinity : latestOrm > 0) ? `1RM ${Math.round(latestOrm)}` : '';
     const prBadge = isPR ? `<span style="display:inline-block;background:#fef3c7;color:#92400e;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;letter-spacing:0.04em;margin-left:6px;vertical-align:middle">PR</span>` : '';
     const daysAgo = (() => {
       const d = new Date(last.date + 'T00:00:00');
@@ -465,7 +497,10 @@ function renderStats() {
 
     let targetStr = '';
     if (last.topSet) {
-      if (hasWeight) {
+      if (isExAssist) {
+        const targetReps = Math.round(last.topSet.r * 1.10);
+        targetStr = `<span style="font-weight:600;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;padding:1px 5px;border-radius:4px;font-size:9.5px">🎯 Target: ${targetReps} reps or drop assist</span>`;
+      } else if (hasWeight) {
         const targetVal = Math.round(last.topSet.w * 1.10);
         targetStr = `<span style="font-weight:600;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;padding:1px 5px;border-radius:4px;font-size:9.5px">🎯 Target: ${targetVal}lb</span>`;
       } else {

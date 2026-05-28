@@ -1113,7 +1113,15 @@ function App() {
           if (w > mw) mw = w; if (mw > histMaxWt) histMaxWt = mw;
           if (r > mr) mr = r; if (mr > histMaxReps) histMaxReps = mr;
           if (w > 0 && r > 0) {
-            const o = ormOf(w, r);
+            const isAssist = subName === "Bench Dips" || subName === "Assisted Pull-Ups";
+            let bandSum = 0;
+            if (isAssist && st.bands_json) {
+              try {
+                const b = JSON.parse(st.bands_json);
+                if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
+              } catch(e){}
+            }
+            const o = isAssist ? (r > 1 ? (w * r / 30.0) - bandSum : -bandSum) : ormOf(w, r);
             if (o > mo) mo = o;
             if (mo > histMaxOrm) histMaxOrm = mo;
             sv += w * r;
@@ -1164,7 +1172,9 @@ function App() {
                 : exercise.isBandsOnly ? bs
                 : exercise.bandAddon ? (s.weight || 0) + bs
                 : (s.weight || 0);
-        return reps > 0 && w > 0 ? Math.max(m, ormOf(w, reps)) : m;
+        const isAssist = exercise.assist;
+        const o = isAssist ? (reps > 1 ? (w * reps / 30.0) - bs : -bs) : ormOf(w, reps);
+        return reps > 0 && w > 0 ? Math.max(m, o) : m;
       }, 0);
       const curVol = workingSets.reduce((sum, s) => {
         const reps = parseInt(s.reps) || 0;

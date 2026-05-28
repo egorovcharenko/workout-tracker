@@ -1387,23 +1387,32 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   const sibling = pickSiblingForStats();
   const lookupName = sibling || exercise.name;
 
+  const lookupIsAssist = lookupName === "Bench Dips" || lookupName === "Assisted Pull-Ups";
   const histByDate = {};
   (history || []).forEach(sess => {
     if (!sess.date) return;
     const sets = (sess.sets || []).filter(st => st.exercise === lookupName && st.set_type === 'working');
     if (!sets.length) return;
-    let mo = 0, sv = 0, mw = 0, mr = 0;
+    let mo = lookupIsAssist ? -Infinity : 0, sv = 0, mw = lookupIsAssist ? -Infinity : 0, mr = 0;
     sets.forEach(st => {
       const w = +st.weight_lb || 0, r = parseInt(st.reps) || 0;
-      if (w > mw) mw = w;
+      let bandSum = 0;
+      if (lookupIsAssist && st.bands_json) {
+        try {
+          const b = JSON.parse(st.bands_json);
+          if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
+        } catch(e){}
+      }
+      const displayW = lookupIsAssist ? -bandSum : w;
+      if (displayW > mw) mw = displayW;
       if (r > mr) mr = r;
       if (w > 0 && r > 0) {
-        const o = r > 1 ? w * (1 + r / 30) : w;
+        const o = lookupIsAssist ? (r > 1 ? (w * r / 30.0) - bandSum : -bandSum) : (r > 1 ? w * (1 + r / 30) : w);
         if (o > mo) mo = o;
         sv += w * r;
       }
     });
-    histByDate[sess.date] = { date: sess.date, orm: mo, vol: sv, wt: mw, reps: mr };
+    histByDate[sess.date] = { date: sess.date, orm: mo === -Infinity ? 0 : mo, vol: sv, wt: mw === -Infinity ? 0 : mw, reps: mr };
   });
 
   const mergeMetric = (statArr, key) => {
@@ -1419,7 +1428,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   const repsHist   = mergeMetric((stat.reps|| {})[lookupName], "reps");
   const volHistRaw = mergeMetric((stat.vol || {})[lookupName], "vol");
 
-  let todayOrm = 0, todayVol = 0;
+  let todayOrm = exercise.assist ? -Infinity : 0, todayVol = 0;
   (exercise.sets || []).forEach(s => {
     if (!s.completed || s.kind !== 'work') return;
     const bs = (s.bands || []).reduce((a, b) => a + b, 0);
@@ -1429,25 +1438,35 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
             : (s.weight || 0);
     const r = parseInt(s.reps) || 0;
     if (r > 0 && w > 0) {
-      const o = r > 1 ? w * (1 + r / 30) : w;
+      const isAssist = exercise.assist;
+      let o;
+      if (isAssist) {
+        const bw = s.bodyweight || 175;
+        const totalOrm = r > 1 ? w * (1 + r / 30) : w;
+        o = totalOrm - bw;
+      } else {
+        o = r > 1 ? w * (1 + r / 30) : w;
+      }
       if (o > todayOrm) todayOrm = o;
       todayVol += w * r;
     }
   });
   const chartTodayDateStr = new Date(todayMs).toISOString().slice(0, 10);
 
-  const ormHist = (!sibling && todayOrm > 0)
+  const ormHist = (!sibling && todayOrm !== -Infinity)
     ? [...ormHistRaw.filter(d => d.date !== chartTodayDateStr), { date: chartTodayDateStr, orm: todayOrm }]
     : ormHistRaw;
   const volHist = (!sibling && todayVol > 0)
     ? [...volHistRaw.filter(d => d.date !== chartTodayDateStr), { date: chartTodayDateStr, vol: todayVol }]
     : volHistRaw;
-  const bestOrm = ormHist.length ? Math.max(...ormHist.map(d => +d.orm || 0)) : 0;
-  const bestWt = wtHist.length ? Math.max(...wtHist.map(d => +d.wt || 0)) : 0;
+  const bestOrm = ormHist.length ? Math.max(...ormHist.map(d => d.orm !== undefined ? +d.orm : -Infinity)) : (exercise.assist ? -Infinity : 0);
+  const bestWt = wtHist.length ? Math.max(...wtHist.map(d => d.wt !== undefined ? +d.wt : -Infinity)) : (exercise.assist ? -Infinity : 0);
   const bestReps = repsHist.length ? Math.max(...repsHist.map(d => +d.reps || 0)) : 0;
   const bestVol = volHist.length ? Math.max(...volHist.map(d => +d.vol || 0)) : 0;
 
-  const hasPRs = bestOrm > 0 || bestWt > 0 || bestVol > 0;
+  const hasPRs = exercise.assist
+    ? (bestOrm !== -Infinity || bestWt !== -Infinity || bestVol > 0)
+    : (bestOrm > 0 || bestWt > 0 || bestVol > 0);
   const primaryList = (muscleInfo.primary || []);
   const secondaryList = (muscleInfo.secondary || []);
 
@@ -1510,8 +1529,8 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
 
       {hasPRs && (
         <Section label="PRS">
-          {bestOrm > 0 && <KV k="1RM est" v={`${Math.round(bestOrm)} lb`} />}
-          {bestWt > 0 && <KV k="Top weight" v={`${bestWt} lb`} />}
+          {(exercise.assist ? bestOrm !== -Infinity : bestOrm > 0) && <KV k="1RM est" v={`${Math.round(bestOrm)} lb`} />}
+          {(exercise.assist ? bestWt !== -Infinity : bestWt > 0) && <KV k="Top weight" v={`${bestWt} lb`} />}
           {bestReps > 0 && <KV k="Top reps" v={String(bestReps)} />}
           {bestVol > 0 && <KV k="Top volume" v={`${bestVol.toLocaleString()} lb`} />}
         </Section>
