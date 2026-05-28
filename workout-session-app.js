@@ -1,5 +1,3 @@
-var { useState, useEffect, useRef, useMemo } = React;
-
 function App() {
   const [workoutId, setWorkoutId] = useState(() => {
     const params = new URLSearchParams(window.location.search);

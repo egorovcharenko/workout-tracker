@@ -1,5 +1,3 @@
-var { useState, useEffect } = React;
-
 function Header({ workout, workouts, onPickWorkout, done, total, elapsedSec }) {
   const pct = total ? (done / total) * 100 : 0;
   const m = Math.floor(elapsedSec / 60);

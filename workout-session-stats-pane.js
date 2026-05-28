@@ -1,5 +1,3 @@
-var { useState, useEffect } = React;
-
 const Section = ({ label, children }) => (
   <div style={{ marginBottom: 14 }}>
     <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 0.9, marginBottom: 8 }}>

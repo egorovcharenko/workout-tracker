@@ -1,5 +1,3 @@
-var { useState, useEffect, useRef } = React;
-
 function RepCell({ n, inRange, isLast, isLogged, onClick }) {
   let bg = "transparent";
   let color = inRange ? "#D1D5DB" : T.faint;

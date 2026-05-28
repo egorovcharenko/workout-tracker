@@ -1,5 +1,3 @@
-const { useState, useEffect, useRef } = React;
-
 function useWorkoutTimers(workoutId, exercises) {
   const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(false);

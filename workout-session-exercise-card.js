@@ -1,5 +1,3 @@
-var { useState } = React;
-
 function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onSwapExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup, motivation }) {
   const [swapOpen, setSwapOpen] = useState(false);
   const swapOptions = getSwapOptions(exercise.name);

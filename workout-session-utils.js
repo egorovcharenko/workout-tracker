@@ -1,5 +1,8 @@
 // Workout Tracker Session Utilities (Non-React Helpers)
 
+// Expose React hooks globally to avoid redeclaration issues in Babel Standalone scripts
+var { useState, useEffect, useRef, useMemo, useCallback } = React;
+
 const SWAP_GROUPS = [
   [
     { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
@@ -48,11 +51,6 @@ const api = {
   motivate: (body) => fetch("/api/motivate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
   motivations: (sid) => fetchT(`/api/motivations?session_id=${sid}`),
 };
-
-// Interleave set numbers for supersets: AM/PM blocks or subIdx mapping
-function interleavedSetNumber(round, subIdx, totalSubs) {
-  return round * totalSubs + subIdx + 1;
-}
 
 function flattenTemplate(workout, lastSessionMap, hintsMap) {
   hintsMap = hintsMap || {};

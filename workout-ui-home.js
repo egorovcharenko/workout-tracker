@@ -523,6 +523,7 @@ function renderPercentilesCard() {
   }
 
   let cardBody = '';
+  let rowsHTML = '';
   if (activeExercises.size === 0) {
     cardBody = `
       <div style="text-align:center;padding:24px 0;color:#9ca3af;font-size:12px;border:1px dashed rgba(255,255,255,0.1);border-radius:8px;margin-top:12px">
@@ -576,7 +577,7 @@ function renderPercentilesCard() {
       });
     });
 
-    const rowsHTML = exercisesList.map(ex => {
+    rowsHTML = exercisesList.map(ex => {
       const color = exColors[ex.name];
       const sign = ex.diffPct >= 0 ? '+' : '';
       const diffColor = ex.diffPct > 0 ? '#10b981' : ex.diffPct < 0 ? '#ef4444' : '#9ca3af';
@@ -601,13 +602,27 @@ function renderPercentilesCard() {
 
     cardBody = `
       <div style="margin:12px auto;display:block;width:100%;overflow-x:auto;scrollbar-width:none">
-        <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="display:block;margin:0 auto">
-          <line x1="${paddingLeft}" y1="130" x2="${width - paddingRight}" y2="130" stroke="rgba(255,255,255,0.15)" stroke-width="1.2" />
-          ${gridLines.join("")}
-          ${xTicks.join("")}
-          ${paths.join("")}
         </svg>
       </div>
+    `;
+  }
+
+  return `
+    <div class="card" style="padding:16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px">
+        <h3 style="font-size:14px;font-weight:600;color:${T.strong};margin:0">Strength Progress (${monthName})</h3>
+        <div style="display:flex;gap:4px">
+          <button onclick="changePercentileMonth(-1)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:${T.strong};cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center">&lt;</button>
+          <button onclick="changePercentileMonth(1)" ${offset === 0 ? 'disabled style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.2);cursor:default;border-radius:6px;display:flex;align-items:center;justify-content:center"' : 'style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:'+T.strong+';cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center"'} onclick="changePercentileMonth(1)">&gt;</button>
+        </div>
+      </div>
+      ${cardBody}
+      ${activeExercises.size > 0 ? `<div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:8px">${rowsHTML}</div>` : ''}
+    </div>
+  `;
+}
+
+function renderHome() {
   const getExpectedSets = (w) => {
     let count = 0;
     w.exercises.forEach(ex => {
