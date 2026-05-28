@@ -171,6 +171,28 @@ function getMuscleImpact(exName, muscle, isPrimary) {
   return isPrimary ? 1.0 : 0.5;
 }
 
+function calcSet1RM(exerciseName, weight, reps, bandsJson) {
+  const isAssist = exerciseName === "Bench Dips" || exerciseName === "Assisted Pull-Ups";
+  const isBandAddon = exerciseName === "Goblet Squat" || exerciseName === "Bulgarian Split Squat";
+  
+  let bandSum = 0;
+  if (bandsJson) {
+    try {
+      const b = typeof bandsJson === 'string' ? JSON.parse(bandsJson) : bandsJson;
+      if (Array.isArray(b)) {
+        bandSum = b.reduce((a, x) => a + (+x || 0), 0);
+      }
+    } catch(e){}
+  }
+  
+  if (isAssist) {
+    return reps > 1 ? (weight * reps / 30.0) - bandSum : -bandSum;
+  } else {
+    const effW = isBandAddon ? (weight + bandSum) : weight;
+    return reps > 1 ? effW * (1 + reps / 30.0) : effW;
+  }
+}
+
 function getStrengthPercentile(exerciseName, weight1RM) {
   const stds = STRENGTH_STANDARDS[exerciseName];
   if (!stds) return null;

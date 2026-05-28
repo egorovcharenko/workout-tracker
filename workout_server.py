@@ -507,7 +507,7 @@ def get_exercise_1rm_history():
     conn = get_db()
     c = conn.cursor()
     c.execute('''
-        SELECT sess.date, s.exercise, s.weight_lb, s.reps
+        SELECT sess.date, s.exercise, s.weight_lb, s.reps, s.bands_json
         FROM sets s
         INNER JOIN sessions sess ON sess.id = s.session_id
         WHERE s.set_type = 'working' AND s.reps IS NOT NULL AND s.reps <> ''
@@ -525,18 +525,25 @@ def get_exercise_1rm_history():
         if r["weight_lb"] and float(r["weight_lb"]) > 0:
             w = float(r["weight_lb"])
             is_assist = r["exercise"] in ("Bench Dips", "Assisted Pull-Ups")
+            is_band_addon = r["exercise"] in ("Goblet Squat", "Bulgarian Split Squat")
+            
+            band_sum = 0.0
+            if r["bands_json"]:
+                try:
+                    import json
+                    bands = json.loads(r["bands_json"])
+                    if isinstance(bands, list):
+                        band_sum = float(sum(bands))
+                except:
+                    pass
+            
             if is_assist:
-                band_sum = 0.0
-                if r["bands_json"]:
-                    try:
-                        import json
-                        bands = json.loads(r["bands_json"])
-                        if isinstance(bands, list):
-                            band_sum = float(sum(bands))
-                    except:
-                        pass
                 orm = w * (reps / 30.0) - band_sum if reps > 1 else -band_sum
                 wt_raw[(r["exercise"], r["date"])].append(-band_sum)
+            elif is_band_addon:
+                eff_w = w + band_sum
+                wt_raw[(r["exercise"], r["date"])].append(eff_w)
+                orm = eff_w * (1 + reps / 30.0) if reps > 1 else eff_w
             else:
                 wt_raw[(r["exercise"], r["date"])].append(w)
                 orm = w * (1 + reps / 30.0) if reps > 1 else w

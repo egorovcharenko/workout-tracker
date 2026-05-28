@@ -184,13 +184,6 @@ function renderSessionList() {
       const prevSession = history.find((ps, pi) => pi > history.indexOf(s) && ps.workout_name === s.workout_name);
       let highlightHTML = '';
       if (prevSession) {
-        function calcE1RM(exName, w, r, bandSum) {
-          const isAssist = exName === "Bench Dips" || exName === "Assisted Pull-Ups";
-          if (isAssist) {
-            return (w * r / 30.0) - bandSum;
-          }
-          return r > 1 ? w * (1 + r / 30.0) : w;
-        }
         function exStats(sets) {
           const m = {};
           sets.forEach(st => {
@@ -210,7 +203,7 @@ function renderSessionList() {
             m[st.exercise].reps += r;
             const displayW = isAssist ? -bandSum : w;
             m[st.exercise].maxW = Math.max(m[st.exercise].maxW, displayW);
-            if (w > 0 && r > 0) m[st.exercise].best1RM = Math.max(m[st.exercise].best1RM, calcE1RM(st.exercise, w, r, bandSum));
+            if (w > 0 && r > 0) m[st.exercise].best1RM = Math.max(m[st.exercise].best1RM, calcSet1RM(st.exercise, w, r, st.bands_json));
           });
           return m;
         }

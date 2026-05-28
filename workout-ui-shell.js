@@ -1725,17 +1725,8 @@ function getExerciseStatsFromHistory(exName) {
       const w = st.weight_lb || 0;
       if (r <= 0) continue;
       didLog = true;
-      if (w > 0) {
-        let bandSum = 0;
-        if (isAssist && st.bands_json) {
-          try {
-            const b = JSON.parse(st.bands_json);
-            if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
-          } catch(e){}
-        }
-        const orm = isAssist ? (r > 1 ? (w * r / 30.0) - bandSum : -bandSum) : (r > 1 ? w * (1 + r / 30) : w);
+        const orm = calcSet1RM(exName, w, r, st.bands_json);
         if (orm > bestOrm) bestOrm = orm;
-      }
       if (r > maxReps) maxReps = r;
     }
     if (didLog) perSession.push({ date: s.date, orm: bestOrm === -Infinity ? 0 : bestOrm, reps: maxReps });

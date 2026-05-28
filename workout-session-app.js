@@ -330,20 +330,10 @@ function App() {
           const r = parseInt(st.reps) || 0;
           if (w > mw) mw = w; if (mw > histMaxWt) histMaxWt = mw;
           if (r > mr) mr = r; if (mr > histMaxReps) histMaxReps = mr;
-          if (w > 0 && r > 0) {
-            const isAssist = subName === "Bench Dips" || subName === "Assisted Pull-Ups";
-            let bandSum = 0;
-            if (isAssist && st.bands_json) {
-              try {
-                const b = JSON.parse(st.bands_json);
-                if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
-              } catch(e){}
-            }
-            const o = isAssist ? (r > 1 ? (w * r / 30.0) - bandSum : -bandSum) : ormOf(w, r);
+            const o = calcSet1RM(subName, w, r, st.bands_json);
             if (o > mo) mo = o;
             if (mo > histMaxOrm) histMaxOrm = mo;
             sv += w * r;
-          }
         });
         histByDate[sess.date] = { date: sess.date, orm: mo, wt: mw, reps: mr, vol: sv };
       });

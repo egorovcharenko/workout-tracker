@@ -130,6 +130,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
     let mo = lookupIsAssist ? -Infinity : 0, sv = 0, mw = lookupIsAssist ? -Infinity : 0, mr = 0;
     sets.forEach(st => {
       const w = +st.weight_lb || 0, r = parseInt(st.reps) || 0;
+      const orm = calcSet1RM(st.exercise || lookupName, w, r, st.bands_json);
       let bandSum = 0;
       if (lookupIsAssist && st.bands_json) {
         try {
@@ -141,8 +142,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
       if (displayW > mw) mw = displayW;
       if (r > mr) mr = r;
       if (w > 0 && r > 0) {
-        const o = lookupIsAssist ? (r > 1 ? (w * r / 30.0) - bandSum : -bandSum) : (r > 1 ? w * (1 + r / 30) : w);
-        if (o > mo) mo = o;
+        if (orm > mo) mo = orm;
         sv += w * r;
       }
     });

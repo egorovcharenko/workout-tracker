@@ -198,15 +198,8 @@ function renderWorkoutSummaryCard() {
     const sum = exerciseSummary[ex];
     sum.totalVol += vol;
     sum.setsCount++;
+    const est = calcSet1RM(ex, w, r, set.bands_json);
     const isAssist = ex === "Bench Dips" || ex === "Assisted Pull-Ups";
-    let bandSum = 0;
-    if (isAssist && set.bands_json) {
-      try {
-        const b = JSON.parse(set.bands_json);
-        if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
-      } catch(e){}
-    }
-    const est = isAssist ? (r > 1 ? (w * r / 30.0) - bandSum : -bandSum) : (r > 1 ? w * (1 + r / 30) : w);
     if (sum.best1RM === 0 && isAssist) sum.best1RM = -Infinity;
     if (est > sum.best1RM) {
       sum.bestW = w;
@@ -265,15 +258,8 @@ function renderWorkoutSummaryCard() {
         if (set.exercise === exName && set.set_type === 'working' && set.reps) {
           const w = parseFloat(set.weight_lb) || 0;
           const r = parseInt(set.reps) || 0;
+          const est = calcSet1RM(exName, w, r, set.bands_json);
           const isAssist = exName === "Bench Dips" || exName === "Assisted Pull-Ups";
-          let bandSum = 0;
-          if (isAssist && set.bands_json) {
-            try {
-              const b = JSON.parse(set.bands_json);
-              if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
-            } catch(e){}
-          }
-          const est = isAssist ? (r > 1 ? (w * r / 30.0) - bandSum : -bandSum) : (r > 1 ? w * (1 + r / 30) : w);
           if (s.date !== latest.date) {
             historicList.push(est);
           }
@@ -409,20 +395,7 @@ function renderPercentilesCard() {
         const r = parseInt(st.reps) || 0;
         if (w <= 0 || r <= 0) return;
         
-        const isAssist = st.exercise === "Bench Dips" || st.exercise === "Assisted Pull-Ups";
-        let orm;
-        if (isAssist) {
-          let bandSum = 0;
-          if (st.bands_json) {
-            try {
-              const b = JSON.parse(st.bands_json);
-              if (Array.isArray(b)) bandSum = b.reduce((a, x) => a + (+x || 0), 0);
-            } catch(e){}
-          }
-          orm = w * (r / 30.0) - bandSum;
-        } else {
-          orm = r > 1 ? w * (1 + r / 30) : w;
-        }
+        const orm = calcSet1RM(st.exercise, w, r, st.bands_json);
 
         if (!exerciseDates[st.exercise]) {
           exerciseDates[st.exercise] = {};
@@ -577,31 +550,62 @@ function renderPercentilesCard() {
       });
     });
 
-    rowsHTML = exercisesList.map(ex => {
-      const color = exColors[ex.name];
-      const sign = ex.diffPct >= 0 ? '+' : '';
-      const diffColor = ex.diffPct > 0 ? '#10b981' : ex.diffPct < 0 ? '#ef4444' : '#9ca3af';
-      const diffText = ex.pts.length > 1 ? `<span style="font-size:10px;font-weight:700;color:${diffColor};margin-left:4px">${sign}${ex.diffPct}%</span>` : '';
-      const tierStyle = getTierStyle(ex.latestTier);
+    const groups = {};
+    exercisesList.forEach(ex => {
+      const muscleKey = EXERCISE_MUSCLES[ex.name]?.primary?.[0] || 'other';
+      if (!groups[muscleKey]) groups[muscleKey] = [];
+      groups[muscleKey].push(ex);
+    });
+
+    const sortedGroupEntries = Object.entries(groups).sort((a, b) => {
+      const labelA = MUSCLE_GROUPS[a[0]]?.label || a[0];
+      const labelB = MUSCLE_GROUPS[b[0]]?.label || b[0];
+      return labelA.localeCompare(labelB);
+    });
+
+    rowsHTML = sortedGroupEntries.map(([muscleKey, list]) => {
+      const muscleLabel = MUSCLE_GROUPS[muscleKey]?.label || (muscleKey.charAt(0).toUpperCase() + muscleKey.slice(1));
       
+      const exerciseRows = list.map(ex => {
+        const color = exColors[ex.name];
+        const sign = ex.diffPct >= 0 ? '+' : '';
+        const diffColor = ex.diffPct > 0 ? '#10b981' : ex.diffPct < 0 ? '#ef4444' : '#9ca3af';
+        const diffText = ex.pts.length > 1 ? `<span style="font-size:10px;font-weight:700;color:${diffColor};margin-left:4px">${sign}${ex.diffPct}%</span>` : '';
+        const tierStyle = getTierStyle(ex.latestTier);
+        
+        return `
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);gap:8px">
+            <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
+              <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
+              <span style="color:#111827;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+              <span style="font-size:10px;color:#9ca3af">${Math.round(ex.latestOrm)} lb est</span>
+              <span style="font-weight:700;color:#111827;font-family:${T.mono}">${ex.latestPct}%</span>
+              <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;min-width:70px;text-align:center;${tierStyle}">${ex.latestTier}</span>
+              ${diffText}
+            </div>
+          </div>
+        `;
+      }).join("");
+
       return `
-        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);gap:8px">
-          <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
-            <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
-            <span style="color:#111827;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+            <span>${muscleLabel}</span>
+            <span style="flex:1;height:1px;background:rgba(255,255,255,0.08)"></span>
           </div>
-          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-            <span style="font-size:10px;color:#9ca3af">${Math.round(ex.latestOrm)} lb est</span>
-            <span style="font-weight:700;color:#111827;font-family:${T.mono}">${ex.latestPct}%</span>
-            <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;min-width:70px;text-align:center;${tierStyle}">${ex.latestTier}</span>
-            ${diffText}
-          </div>
+          <div style="padding-left:4px">${exerciseRows}</div>
         </div>
       `;
     }).join("");
 
     cardBody = `
       <div style="margin:12px auto;display:block;width:100%;overflow-x:auto;scrollbar-width:none">
+        <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="display:block;margin:0 auto">
+          ${gridLines.join('')}
+          ${xTicks.join('')}
+          ${paths.join('')}
         </svg>
       </div>
     `;
