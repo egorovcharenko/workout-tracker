@@ -173,7 +173,6 @@ function getMuscleImpact(exName, muscle, isPrimary) {
 
 function calcSet1RM(exerciseName, weight, reps, bandsJson) {
   const isAssist = exerciseName === "Bench Dips" || exerciseName === "Assisted Pull-Ups";
-  const isBandAddon = exerciseName === "Goblet Squat" || exerciseName === "Bulgarian Split Squat";
   
   let bandSum = 0;
   if (bandsJson) {
@@ -188,8 +187,7 @@ function calcSet1RM(exerciseName, weight, reps, bandsJson) {
   if (isAssist) {
     return reps > 1 ? (weight * reps / 30.0) - bandSum : -bandSum;
   } else {
-    const effW = isBandAddon ? (weight + bandSum) : weight;
-    return reps > 1 ? effW * (1 + reps / 30.0) : effW;
+    return reps > 1 ? weight * (1 + reps / 30.0) : weight;
   }
 }
 

@@ -540,10 +540,6 @@ def get_exercise_1rm_history():
             if is_assist:
                 orm = w * (reps / 30.0) - band_sum if reps > 1 else -band_sum
                 wt_raw[(r["exercise"], r["date"])].append(-band_sum)
-            elif is_band_addon:
-                eff_w = w + band_sum
-                wt_raw[(r["exercise"], r["date"])].append(eff_w)
-                orm = eff_w * (1 + reps / 30.0) if reps > 1 else eff_w
             else:
                 wt_raw[(r["exercise"], r["date"])].append(w)
                 orm = w * (1 + reps / 30.0) if reps > 1 else w
