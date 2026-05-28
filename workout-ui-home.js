@@ -179,8 +179,12 @@ function renderWorkoutSummaryCard() {
   const addMus = (exName, setVol) => {
     const map = EXERCISE_MUSCLES[exName];
     if (!map) return;
-    map.primary.forEach(m => { muscles[m] = (muscles[m] || 0) + setVol; });
-    map.secondary.forEach(m => { muscles[m] = (muscles[m] || 0) + setVol * 0.5; });
+    map.primary.forEach(m => {
+      muscles[m] = (muscles[m] || 0) + setVol * getMuscleImpact(exName, m, true);
+    });
+    map.secondary.forEach(m => {
+      muscles[m] = (muscles[m] || 0) + setVol * getMuscleImpact(exName, m, false);
+    });
   };
 
   const exerciseSummary = {};
@@ -210,11 +214,6 @@ function renderWorkoutSummaryCard() {
 
   const muscleVolumeList = Object.entries(muscles).sort((a,b) => b[1] - a[1]);
   const totalMusVolume = muscleVolumeList.reduce((sum, item) => sum + item[1], 0) || 1;
-  const pills = muscleVolumeList.map(([muscle, vol]) => {
-    const label = MUSCLE_GROUPS[muscle]?.label || muscle;
-    const pct = Math.round((vol / totalMusVolume) * 100);
-    return `<span style="font-size:10px;font-weight:700;color:#c084fc;background:#f3e8ff;padding:2px 7px;border-radius:6px;white-space:nowrap">${label} ${pct}%</span>`;
-  }).join('');
 
   const sameWorkoutHistory = history
     .filter(s => s.workout_name === latest.workout_name && (s.sets || []).some(x => x.set_type === 'working' && x.reps))
@@ -294,6 +293,32 @@ function renderWorkoutSummaryCard() {
     const sparkHTML = microSparkline(historicList.slice(-6).concat(sum.best1RM), '#c084fc');
     const best1RMText = Math.round(sum.best1RM);
 
+    const exMap = EXERCISE_MUSCLES[exName];
+    let badgesHTML = '';
+    if (exMap) {
+      const exMusclesList = [];
+      exMap.primary.forEach(m => {
+        const vol = sum.totalVol * getMuscleImpact(exName, m, true);
+        const pct = Math.round((vol / totalMusVolume) * 100);
+        if (pct > 0) {
+          exMusclesList.push({ name: m, pct, isPrimary: true });
+        }
+      });
+      exMap.secondary.forEach(m => {
+        const vol = sum.totalVol * getMuscleImpact(exName, m, false);
+        const pct = Math.round((vol / totalMusVolume) * 100);
+        if (pct > 0) {
+          exMusclesList.push({ name: m, pct, isPrimary: false });
+        }
+      });
+      exMusclesList.sort((a, b) => b.pct - a.pct);
+      badgesHTML = exMusclesList.map(item => {
+        const label = MUSCLE_GROUPS[item.name]?.label || item.name;
+        const pillColor = item.isPrimary ? 'color:#c084fc;background:#f3e8ff;' : 'color:#9ca3af;background:#f3f4f6;';
+        return `<span style="font-size:9px;font-weight:700;${pillColor}padding:1px 5px;border-radius:4px;white-space:nowrap;margin-right:4px;display:inline-block;margin-top:2px">${label} ${item.pct}%</span>`;
+      }).join('');
+    }
+
     return `<div style="display:flex;justify-content:between;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid #f9fafb;gap:10px">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:4px">
@@ -302,6 +327,9 @@ function renderWorkoutSummaryCard() {
         </div>
         <div style="font-size:10px;color:#9CA3AF;font-family:ui-monospace,Menlo,monospace;margin-top:1px">
           Best: ${sum.bestW}lb × ${sum.bestR} <span style="color:#d1d5db;font-weight:normal">(${best1RMText} est)</span> · ${sum.setsCount}s
+        </div>
+        <div style="display:flex;flex-wrap:wrap;margin-top:2px">
+          ${badgesHTML}
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -331,7 +359,6 @@ function renderWorkoutSummaryCard() {
           ${rows || '<div style="color:#6B7280;font-size:12px;padding:8px 0">No working sets logged.</div>'}
         </div>
       </div>
-      ${pills ? `<div style="margin:0 16px 12px;display:flex;gap:6px;flex-wrap:wrap">${pills}</div>` : ''}
     </div>
   `;
 }
@@ -438,52 +465,108 @@ function renderPercentilesCard() {
   const exColors = {};
 
   const renderSparkline = (pts, color) => {
-    const w = 100;
-    const h = 32;
-    const padX = 2;
-    const padY = 2;
+    if (pts.length === 0) return '';
+
+    const w = 150;
+    const h = 50;
+    const padLeft = 28;
+    const padRight = 6;
+    const padTop = 6;
+    const padBottom = 12;
+
+    const percentiles = pts.map(p => p.percentile);
+    const minP = Math.min(...percentiles);
+    const maxP = Math.max(...percentiles);
     
+    // Autoscale with a minimum span of 10%
+    const span = Math.max(10, maxP - minP);
+    const mid = (minP + maxP) / 2;
+    let yMin = Math.max(0, mid - span / 2);
+    let yMax = Math.min(100, mid + span / 2);
+    
+    // Adjust bounds if they exceed 0 or 100
+    if (yMin < 0) {
+      yMax = Math.min(100, yMax + (0 - yMin));
+      yMin = 0;
+    }
+    if (yMax > 100) {
+      yMin = Math.max(0, yMin - (yMax - 100));
+      yMax = 100;
+    }
+
     const getX = (ms) => {
       const range = endMs - startMs || 1;
       const ratio = (ms - startMs) / range;
-      return padX + ratio * (w - padX * 2);
+      return padLeft + ratio * (w - padLeft - padRight);
     };
-    
+
     const getY = (pct) => {
-      const ratio = pct / 100;
-      return (h - padY) - ratio * (h - padY * 2);
+      const range = yMax - yMin || 1;
+      const ratio = (pct - yMin) / range;
+      return (h - padBottom) - ratio * (h - padBottom - padTop);
     };
 
-    const midY = getY(50);
-    const midLine = `<line x1="0" y1="${midY}" x2="${w}" y2="${midY}" stroke="rgba(0,0,0,0.05)" stroke-width="0.8" stroke-dasharray="2,2" />`;
+    // Build horizontal gridlines and Y-axis labels
+    const yVals = [yMin, (yMin + yMax) / 2, yMax];
+    const gridLines = yVals.map(val => {
+      const y = getY(val);
+      const label = `${Math.round(val)}%`;
+      return `
+        <line x1="${padLeft}" y1="${y}" x2="${w - padRight}" y2="${y}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="2,2" />
+        <text x="${padLeft - 4}" y="${y + 3.5}" font-size="8px" fill="#6b7280" text-anchor="end">${label}</text>
+      `;
+    }).join('');
 
-    if (pts.length === 0) return '';
+    // Build vertical week lines and indicators (W1 at day 7, W2 at day 14, etc.)
+    const dayMs = 24 * 3600 * 1000;
+    const weekMarks = [
+      { day: 7, label: 'W1', ms: startMs + 6 * dayMs },
+      { day: 14, label: 'W2', ms: startMs + 13 * dayMs },
+      { day: 21, label: 'W3', ms: startMs + 20 * dayMs },
+      { day: 28, label: 'W4', ms: startMs + 27 * dayMs }
+    ];
+
+    const weekLines = weekMarks
+      .filter(mark => mark.ms <= endMs)
+      .map(mark => {
+        const x = getX(mark.ms);
+        return `
+          <line x1="${x}" y1="${padTop}" x2="${x}" y2="${h - padBottom}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="2,2" />
+          <text x="${x}" y="${h - 2}" font-size="7px" fill="#9ca3af" text-anchor="middle">${mark.label}</text>
+        `;
+      }).join('');
+
+    // Draw the sparkline path
+    let pathHTML = '';
+    let dotsHTML = '';
+
     if (pts.length === 1) {
       const x = getX(pts[0].ms);
       const y = getY(pts[0].percentile);
-      return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;">
-        ${midLine}
-        <circle cx="${x}" cy="${y}" r="2" fill="${color}" />
-      </svg>`;
+      dotsHTML = `<circle cx="${x}" cy="${y}" r="2.5" fill="${color}" />`;
+    } else {
+      const pathD = pts.map((p, idx) => {
+        const x = getX(p.ms);
+        const y = getY(p.percentile);
+        return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
+      }).join(' ');
+
+      pathHTML = `<path d="${pathD}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />`;
+      dotsHTML = pts.map(p => {
+        const x = getX(p.ms);
+        const y = getY(p.percentile);
+        return `<circle cx="${x}" cy="${y}" r="2" fill="${color}" />`;
+      }).join('');
     }
 
-    const pathD = pts.map((p, idx) => {
-      const x = getX(p.ms);
-      const y = getY(p.percentile);
-      return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
-    }).join(' ');
-
-    const dots = pts.map(p => {
-      const x = getX(p.ms);
-      const y = getY(p.percentile);
-      return `<circle cx="${x}" cy="${y}" r="1.5" fill="${color}" />`;
-    }).join('');
-
-    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;">
-      ${midLine}
-      <path d="${pathD}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" />
-      ${dots}
-    </svg>`;
+    return `
+      <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;">
+        ${gridLines}
+        ${weekLines}
+        ${pathHTML}
+        ${dotsHTML}
+      </svg>
+    `;
   };
 
   function getTierStyle(tier) {
