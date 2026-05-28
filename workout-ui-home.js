@@ -434,49 +434,57 @@ function renderPercentilesCard() {
     }
   });
 
-  const width = 350;
-  const height = 150;
-  const paddingLeft = 30;
-  const paddingRight = 10;
-  const paddingTop = 10;
-  const paddingBottom = 20;
-
   const COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4", "#f43f5e", "#14b8a6"];
   const exColors = {};
 
-  const getX = (ms) => {
-    const range = endMs - startMs || 1;
-    const ratio = (ms - startMs) / range;
-    return paddingLeft + ratio * (width - paddingLeft - paddingRight);
+  const renderSparkline = (pts, color) => {
+    const w = 100;
+    const h = 32;
+    const padX = 2;
+    const padY = 2;
+    
+    const getX = (ms) => {
+      const range = endMs - startMs || 1;
+      const ratio = (ms - startMs) / range;
+      return padX + ratio * (w - padX * 2);
+    };
+    
+    const getY = (pct) => {
+      const ratio = pct / 100;
+      return (h - padY) - ratio * (h - padY * 2);
+    };
+
+    const midY = getY(50);
+    const midLine = `<line x1="0" y1="${midY}" x2="${w}" y2="${midY}" stroke="rgba(0,0,0,0.05)" stroke-width="0.8" stroke-dasharray="2,2" />`;
+
+    if (pts.length === 0) return '';
+    if (pts.length === 1) {
+      const x = getX(pts[0].ms);
+      const y = getY(pts[0].percentile);
+      return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;">
+        ${midLine}
+        <circle cx="${x}" cy="${y}" r="2" fill="${color}" />
+      </svg>`;
+    }
+
+    const pathD = pts.map((p, idx) => {
+      const x = getX(p.ms);
+      const y = getY(p.percentile);
+      return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
+    }).join(' ');
+
+    const dots = pts.map(p => {
+      const x = getX(p.ms);
+      const y = getY(p.percentile);
+      return `<circle cx="${x}" cy="${y}" r="1.5" fill="${color}" />`;
+    }).join('');
+
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;">
+      ${midLine}
+      <path d="${pathD}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" />
+      ${dots}
+    </svg>`;
   };
-
-  const getY = (pct) => {
-    const ratio = pct / 100;
-    return (height - paddingBottom) - ratio * (height - paddingTop - paddingBottom);
-  };
-
-  const gridLines = [];
-  const yTicks = [0, 25, 50, 75, 100];
-  yTicks.forEach(tick => {
-    const yVal = getY(tick);
-    gridLines.push(`
-      <line x1="${paddingLeft}" y1="${yVal}" x2="${width - paddingRight}" y2="${yVal}" stroke="rgba(255,255,255,0.08)" stroke-width="1" stroke-dasharray="3,3" />
-      <text x="${paddingLeft - 6}" y="${yVal + 3}" text-anchor="end" font-size="8" fill="#9ca3af" font-family="${T.mono}">${tick}%</text>
-    `);
-  });
-
-  const xTicks = [];
-  const tickDays = [1, 10, 20, lastDay];
-  tickDays.forEach(d => {
-    const dateStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const tickMs = Date.parse(dateStr + 'T00:00:00');
-    const xVal = getX(tickMs);
-    const label = targetMonthDate.toLocaleDateString("en-US", { month: "short" }) + ` ${d}`;
-    xTicks.push(`
-      <line x1="${xVal}" y1="130" x2="${xVal}" y2="134" stroke="rgba(255,255,255,0.15)" stroke-width="1" />
-      <text x="${xVal}" y="${144}" text-anchor="middle" font-size="8" fill="#9ca3af" font-family="${T.mono}">${label}</text>
-    `);
-  });
 
   function getTierStyle(tier) {
     switch (tier) {
@@ -499,7 +507,7 @@ function renderPercentilesCard() {
   let rowsHTML = '';
   if (activeExercises.size === 0) {
     cardBody = `
-      <div style="text-align:center;padding:24px 0;color:#9ca3af;font-size:12px;border:1px dashed rgba(255,255,255,0.1);border-radius:8px;margin-top:12px">
+      <div style="text-align:center;padding:24px 0;color:#9ca3af;font-size:12px;border:1px dashed rgba(0,0,0,0.1);border-radius:8px;margin-top:12px">
         No strength exercises logged in ${monthName}.
       </div>`;
   } else {
@@ -521,33 +529,6 @@ function renderPercentilesCard() {
 
     exercisesList.forEach((ex, idx) => {
       exColors[ex.name] = COLORS[idx % COLORS.length];
-    });
-
-    const paths = [];
-    exercisesList.forEach(ex => {
-      const pts = ex.pts;
-      if (pts.length < 1) return;
-      const color = exColors[ex.name];
-      
-      if (pts.length >= 2) {
-        const pathD = pts.map((p, idx) => {
-          const x = getX(p.ms);
-          const y = getY(p.percentile);
-          return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
-        }).join(' ');
-        
-        paths.push(`
-          <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" />
-        `);
-      }
-      
-      pts.forEach(p => {
-        const x = getX(p.ms);
-        const y = getY(p.percentile);
-        paths.push(`
-          <circle cx="${x}" cy="${y}" r="2.8" fill="${color}" stroke="#111827" stroke-width="0.8" />
-        `);
-      });
     });
 
     const groups = {};
@@ -574,17 +555,22 @@ function renderPercentilesCard() {
           ? `<span style="font-size:10px;font-weight:700;color:${diffColor};width:42px;text-align:right;flex-shrink:0">${sign}${ex.diffPct}%</span>` 
           : `<span style="font-size:10px;font-weight:700;color:#9ca3af;width:42px;text-align:right;flex-shrink:0;opacity:0.25">-</span>`;
         const tierStyle = getTierStyle(ex.latestTier);
+        const sparklineHTML = renderSparkline(ex.pts, color);
         
         return `
-          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);gap:12px">
-            <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
-              <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
-              <span style="color:#111827;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:8px;border:1px solid #f3f4f6;background:#ffffff;border-radius:8px;margin-bottom:6px;gap:12px">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="width:7px;height:7px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
+                <span style="color:#111827;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span style="font-size:10px;color:#6b7280">${Math.round(ex.latestOrm)} lb est · ${ex.latestPct}%</span>
+                <span style="font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;display:inline-block;${tierStyle}">${ex.latestTier}</span>
+              </div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-              <span style="font-size:10px;color:#9ca3af;width:60px;text-align:right;flex-shrink:0">${Math.round(ex.latestOrm)} lb est</span>
-              <span style="font-weight:700;color:#111827;font-family:${T.mono};width:36px;text-align:right;flex-shrink:0">${ex.latestPct}%</span>
-              <span style="font-size:9px;font-weight:700;padding:2px 0;border-radius:4px;width:76px;text-align:center;flex-shrink:0;display:inline-block;${tierStyle}">${ex.latestTier}</span>
+              ${sparklineHTML}
               ${diffText}
             </div>
           </div>
@@ -595,22 +581,12 @@ function renderPercentilesCard() {
         <div style="margin-bottom:12px">
           <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <span>${muscleLabel}</span>
-            <span style="flex:1;height:1px;background:rgba(255,255,255,0.08)"></span>
+            <span style="flex:1;height:1px;background:rgba(0,0,0,0.05)"></span>
           </div>
           <div style="padding-left:4px">${exerciseRows}</div>
         </div>
       `;
     }).join("");
-
-    cardBody = `
-      <div style="margin:12px auto;display:block;width:100%;overflow-x:auto;scrollbar-width:none">
-        <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="display:block;margin:0 auto">
-          ${gridLines.join('')}
-          ${xTicks.join('')}
-          ${paths.join('')}
-        </svg>
-      </div>
-    `;
   }
 
   return `
@@ -618,16 +594,16 @@ function renderPercentilesCard() {
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px">
         <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0">Strength Progress (${monthName})</h3>
         <div style="display:flex;gap:4px">
-          <button onclick="changePercentileMonth(-1)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center">&lt;</button>
-          <button onclick="changePercentileMonth(1)" ${offset === 0 ? 'disabled style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.2);cursor:default;border-radius:6px;display:flex;align-items:center;justify-content:center"' : 'style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center"'} onclick="changePercentileMonth(1)">&gt;</button>
+          <button onclick="changePercentileMonth(-1)" style="background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.08);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center">&lt;</button>
+          <button onclick="changePercentileMonth(1)" ${offset === 0 ? 'disabled style="background:rgba(0,0,0,0.01);border:1px solid rgba(0,0,0,0.03);color:rgba(0,0,0,0.2);cursor:default;border-radius:6px;display:flex;align-items:center;justify-content:center"' : 'style="background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.08);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center"'} onclick="changePercentileMonth(1)">&gt;</button>
         </div>
       </div>
       ${cardBody}
       ${activeExercises.size > 0 ? `
-        <div style="font-size:10px;color:#6b7280;margin-bottom:12px;padding:8px;background:rgba(0,0,0,0.02);border-radius:6px;border:1px solid rgba(255,255,255,0.04);line-height:1.4">
+        <div style="font-size:10px;color:#6b7280;margin-bottom:12px;padding:8px;background:rgba(0,0,0,0.02);border-radius:6px;border:1px solid rgba(0,0,0,0.04);line-height:1.4">
           💡 <strong>Hint:</strong> Percentiles show your estimated 1RM relative to standards. The trend (e.g. <strong>+3%</strong>) tracks your percentile change since your first workout of the month.
         </div>
-        <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:8px">${rowsHTML}</div>
+        <div style="border-top:1px solid rgba(0,0,0,0.05);padding-top:8px">${rowsHTML}</div>
       ` : ''}
     </div>
   `;
@@ -668,54 +644,39 @@ function renderHome() {
     return today.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   };
 
-  const cardsHTML = WORKOUTS.filter(w => !w.hidden).map((w, idx) => {
-    const rec = getWorkoutRecovery(w);
-    const expected = getExpectedSets(w);
-    const logged = getLoggedCount(w);
-    const pct = expected ? Math.round((logged / expected) * 100) : 0;
-    const subLabel = logged > 0 ? `${logged} of ${expected} sets logged (${pct}%)` : w.duration;
-    const progressHTML = logged > 0 ? `
-      <div style="margin-top:10px">
-        <div style="height:4px;background:#f3f4f6;border-radius:2px;overflow:hidden">
-          <div style="height:100%;width:${pct}%;background:#3b82f6;border-radius:2px;transition:width 0.2s"></div>
+  const activeSess = state._activeSessions && state._activeSessions[0];
+  let activeWorkout = WORKOUTS.find(w => w.id === 'full-body') || WORKOUTS[0];
+  let isOngoing = false;
+  let logged = 0;
+  let expected = 0;
+  let pct = 0;
+
+  if (activeSess) {
+    const w = WORKOUTS.find(x => x.name === activeSess.workout_name);
+    if (w) {
+      expected = getExpectedSets(w);
+      logged = getLoggedCount(w);
+      if (logged > 0 && logged < expected) {
+        activeWorkout = w;
+        isOngoing = true;
+        pct = Math.round((logged / expected) * 100);
+      }
+    }
+  }
+
+  const workoutUrl = `/workout?w=${activeWorkout.id}`;
+  const workoutButtonHTML = `
+    <a href="${workoutUrl}" style="text-decoration:none;display:block;margin-bottom:16px;">
+      <div style="background:linear-gradient(135deg, #eff6ff, #dbeafe); border:1px solid #bfdbfe; border-radius:14px; padding:18px; text-align:center; box-shadow:0 4px 12px rgba(59,130,246,0.08); transition:all 0.2s;" class="clickable">
+        <div style="font-size:16px; font-weight:800; color:#1d4ed8; margin-bottom:4px; display:flex; align-items:center; justify-content:center; gap:8px;">
+          <span>${isOngoing ? '⚡️ Continue Workout' : '🏋️‍♂️ Start Workout'}</span>
+        </div>
+        <div style="font-size:12px; color:#60a5fa; font-weight:600;">
+          ${isOngoing ? `${logged} of ${expected} sets logged (${pct}%)` : 'Full Body · ~40 min'}
         </div>
       </div>
-    ` : '';
-    const workoutUrl = `/workout?w=${w.id}`;
-
-    return `
-      <a href="${workoutUrl}" style="text-decoration:none;display:block" class="card clickable">
-        <div style="padding:16px">
-          <div style="display:flex;justify-content:between;align-items:start;margin-bottom:4px">
-            <div>
-              <h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 2px">${w.name}</h3>
-              <span style="font-size:11px;color:#9ca3af;font-weight:600">${subLabel}</span>
-            </div>
-            ${recoveryBadge(rec.avg)}
-          </div>
-          ${progressHTML}
-        </div>
-      </a>
-    `;
-  }).join("");
-
-  const hiddenHTML = WORKOUTS.filter(w => w.hidden).map((w, idx) => {
-    const rec = getWorkoutRecovery(w);
-    const workoutUrl = `/workout?w=${w.id}`;
-    return `
-      <a href="${workoutUrl}" style="text-decoration:none;display:block" class="card clickable">
-        <div style="padding:16px">
-          <div style="display:flex;justify-content:between;align-items:start">
-            <div>
-              <h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 2px">${w.name}</h3>
-              <span style="font-size:11px;color:#9ca3af;font-weight:600">${w.duration}</span>
-            </div>
-            ${recoveryBadge(rec.avg)}
-          </div>
-        </div>
-      </a>
-    `;
-  }).join("");
+    </a>
+  `;
 
   const menuHTML = `
     <div style="display:flex;justify-content:space-around;padding:12px 0;background:white;border-top:1px solid #e5e7eb;position:fixed;bottom:0;left:0;right:0;max-width:448px;margin:0 auto;z-index:1000">
@@ -731,7 +692,7 @@ function renderHome() {
   `;
 
   return `
-    <div style="padding:16px 16px 80px;background:#f9fafb;min-height:100vh">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 16px 16px 80px; background:#f9fafb; min-height:100vh">
       <div style="display:flex;justify-content:between;align-items:center;margin-bottom:16px">
         <div>
           <span style="font-size:11px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">${getSessionDateStr()}</span>
@@ -742,13 +703,19 @@ function renderHome() {
         </button>
       </div>
 
-      ${renderLastFinishCard()}
-      ${renderWorkoutSummaryCard()}
-      ${renderPercentilesCard()}
+      ${workoutButtonHTML}
 
-      ${cardsHTML}
+      <div class="dashboard-grid">
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          ${renderLastFinishCard()}
+          ${renderWorkoutSummaryCard()}
+        </div>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          ${renderPercentilesCard()}
+          ${renderCalendar()}
+        </div>
+      </div>
 
-      ${renderCalendar()}
       ${menuHTML}
     </div>
   `;

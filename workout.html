@@ -45,6 +45,23 @@
   html, body { background: #18191c; }
   #app {
     filter: invert(0.92) hue-rotate(180deg) saturate(0.78);
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    min-height: 100vh;
+    background: #f9fafb;
+  }
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  @media (min-width: 768px) {
+    .dashboard-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
   }
   #app img, #app video, #app svg, #app iframe, #app embed, #app object, #app [data-noinvert] {
     filter: invert(1) hue-rotate(180deg) saturate(1.28);
@@ -183,7 +200,7 @@
 </style>
 </head>
 <body>
-<div id="app" style="max-width: 448px; margin: 0 auto; min-height: 100vh;"></div>
+<div id="app"></div>
 
 <script src="/workout-shared.js"></script>
 <script src="/workout-ui-home.js"></script>

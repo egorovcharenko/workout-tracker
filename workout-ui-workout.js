@@ -603,7 +603,7 @@ function renderWorkout() {
     `;
   }
 
-  return `
+  const innerHTML = `
     <div style="position:sticky;top:0;background:white;border-bottom:1px solid #f3f4f6;padding:12px 16px;z-index:10">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <button onclick="stopTimer();state.screen='home';history.replaceState(null,'','#');loadHomeData()" style="color:#2563eb;font-size:14px;font-weight:500;background:none;border:none;cursor:pointer">← Back</button>
@@ -627,6 +627,12 @@ function renderWorkout() {
       ` : ''}
     </div>
     ${renderMotivationBanner()}
+  `;
+
+  return `
+    <div style="max-width: 448px; margin: 0 auto; min-height: 100vh; background: #f9fafb; position: relative;">
+      ${innerHTML}
+    </div>
   `;
 }
 

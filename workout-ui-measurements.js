@@ -98,144 +98,29 @@ function renderMeasurements() {
       <h2 style="font-size:18px;font-weight:700;margin:0">Measurements</h2>
     </div>`;
 
-  if (loading) return `${back}<div style="padding:32px;text-align:center;color:#9ca3af">Loading…</div>`;
-  if (entries.length === 0) {
-    return `${back}<div style="padding:24px 16px">
-      <p style="color:#6b7280;text-align:center;margin:24px 0">No measurements logged yet.</p>
-      ${_renderMeasurementForm()}
-    </div>`;
-  }
-
-  const snapshotRows = MEASUREMENT_METRICS.map(m => {
-    const v = latest?.[m.id];
-    const pv = prev?.[m.id];
-    if (v == null) return '';
-    const delta = _measurementDelta(v, pv, m.direction);
-    const unit = m.unit || 'cm';
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6">
-      <span style="font-size:13px;color:#374151">${m.label}</span>
-      <div style="display:flex;align-items:baseline;gap:8px">
-        <span style="font-size:14px;font-family:monospace;font-weight:600;color:#111827">${v.toFixed(1)}<span style="font-size:10px;color:#9ca3af;margin-left:2px">${unit}</span></span>
-        ${delta ? `<span style="font-size:11px;font-family:monospace;color:${delta.color};min-width:40px;text-align:right">${delta.sign}${Math.abs(delta.d).toFixed(1)}</span>` : '<span style="min-width:40px"></span>'}
-      </div>
-    </div>`;
-  }).join('');
-
-  const snapshotCard = `
-    <div class="card" style="padding:14px 16px;margin-bottom:12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <h3 style="font-size:13px;font-weight:600;color:#111827;margin:0">Latest snapshot</h3>
-        <span style="font-size:11px;color:#9ca3af;font-family:monospace">${_formatMeasurementDate(latest.taken_at)}</span>
-      </div>
-      ${snapshotRows}
-    </div>`;
-
-  function metricBlock(m) {
-    const vals = sortedAsc.map(e => e[m.id]).filter(v => v != null);
-    if (!vals.length) return '';
-    const v = latest?.[m.id], pv = prev?.[m.id];
-    const delta = _measurementDelta(v, pv, m.direction);
-    const range = vals.length > 1 ? `${Math.min(...vals).toFixed(1)} → ${Math.max(...vals).toFixed(1)}` : `${vals[0].toFixed(1)}`;
-    const unit = m.unit || 'cm';
-    return `<div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:12px;color:#374151;font-weight:600">${m.label}</span>
-        ${delta ? `<span style="font-size:10px;font-family:monospace;color:${delta.color}">${delta.sign}${Math.abs(delta.d).toFixed(1)}</span>` : ''}
-      </div>
-      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px">
-        ${_measurementSparkline(vals, m.color, m.direction)}
-        <div style="text-align:right">
-          <div style="font-size:14px;font-family:monospace;font-weight:700;color:${m.color}">${(v != null ? v.toFixed(1) : '—')}<span style="font-size:9px;color:#9ca3af;margin-left:1px">${unit}</span></div>
-          <div style="font-size:9px;color:#9ca3af;font-family:monospace">${range}</div>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  const groupBlock = (title, group) => {
-    const blocks = MEASUREMENT_METRICS.filter(m => m.group === group).map(metricBlock).filter(Boolean).join('');
-    if (!blocks) return '';
-    return `<div style="margin-bottom:14px">
-      <h4 style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">${title}</h4>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${blocks}</div>
-    </div>`;
-  };
-
-  const LIMB_PAIRS = [
-    { label: 'Arm',   leftId: 'l_arm_cm',   rightId: 'r_arm_cm',   color: '#dc2626', direction: 'up' },
-    { label: 'Thigh', leftId: 'l_thigh_cm', rightId: 'r_thigh_cm', color: '#7c3aed', direction: 'up' },
-    { label: 'Calf',  leftId: 'l_calf_cm',  rightId: 'r_calf_cm',  color: '#15803d', direction: 'up' },
-  ];
-  function pairBlock(p) {
-    const lVals = sortedAsc.map(e => e[p.leftId]).filter(v => v != null);
-    const rVals = sortedAsc.map(e => e[p.rightId]).filter(v => v != null);
-    if (!lVals.length && !rVals.length) return '';
-    const lLatest = latest?.[p.leftId];
-    const rLatest = latest?.[p.rightId];
-    const gap = (lLatest != null && rLatest != null) ? (lLatest - rLatest) : null;
-    const gapColor = gap == null ? '#9ca3af'
-      : Math.abs(gap) >= 1.0 ? '#dc2626'
-      : Math.abs(gap) >= 0.5 ? '#f59e0b'
-      : '#16a34a';
-    const allVals = [...lVals, ...rVals];
-    const range = allVals.length > 1 ? `${Math.min(...allVals).toFixed(1)} → ${Math.max(...allVals).toFixed(1)}` : (allVals[0]?.toFixed(1) || '');
-    return `<div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:12px;color:#374151;font-weight:600">${p.label}</span>
-        <span style="font-size:9px;color:#9ca3af;display:inline-flex;align-items:center;gap:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;border-top:1.4px dashed ${p.color};opacity:0.7"></span>L</span>
-          <span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;border-top:1.6px solid ${p.color}"></span>R</span>
-        </span>
-      </div>
-      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px">
-        ${_measurementPairedSparkline(lVals, rVals, p.color, p.direction)}
-        <div style="text-align:right;font-family:monospace;line-height:1.25">
-          <div style="font-size:11px;color:${p.color};opacity:0.7">L ${lLatest != null ? lLatest.toFixed(1) : '—'}</div>
-          <div style="font-size:13px;font-weight:700;color:${p.color}">R ${rLatest != null ? rLatest.toFixed(1) : '—'}</div>
-          <div style="font-size:9px;color:${gapColor};font-weight:600">${gap != null ? `Δ ${gap >= 0 ? '+' : ''}${gap.toFixed(1)}` : ''}</div>
-        </div>
-      </div>
-      <div style="font-size:9px;color:#9ca3af;font-family:monospace;margin-top:4px">range ${range}</div>
-    </div>`;
-  }
-
-  const limbsPairedHTML = LIMB_PAIRS.map(pairBlock).filter(Boolean).join('');
-  const limbsGroupHTML = limbsPairedHTML ? `<div style="margin-bottom:14px">
-    <h4 style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">Limbs <span style="opacity:0.6;font-weight:400;text-transform:none;letter-spacing:0">· left vs right</span></h4>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${limbsPairedHTML}</div>
-  </div>` : '';
-
-  const graphsHTML = `
-    ${groupBlock('Core', 'core')}
-    ${limbsGroupHTML}
-    ${groupBlock('Other', 'misc')}
-  `;
-
-  const historyRows = entries.map(e => `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-bottom:1px solid #f3f4f6">
-      <span style="font-size:11px;color:#6b7280;font-family:monospace;min-width:60px">${_formatMeasurementDate(e.taken_at)}</span>
-      <span style="font-size:11px;font-family:monospace;color:#374151;flex:1;text-align:center">
-        ${e.chest_cm != null ? `<span style="color:#ef4444">${e.chest_cm.toFixed(1)}c</span>` : '—'} ·
-        ${e.waist_cm != null ? `<span style="color:#3b82f6">${e.waist_cm.toFixed(1)}w</span>` : '—'} ·
-        ${e.l_arm_cm != null ? `<span style="color:#dc2626">${e.l_arm_cm.toFixed(1)}a</span>` : '—'}
-      </span>
-      <button onclick="deleteMeasurement(${e.id})" style="font-size:9px;color:#9ca3af;background:none;border:1px solid #e5e7eb;border-radius:4px;padding:2px 6px;cursor:pointer">×</button>
-    </div>`).join('');
-
-  const historyCard = `
-    <div class="card" style="padding:12px 14px;margin-bottom:12px">
-      <h3 style="font-size:13px;font-weight:600;color:#111827;margin:0 0 8px">History · ${entries.length} entries</h3>
-      ${historyRows}
-    </div>`;
+  const innerHTML = (() => {
+    if (loading) return `<div style="padding:32px;text-align:center;color:#9ca3af">Loading…</div>`;
+    if (entries.length === 0) {
+      return `<div style="padding:24px 16px">
+        <p style="color:#6b7280;text-align:center;margin:24px 0">No measurements logged yet.</p>
+        ${_renderMeasurementForm()}
+      </div>`;
+    }
+    return `
+      <div style="padding:16px">
+        ${snapshotCard}
+        ${graphsHTML}
+        ${historyCard}
+        ${_renderMeasurementForm()}
+      </div>`;
+  })();
 
   return `
-    ${back}
-    <div style="padding:16px">
-      ${snapshotCard}
-      ${graphsHTML}
-      ${historyCard}
-      ${_renderMeasurementForm()}
-    </div>`;
+    <div style="max-width: 448px; margin: 0 auto; min-height: 100vh; background: #f9fafb; position: relative;">
+      ${back}
+      ${innerHTML}
+    </div>
+  `;
 }
 
 function _renderMeasurementForm() {
