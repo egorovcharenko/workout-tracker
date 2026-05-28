@@ -570,19 +570,21 @@ function renderPercentilesCard() {
         const color = exColors[ex.name];
         const sign = ex.diffPct >= 0 ? '+' : '';
         const diffColor = ex.diffPct > 0 ? '#10b981' : ex.diffPct < 0 ? '#ef4444' : '#9ca3af';
-        const diffText = ex.pts.length > 1 ? `<span style="font-size:10px;font-weight:700;color:${diffColor};margin-left:4px">${sign}${ex.diffPct}%</span>` : '';
+        const diffText = ex.pts.length > 1 
+          ? `<span style="font-size:10px;font-weight:700;color:${diffColor};width:42px;text-align:right;flex-shrink:0">${sign}${ex.diffPct}%</span>` 
+          : `<span style="font-size:10px;font-weight:700;color:#9ca3af;width:42px;text-align:right;flex-shrink:0;opacity:0.25">-</span>`;
         const tierStyle = getTierStyle(ex.latestTier);
         
         return `
-          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);gap:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);gap:12px">
             <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
               <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
               <span style="color:#111827;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-              <span style="font-size:10px;color:#9ca3af">${Math.round(ex.latestOrm)} lb est</span>
-              <span style="font-weight:700;color:#111827;font-family:${T.mono}">${ex.latestPct}%</span>
-              <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;min-width:70px;text-align:center;${tierStyle}">${ex.latestTier}</span>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+              <span style="font-size:10px;color:#9ca3af;width:60px;text-align:right;flex-shrink:0">${Math.round(ex.latestOrm)} lb est</span>
+              <span style="font-weight:700;color:#111827;font-family:${T.mono};width:36px;text-align:right;flex-shrink:0">${ex.latestPct}%</span>
+              <span style="font-size:9px;font-weight:700;padding:2px 0;border-radius:4px;width:76px;text-align:center;flex-shrink:0;display:inline-block;${tierStyle}">${ex.latestTier}</span>
               ${diffText}
             </div>
           </div>
