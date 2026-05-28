@@ -623,7 +623,12 @@ function renderPercentilesCard() {
         </div>
       </div>
       ${cardBody}
-      ${activeExercises.size > 0 ? `<div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:8px">${rowsHTML}</div>` : ''}
+      ${activeExercises.size > 0 ? `
+        <div style="font-size:10px;color:#6b7280;margin-bottom:12px;padding:8px;background:rgba(0,0,0,0.02);border-radius:6px;border:1px solid rgba(255,255,255,0.04);line-height:1.4">
+          💡 <strong>Hint:</strong> Percentiles show your estimated 1RM relative to standards. The trend (e.g. <strong>+3%</strong>) tracks your percentile change since your first workout of the month.
+        </div>
+        <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:8px">${rowsHTML}</div>
+      ` : ''}
     </div>
   `;
 }
