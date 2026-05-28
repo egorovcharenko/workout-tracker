@@ -1,4 +1,4 @@
-function Header({ workout, workouts, onPickWorkout, done, total, elapsedSec }) {
+function Header({ workout, workouts, onPickWorkout, done, total, elapsedSec, running, onToggleTimer }) {
   const pct = total ? (done / total) * 100 : 0;
   const m = Math.floor(elapsedSec / 60);
   const s = String(elapsedSec % 60).padStart(2, "0");
@@ -58,7 +58,28 @@ function Header({ workout, workouts, onPickWorkout, done, total, elapsedSec }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 12, fontWeight: 600 }}>{done}/{total}</span>
-          <span style={{ color: elapsedSec > 0 ? T.green : T.faint, fontFamily: T.mono, fontWeight: 700, fontSize: 15 }}>{m}:{s}</span>
+          <button 
+            onClick={onToggleTimer} 
+            style={{
+              background: "transparent",
+              border: 0,
+              color: elapsedSec > 0 ? (running ? T.green : T.amber) : T.faint,
+              fontFamily: T.mono,
+              fontWeight: 700,
+              fontSize: 15,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "4px 8px",
+              borderRadius: 6,
+              transition: "background 150ms"
+            }}
+            title={running ? "Pause Workout" : "Resume Workout"}
+          >
+            <span>{running ? "⏸️" : "▶️"}</span>
+            <span>{m}:{s}</span>
+          </button>
         </div>
       </div>
       <div style={{ height: 3, background: "rgba(255,255,255,0.05)", borderRadius: 99, overflow: "hidden" }}>

@@ -37,7 +37,6 @@ function App() {
   const [history, setHistory] = useState([]);
   const [statHistory, setStatHistory] = useState({});
   const [swaps, setSwaps] = useState({});
-  const [pmStarted, setPmStarted] = useState(false);
   const dataRef = useRef({ last: {}, hints: {} });
   const lastInteractionRef = useRef(Date.now());
   const IDLE_THRESHOLD_MS = 5 * 60 * 1000;
@@ -51,7 +50,6 @@ function App() {
     setHistory([]);
     setStatHistory({});
     setSwaps({});
-    setPmStarted(false);
     (async () => {
       try {
         const results = await Promise.allSettled([
@@ -117,12 +115,7 @@ function App() {
           exs = exs.map(e => skippedNames.has(e.name) ? { ...e, skipped: true } : e);
           activateNextSet(exs);
         }
-        const hasSplit = exs.some(e => e.session);
-        if (hasSplit) {
-          const persisted = loadPmStarted(workout.name, activeDate);
-          const pmHasProgress = exs.some(e => e.session === "PM" && e.sets.some(s => s.completed));
-          setPmStarted(persisted || pmHasProgress);
-        }
+
         setExercises(exs);
         setLoaded(true);
       } catch (e) {
@@ -562,10 +555,7 @@ function App() {
     updateAndSave(next);
   };
 
-  const onContinuePm = () => {
-    setPmStarted(true);
-    savePmStarted(workout.name, sessionDate, true);
-  };
+
 
   const totalSets = exercises.reduce((n, e) => n + e.sets.length, 0);
   const doneSets = exercises.reduce((n, e) =>
@@ -575,7 +565,7 @@ function App() {
     return (
       <div style={{ height: "100%", overflowY: "auto" }}>
         <div style={{ maxWidth: 448, margin: "0 auto", minHeight: "100%", background: T.page }}>
-          <Header workout={workout} workouts={WORKOUTS} onPickWorkout={onPickWorkout} done={0} total={0} elapsedSec={0} />
+          <Header workout={workout} workouts={WORKOUTS} onPickWorkout={onPickWorkout} done={0} total={0} elapsedSec={0} running={false} onToggleTimer={() => {}} />
           <div style={{ margin: "40px 16px", padding: "20px", textAlign: "center", color: T.muted, fontFamily: T.mono, fontSize: 13, border: `1px dashed ${T.cardBorder}`, borderRadius: 12 }}>
             loading workout…
           </div>
@@ -606,24 +596,16 @@ function App() {
             done={doneSets}
             total={totalSets}
             elapsedSec={elapsed}
+            running={running}
+            onToggleTimer={() => setRunning(r => !r)}
           />
           {exercises.map((ex, i) => {
             const prev = i > 0 ? exercises[i - 1] : null;
             const isFirstInSuperset = ex.superset && (!prev || prev.superset !== ex.superset);
             const supersetTag = ex.superset ? `${ex.superset}${ex.supersetPos || ''}` : null;
-            const hasSplit = exercises.some(e => e.session);
-            const isFirstAM = hasSplit && ex.session === "AM" && (!prev || prev.session !== "AM");
-            const isFirstPM = hasSplit && ex.session === "PM" && (!prev || prev.session !== "PM");
-
-            if (hasSplit && ex.session === "PM" && !pmStarted) {
-              if (!isFirstPM) return null;
-              return <PmGate key="pm-gate" exercises={exercises} onContinuePm={onContinuePm} />;
-            }
 
             return (
               <React.Fragment key={ex.id}>
-                {isFirstAM && <SessionDivider label="MORNING SESSION" emoji="☀️" color={T.amber} bg="rgba(251,191,36,0.08)" border="rgba(251,191,36,0.28)" />}
-                {isFirstPM && <SessionDivider label="EVENING SESSION" emoji="🌙" color={T.accentLight} bg="rgba(96,165,250,0.08)" border="rgba(96,165,250,0.28)" />}
                 {isFirstInSuperset && (
                   <div style={{ margin: "4px 16px 6px", display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ flex: 1, height: 1, background: "rgba(192,132,252,0.18)" }} />
