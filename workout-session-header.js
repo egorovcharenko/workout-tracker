@@ -3,15 +3,16 @@ function Header({ workout, workouts, onPickWorkout, done, total, elapsedSec }) {
   const m = Math.floor(elapsedSec / 60);
   const s = String(elapsedSec % 60).padStart(2, "0");
   const [open, setOpen] = useState(false);
+  const hasMultiple = (workouts || []).length > 1;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !hasMultiple) return;
     const onDoc = (e) => {
       if (!e.target.closest || !e.target.closest("[data-workout-menu]")) setOpen(false);
     };
     document.addEventListener("click", onDoc);
     return () => document.removeEventListener("click", onDoc);
-  }, [open]);
+  }, [open, hasMultiple]);
 
   return (
     <div style={{ background: T.page, padding: "14px 18px 14px", position: "sticky", top: 0, zIndex: 5 }}>
@@ -19,16 +20,16 @@ function Header({ workout, workouts, onPickWorkout, done, total, elapsedSec }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           <a href="/" style={{ color: T.accent, fontSize: 16, fontWeight: 600, textDecoration: "none", flexShrink: 0 }} title="Home">← Back</a>
           <div data-workout-menu style={{ position: "relative", minWidth: 0 }}>
-            <button onClick={() => setOpen(o => !o)} style={{
+            <button onClick={hasMultiple ? () => setOpen(o => !o) : undefined} style={{
               background: "transparent", border: 0, color: T.strong,
               fontSize: 17, fontWeight: 700, letterSpacing: -0.3,
-              padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+              padding: 0, cursor: hasMultiple ? "pointer" : "default", display: "flex", alignItems: "center", gap: 6,
               maxWidth: "100%",
             }}>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{workout.name}</span>
-              <span style={{ color: T.faint, fontSize: 12, transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 160ms ease" }}>▾</span>
+              {hasMultiple && <span style={{ color: T.faint, fontSize: 12, transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 160ms ease" }}>▾</span>}
             </button>
-            {open && (
+            {hasMultiple && open && (
               <div style={{
                 position: "absolute", top: "100%", left: 0, marginTop: 6,
                 background: "#0f1722", border: `1px solid ${T.cardBorder}`,

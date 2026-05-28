@@ -116,6 +116,7 @@ const WORKOUTS = [
   {
     id: "full-body-b",
     name: "Full Body B",
+    hidden: true,
     duration: "~40 min",
     rest: 75,
     warmup: "Light band squats to warm up legs",
@@ -136,6 +137,7 @@ const WORKOUTS = [
   {
     id: "arms-shoulders",
     name: "Arms & Shoulders",
+    hidden: true,
     duration: "~15 min",
     rest: 60,
     warmup: "A few light sets to warm up elbows and wrists",
@@ -148,6 +150,7 @@ const WORKOUTS = [
   {
     id: "back",
     name: "Back",
+    hidden: true,
     duration: "~20 min",
     rest: 60,
     warmup: "Light rows to warm up shoulders and back",

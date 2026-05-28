@@ -326,7 +326,7 @@ function renderWorkoutSummaryCard() {
   }).join('');
 
   return `
-    <div class="card" data-noinvert style="margin-bottom:16px;background:#ffffff;border:1px solid #e5e7eb;overflow:hidden">
+    <div class="card" style="margin-bottom:16px;overflow:hidden">
       <div style="padding:16px 16px 12px;background:linear-gradient(180deg,#fafafa,#ffffff);border-bottom:1px solid #f3f4f6">
         <div style="display:flex;justify-content:between;align-items:start">
           <div>
@@ -735,7 +735,6 @@ function renderHome() {
       ${renderWorkoutSummaryCard()}
       ${renderPercentilesCard()}
 
-      <div style="margin-bottom:8px"><h4 style="font-size:11px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin:0">Routines</h4></div>
       ${cardsHTML}
 
       ${renderCalendar()}
