@@ -91,40 +91,35 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
   return (
     <div style={{ padding: 12, borderRadius: 14, background: T.cardBg, border: `1px solid ${T.cardBorder}` }}>
       <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0, marginBottom: 10, padding: "0 2px" }}>EXERCISES</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-        {exercises.map((e, i) => {
-          const m = meta(e, i);
-          const sel = i === shownIdx;
-          const prev = i > 0 ? exercises[i - 1] : null;
-          const firstInSuperset = e.superset && (!prev || prev.superset !== e.superset);
-          const swapGroup = getSwapGroup(e.name);
-          const hasVariants = swapGroup && swapGroup.length > 1;
-          const workLogged = e.sets.some(s => s.completed && s.kind === "work");
-          const swapOpen = swapOpenIdx === i;
-          // Names render at max brightness for every active exercise (done
-          // included — a finished lift is an achievement, not something to
-          // mute). Only skipped exercises dim down.
-          const nameColor = m.status === "skipped" ? T.muted : T.strong;
-          return (
-            <React.Fragment key={e.id}>
-              {firstInSuperset && (
-                <div style={{ color: T.bands, fontFamily: T.mono, fontSize: 8.5, fontWeight: 800, letterSpacing: 1.0, padding: "6px 4px 2px" }}>
-                  SUPERSET {e.superset}
-                </div>
-              )}
-              <div style={{
-                borderRadius: 10, overflow: "hidden",
-                border: sel ? "1px solid rgba(96,165,250,0.55)" : `1px solid ${T.cardBorder}`,
-                background: sel ? "rgba(96,165,250,0.10)" : "rgba(255,255,255,0.02)",
-                transition: "all 150ms ease",
-              }}>
-                {/* header — click anywhere (except ⇄) to focus */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {(() => {
+          // Group consecutive same-superset exercises so they render as one
+          // bracketed unit instead of separate cards.
+          const groups = [];
+          exercises.forEach((e, i) => {
+            const last = groups[groups.length - 1];
+            if (e.superset && last && last.superset === e.superset) last.items.push(i);
+            else groups.push({ superset: e.superset || null, items: [i] });
+          });
+
+          // Inner content shared by standalone cards and superset members.
+          const renderInner = (i, { inGroup } = {}) => {
+            const e = exercises[i];
+            const m = meta(e, i);
+            const sel = i === shownIdx;
+            const swapGroup = getSwapGroup(e.name);
+            const hasVariants = swapGroup && swapGroup.length > 1;
+            const workLogged = e.sets.some(s => s.completed && s.kind === "work");
+            const swapOpen = swapOpenIdx === i;
+            const nameColor = m.status === "skipped" ? T.muted : T.strong;
+            return (
+              <React.Fragment>
                 <div onClick={() => onSelect(i)} role="button" style={{
                   display: "flex", alignItems: "flex-start", gap: 8, padding: "9px 11px", cursor: "pointer",
                 }}>
                   <span style={{ width: 13, textAlign: "center", color: STATUS_COLOR[m.status], fontSize: 11, flexShrink: 0, marginTop: 1 }}>{STATUS_GLYPH[m.status]}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {m.tag && <span style={{ marginRight: 6 }}>{tagChip(m.tag)}</span>}
+                    {inGroup && m.tag && <span style={{ marginRight: 6 }}>{tagChip(m.tag)}</span>}
                     <span style={{
                       color: nameColor, fontSize: 13.5, fontWeight: sel ? 700 : 600, letterSpacing: -0.2,
                       lineHeight: 1.3,
@@ -158,7 +153,6 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
 
                 {!e.skipped && (
                   <div style={{ padding: "0 11px 9px" }}>
-                    {/* inline variant swap (only when toggled open) */}
                     {hasVariants && swapOpen && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: m.work.length ? 8 : 0 }}>
                         {swapGroup.map(opt => {
@@ -184,9 +178,6 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
                         {workLogged && <span style={{ color: T.disabled, fontFamily: T.mono, fontSize: 9, paddingLeft: 2 }}>locked — sets logged</span>}
                       </div>
                     )}
-                    {/* per-set weight × reps — logged sets bright, the active
-                        set in accent, upcoming previews in a readable muted
-                        (not the near-invisible disabled gray). */}
                     {m.work.length > 0 && (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 0", fontFamily: T.mono, fontSize: 11.5 }}>
                         {m.work.map((s, k) => {
@@ -203,10 +194,62 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
                     )}
                   </div>
                 )}
+              </React.Fragment>
+            );
+          };
+
+          return groups.map((g, gi) => {
+            // Standalone exercise → plain card.
+            if (!g.superset) {
+              const i = g.items[0];
+              const sel = i === shownIdx;
+              return (
+                <div key={`g${gi}`} style={{
+                  borderRadius: 10, overflow: "hidden",
+                  border: sel ? "1px solid rgba(96,165,250,0.55)" : `1px solid ${T.cardBorder}`,
+                  background: sel ? "rgba(96,165,250,0.10)" : "rgba(255,255,255,0.02)",
+                  transition: "all 150ms ease",
+                }}>
+                  {renderInner(i)}
+                </div>
+              );
+            }
+            // Superset → one purple-bracketed container with a NO-REST header
+            // and the members stacked inside, divided by thin purple rules.
+            return (
+              <div key={`g${gi}`} style={{
+                borderRadius: 12, overflow: "hidden",
+                border: "1px solid rgba(192,132,252,0.30)",
+                background: "rgba(192,132,252,0.05)",
+              }}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "7px 11px",
+                  color: T.bands, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0,
+                  borderBottom: "1px solid rgba(192,132,252,0.18)",
+                  background: "rgba(192,132,252,0.06)",
+                }}>
+                  <span aria-hidden>⇄</span>
+                  SUPERSET {g.superset}
+                  <span style={{ color: "rgba(192,132,252,0.6)", fontWeight: 700 }}>· NO REST</span>
+                </div>
+                {g.items.map((i, k) => {
+                  const sel = i === shownIdx;
+                  return (
+                    <div key={exercises[i].id} style={{
+                      borderTop: k > 0 ? "1px solid rgba(192,132,252,0.15)" : "0",
+                      background: sel ? "rgba(96,165,250,0.12)" : "transparent",
+                      boxShadow: sel ? `inset 3px 0 0 ${T.accentLight}` : "none",
+                      transition: "all 150ms ease",
+                    }}>
+                      {renderInner(i, { inGroup: true })}
+                    </div>
+                  );
+                })}
               </div>
-            </React.Fragment>
-          );
-        })}
+            );
+          });
+        })()}
       </div>
     </div>
   );
