@@ -1,6 +1,13 @@
 function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onSwapExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup, motivation }) {
-  const [swapOpen, setSwapOpen] = useState(false);
-  const swapOptions = getSwapOptions(exercise.name);
+  // Full swap group (includes the current exercise) — drives the first-class
+  // variant selector rendered under the title. null / single-member groups
+  // render no selector.
+  const swapGroup = getSwapGroup(exercise.name);
+  const hasVariants = swapGroup && swapGroup.length > 1;
+  // Lock the variant switch once a WORKING set is logged — switching after
+  // real work would orphan those sets under the old exercise name. Warmups
+  // don't lock it (a warmup shouldn't commit you to the variant).
+  const anyLogged = exercise.sets.some(s => s.completed && s.kind === "work");
 
   if (exercise.skipped) {
     return (
@@ -88,6 +95,56 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
         <p style={{ margin: "6px 0 0", color: T.muted, fontSize: 12, lineHeight: 1.4 }}>{exercise.note}</p>
       )}
 
+      {hasVariants && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 6, marginBottom: 7,
+            color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0,
+          }}>
+            <span aria-hidden style={{ fontSize: 11 }}>⇄</span>
+            CHOOSE VARIANT
+            {anyLogged && (
+              <span style={{ marginLeft: "auto", color: T.disabled, fontWeight: 600, letterSpacing: 0.4, textTransform: "none" }}>
+                locked — sets logged
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+            {swapGroup.map(opt => {
+              const selected = opt.name === exercise.name;
+              const locked = anyLogged && !selected;
+              return (
+                <button
+                  key={opt.name}
+                  onClick={selected || locked ? undefined : () => onSwapExercise(opt.name)}
+                  disabled={selected || locked}
+                  style={{
+                    flex: "1 1 auto", minWidth: 0,
+                    padding: "10px 14px", borderRadius: 11,
+                    fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, letterSpacing: -0.2,
+                    textAlign: "center", lineHeight: 1.2,
+                    cursor: selected ? "default" : locked ? "not-allowed" : "pointer",
+                    transition: "all 160ms ease",
+                    border: selected
+                      ? "1px solid rgba(96,165,250,0.7)"
+                      : `1px solid ${T.cardBorder}`,
+                    background: selected
+                      ? "linear-gradient(180deg, rgba(96,165,250,0.22), rgba(59,130,246,0.12))"
+                      : locked ? "transparent" : "rgba(255,255,255,0.03)",
+                    color: selected ? "#DBEAFE" : locked ? T.disabled : T.text,
+                    boxShadow: selected ? "0 4px 16px -6px rgba(59,130,246,0.6)" : "none",
+                    opacity: locked ? 0.45 : 1,
+                  }}
+                >
+                  {selected && <span aria-hidden style={{ marginRight: 6, color: T.accentLight }}>●</span>}
+                  {opt.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{
         display: "grid",
         gridTemplateColumns: `repeat(${exercise.sets.length}, minmax(0, 1fr))`,
@@ -146,32 +203,6 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
         {footerBtn("+ set", onAddSet)}
         {footerBtn("− set", onRemoveSet, !canRemove)}
         {footerBtn("× skip exercise", onSkipExercise)}
-        {swapOptions.length > 0 && (
-          <div style={{ position: "relative" }}>
-            {footerBtn(swapOpen ? "⇄ swap ▾" : "⇄ swap", () => setSwapOpen(o => !o))}
-            {swapOpen && (
-              <div style={{
-                position: "absolute", bottom: "calc(100% + 6px)", right: 0, zIndex: 50,
-                background: "#111827", border: "1px solid rgba(255,255,255,0.12)",
-                borderRadius: 9, boxShadow: "0 10px 28px rgba(0,0,0,0.55)",
-                overflow: "hidden", minWidth: 210, maxWidth: "78vw",
-              }}>
-                <div style={{ padding: "7px 12px 5px", color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 0.8, borderBottom: `1px solid ${T.cardBorder}` }}>
-                  SWAP FOR
-                </div>
-                {swapOptions.map(opt => (
-                  <button key={opt.name} onClick={() => { setSwapOpen(false); onSwapExercise(opt.name); }} style={{
-                    display: "block", width: "100%", textAlign: "left",
-                    padding: "9px 12px", background: "transparent", border: 0,
-                    borderBottom: `1px solid ${T.cardBorder}`,
-                    color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                    fontFamily: "inherit",
-                  }}>{opt.name}</button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           {hasWarmup && warmupActive && footerBtn("Skip warmup →", onSkipWarmup)}
           {hasWarmup && !warmupActive && footerBtn("× warmup", onRemoveWarmup)}
