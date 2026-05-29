@@ -1781,10 +1781,6 @@ function toggleWarmup(exIdx) {
   }
   if (!wasDoneBefore && isExerciseFullyDone(exIdx)) {
     runCelebration(exIdx);
-    requestMotivation(exIdx);
-  }
-  if (!workoutWasDoneBefore && allDone()) {
-    requestFinishMotivation();
   }
   triggerSave();
   render();
@@ -2074,10 +2070,6 @@ function logReps(exIdx, setKey, reps, isWarmup, ev) {
   if (_setRect) runSetCelebration(_setRect, reps);
   if (!wasDoneBefore && isExerciseFullyDone(exIdx)) {
     runCelebration(exIdx);
-    requestMotivation(exIdx);
-  }
-  if (!workoutWasDoneBefore && allDone()) {
-    requestFinishMotivation();
   }
   if (!state.running) startTimer();
   {

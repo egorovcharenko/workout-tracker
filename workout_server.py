@@ -411,14 +411,8 @@ def get_history(limit=20):
     for sess in sessions:
         c.execute("SELECT * FROM sets WHERE session_id = ? ORDER BY id", (sess["id"],))
         sess["sets"] = [dict(r) for r in c.fetchall()]
-        # Attach the workout-finish motivation if one was generated for this
-        # session — so the home screen can show the witty closer per session.
-        c.execute(
-            "SELECT message FROM motivations WHERE session_id = ? AND exercise = ? ORDER BY id DESC LIMIT 1",
-            (sess["id"], "__workout_finish__"),
-        )
-        row = c.fetchone()
-        sess["finish_motivation"] = row["message"] if row else None
+        # AI finish-motivation is disabled — no longer surfaced to the client.
+        sess["finish_motivation"] = None
     conn.close()
     return sessions
 
@@ -670,245 +664,6 @@ def get_today_session(workout_name, today=None):
     return session
 
 
-MOTIVATE_MODEL = "claude-sonnet-4-6"
-
-
-def call_claude_motivate(payload):
-    """
-    Call Claude Sonnet to generate a 1-2 sentence post-exercise motivation.
-    payload = {
-        exercise: str,
-        muscles: [str],            # primary + secondary muscles hit
-        current: [{set_number,reps,weight_lb}, ...],   # this session's sets
-        previous: [{date, sets:[...]}],                # last 1-3 sessions for trend
-    }
-    Returns (message, model_used) tuple, or (None, None) on failure / no-key.
-    Uses pure stdlib so no extra Python deps on Vercel.
-    """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return (None, None)  # silent no-op if not configured
-
-    import urllib.request
-    import urllib.error
-
-    system = (
-        "You are a sharp gym buddy / smart-aleck wingman who actually READS "
-        "the user's training history. After they finish an exercise, write "
-        "2–3 sentences that feel personal, warm, witty, and a little cocky — "
-        "like a friend who's been spotting them for years. Not corporate. "
-        "Not motivational-poster. Not dry stat-recital.\n\n"
-        "FINDING WHAT'S GOOD — your job is to scan the data and surface ONE "
-        "genuine bright spot. PR is just one option of many. Look at the "
-        "`prs` block AND `history_timeseries` (chronological session-by-session "
-        "progress: date + best 1RM + max weight + best reps + total volume). "
-        "Angles you can highlight, in NO particular order:\n"
-        "  • PR — is_orm_pr / is_weight_pr / is_reps_pr is true. Use the numbers.\n"
-        "  • Tied a previous best (tied_previous_best_orm). Validate the "
-        "consistency, don't fake-celebrate.\n"
-        "  • More reps at the same weight as last time (reps_at_current_weight_improved). "
-        "Silent strength gain.\n"
-        "  • Volume trending up over weeks (vol_trend_pct_4wk_vs_prior > 0). "
-        "Quote the percent.\n"
-        "  • Coming back after a layoff (returning_after_layoff). Showing up "
-        "after 2+ weeks counts.\n"
-        "  • Long-arc progression — pick a session 4–12 weeks ago from "
-        "history_timeseries and contrast with today (\"in March you were "
-        "doing 30s for 8, now 45s for 11\").\n"
-        "  • Hitting the top of the prescribed rep range cleanly.\n"
-        "  • Just consistency — N sessions on this lift in their history.\n"
-        "  • If literally nothing improved or no history exists, praise "
-        "showing up and leave it at that. NEVER invent fake progress. NEVER "
-        "fake-celebrate identical numbers as a PR.\n\n"
-        "RULES:\n"
-        "1. Reference AT LEAST ONE concrete number from the data — today's "
-        "number, a previous number, a percent, a date, a session count. No "
-        "vague \"keep it up\" without specifics.\n"
-        "2. If a PR fired, celebrate it. If multiple bright spots exist, "
-        "pick the most impressive one — don't list them all.\n"
-        "3. Roughly 1 in every 2 messages should END with a charming wingman "
-        "line about the off-the-bench upside — heads turning, women not "
-        "looking away, mirrors filing complaints, shirts fitting tighter, "
-        "dating-pool consequences. Clever, not gross, never explicit. Lean "
-        "in when muscles are vanity-relevant (chest/back/arms/shoulders). "
-        "Skip if it would feel forced.\n"
-        "4. Vary openers — don't always start the same way.\n"
-        "5. Vary the angle session over session — don't always pick the "
-        "same kind of bright spot.\n"
-        "6. Light humor / metaphors / reactions (\"oh that's filthy\", \"chest "
-        "is toast\", \"you're cooking\") welcome when they fit. No fitness "
-        "clichés (\"crush it\", \"beast mode\", \"no pain no gain\").\n"
-        "7. 1–2 emojis max, only if they add something. None is fine.\n"
-        "8. 2–3 sentences. Hard cap 55 words.\n"
-        "9. HARD RULE — coherence with the data: NEVER say 'no history', "
-        "'first time', 'zero sessions', or 'database says nothing' if the "
-        "`previous` array shows even one prior session of this lift. If the "
-        "two seem to disagree, trust `previous` and write from those concrete "
-        "set numbers. Don't call out the data as confusing or self-"
-        "contradicting — just use what's there."
-    )
-    # The client omits prs entries (and sets stats_loaded=false) when the
-    # aggregate-stats fetch failed on its end. Tell the model explicitly so
-    # it doesn't write "no history exists" while the `previous` array clearly
-    # shows recent sessions — that mismatch produced confused/contradictory
-    # messages in the past.
-    stats_loaded = payload.get("stats_loaded", True)
-    stats_caveat = (
-        ""
-        if stats_loaded
-        else "\nNOTE: aggregated PR/trend data was unavailable for this request. "
-             "Do NOT claim 'no history' or 'first time doing this' — `previous` "
-             "and `current` below are accurate; just don't quote PR percentages "
-             "or session counts you can't see. Write from set-level evidence.\n"
-    )
-    user_prompt = (
-        f"Exercise just finished: {payload.get('exercise')}\n"
-        f"Muscles worked: {', '.join(payload.get('muscles') or []) or 'unknown'}\n"
-        f"{stats_caveat}\n"
-        f"Per sub-exercise data (PR flags + multi-week trend signals + "
-        f"chronological history_timeseries — scan all of it before deciding "
-        f"what to celebrate):\n"
-        f"{json.dumps(payload.get('prs') or [], indent=2)}\n\n"
-        f"This session's sets: {json.dumps(payload.get('current') or [])}\n"
-        f"Last few sessions (recent set-level detail): "
-        f"{json.dumps(payload.get('previous') or [])}\n\n"
-        "Find the most genuine bright spot in the data and write the message."
-    )
-    body = {
-        "model": MOTIVATE_MODEL,
-        "max_tokens": 220,
-        "system": system,
-        "messages": [{"role": "user", "content": user_prompt}],
-    }
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=json.dumps(body).encode(),
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-    )
-    # One retry on 5xx; 9s timeout (Vercel hobby tier has 10s function limit).
-    last_err = None
-    for attempt in range(2):
-        try:
-            with urllib.request.urlopen(req, timeout=9) as resp:
-                data = json.loads(resp.read())
-            return (data["content"][0]["text"].strip(), MOTIVATE_MODEL)
-        except urllib.error.HTTPError as e:
-            last_err = e
-            print(f"  [MOTIVATE] HTTP {e.code} on attempt {attempt + 1}: {e}")
-            if 500 <= e.code < 600 and attempt == 0:
-                continue  # retry once on 5xx
-            return (None, None)
-        except Exception as e:
-            last_err = e
-            print(f"  [MOTIVATE] Anthropic call failed on attempt {attempt + 1}: {e}")
-            return (None, None)
-    print(f"  [MOTIVATE] Gave up after retries: {last_err}")
-    return (None, None)
-
-
-def call_claude_motivate_finish(payload):
-    """
-    Witty end-of-workout closer. payload = {
-        workout: str,
-        duration_sec: int,
-        total_sets: int,
-        exercises: [name, ...],
-        prs: [{sub, is_orm_pr, is_weight_pr, is_reps_pr, ...}, ...],
-        total_volume_lb: number,
-    }
-    Returns (message, model_used) tuple.
-    """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return (None, None)
-    import urllib.request
-    import urllib.error
-
-    system = (
-        "You are the user's smart-aleck gym buddy writing a quick post-workout "
-        "victory lap. EXACTLY 2 sentences. Witty, a little cocky.\n\n"
-        "STRUCTURE:\n"
-        "- SENTENCE 1: A real number from their data — a PR, total volume, "
-        "duration, or set count. Make it punchy, not a stat dump.\n"
-        "- SENTENCE 2: The charming wingman line — heads turning, women "
-        "noticing, mirrors complaining, shirts fitting tighter, dating pool "
-        "consequences. Clever, never crass, never explicit.\n\n"
-        "RULES:\n"
-        "- Vary openers. No \"Crushed it.\" \"Beast.\" \"Wow.\"\n"
-        "- Skip fitness clichés (\"beast mode\", \"crush it\", \"keep grinding\").\n"
-        "- Up to 1 emoji, only if it actually lands. None is fine.\n"
-        "- Hard cap 40 words. Concise > verbose.\n"
-        "- Tone: confident wingman, dry humor, warm. Not corporate. Not horny."
-    )
-    user_prompt = (
-        f"Workout: {payload.get('workout')}\n"
-        f"Duration: {payload.get('duration_sec', 0)} seconds\n"
-        f"Total sets: {payload.get('total_sets', 0)}\n"
-        f"Total volume (lb·reps): {payload.get('total_volume_lb', 0)}\n"
-        f"Exercises today: {', '.join(payload.get('exercises') or [])}\n\n"
-        f"PRs achieved this session (look here for celebration material):\n"
-        f"{json.dumps(payload.get('prs') or [], indent=2)}\n\n"
-        "Write the closer message."
-    )
-    body = {
-        "model": MOTIVATE_MODEL,
-        "max_tokens": 160,
-        "system": system,
-        "messages": [{"role": "user", "content": user_prompt}],
-    }
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=json.dumps(body).encode(),
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-    )
-    last_err = None
-    for attempt in range(2):
-        try:
-            with urllib.request.urlopen(req, timeout=9) as resp:
-                data = json.loads(resp.read())
-            return (data["content"][0]["text"].strip(), MOTIVATE_MODEL)
-        except urllib.error.HTTPError as e:
-            last_err = e
-            print(f"  [FINISH] HTTP {e.code} on attempt {attempt + 1}: {e}")
-            if 500 <= e.code < 600 and attempt == 0:
-                continue
-            return (None, None)
-        except Exception as e:
-            last_err = e
-            print(f"  [FINISH] Anthropic call failed on attempt {attempt + 1}: {e}")
-            return (None, None)
-    print(f"  [FINISH] Gave up after retries: {last_err}")
-    return (None, None)
-
-
-# Sentinel exercise name used to persist the workout-closer message in the
-# `motivations` table alongside per-exercise messages. Single row per session.
-FINISH_KEY = "__workout_finish__"
-
-
-def save_motivation(session_id, exercise, message, model):
-    if not session_id or not message:
-        return
-    conn = get_db()
-    try:
-        c = conn.cursor()
-        c.execute(
-            "INSERT INTO motivations (session_id, exercise, message, model) VALUES (?, ?, ?, ?)",
-            (session_id, exercise, message, model),
-        )
-        conn.commit()
-    except Exception as e:
-        print(f"  [MOTIVATE] Failed to persist motivation: {e}")
-    finally:
-        conn.close()
 
 
 def get_motivations_for_session(session_id):
@@ -1082,66 +837,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
     def do_POST(self):
-        if self.path == "/api/motivate":
+        # AI motivation generation is disabled. These endpoints are kept so any
+        # stale client that still POSTs to them gets a clean no-op response
+        # instead of a 404/500 — they never call Claude or persist anything.
+        if self.path in ("/api/motivate", "/api/motivate-finish"):
             try:
                 length = int(self.headers.get("Content-Length", 0))
-                raw = self.rfile.read(length)
-                body = json.loads(raw)
-                # Compact debug snapshot of the payload so when Claude's output
-                # looks off we can see what it actually had to work with.
-                prs = body.get("prs") or []
-                prs_summary = [
-                    {
-                        "sub": p.get("sub"),
-                        "n_sessions": p.get("sessions_in_history"),
-                        "is_pr": p.get("is_orm_pr") or p.get("is_weight_pr") or p.get("is_reps_pr"),
-                    }
-                    for p in prs
-                ]
-                print(
-                    f"  [MOTIVATE-PAYLOAD] ex={body.get('exercise')!r} "
-                    f"current_sets={len(body.get('current') or [])} "
-                    f"previous_sessions={len(body.get('previous') or [])} "
-                    f"prs={prs_summary}"
-                )
-                msg, model_used = call_claude_motivate(body)
-                print(f"  [MOTIVATE] {body.get('exercise')!r} ({model_used}) -> {msg!r}")
-                if msg:
-                    save_motivation(body.get("session_id"), body.get("exercise"), msg, model_used)
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": msg, "model": model_used}).encode())
-            except Exception as e:
-                print(f"  [MOTIVATE] Error: {e}")
-                self.send_response(500)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode())
-            return
-        if self.path == "/api/motivate-finish":
-            try:
-                length = int(self.headers.get("Content-Length", 0))
-                raw = self.rfile.read(length)
-                body = json.loads(raw)
-                msg, model_used = call_claude_motivate_finish(body)
-                print(f"  [FINISH] workout={body.get('workout')!r} ({model_used}) -> {msg!r}")
-                if msg:
-                    save_motivation(body.get("session_id"), FINISH_KEY, msg, model_used)
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": msg, "model": model_used}).encode())
-            except Exception as e:
-                print(f"  [FINISH] Error: {e}")
-                self.send_response(500)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode())
+                if length:
+                    self.rfile.read(length)
+            except Exception:
+                pass
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"message": None, "disabled": True}).encode())
             return
         if self.path == "/api/measurements":
             try:

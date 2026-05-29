@@ -363,33 +363,6 @@ function renderWorkoutSummaryCard() {
   `;
 }
 
-function renderLastFinishCard() {
-  const history = state.history || [];
-  const latest = history.find(s => s.finish_motivation);
-  if (!latest) return '';
-  const dateLabel = (() => {
-    const d = new Date(latest.date + 'T00:00:00');
-    if (isNaN(d.getTime())) return latest.date;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diffDays = Math.round((today - d) / (24 * 3600 * 1000));
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return d.toLocaleDateString('en-US', { weekday: 'long' });
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  })();
-  return `
-    <div style="margin-bottom:14px;padding:16px 18px 14px;background:linear-gradient(135deg,#fef3c7,#fde68a 50%,#fbbf24);border:1px solid #f59e0b;border-radius:14px;box-shadow:0 4px 14px rgba(245,158,11,0.18)">
-      <div style="display:flex;align-items:flex-start;gap:10px">
-        <span style="font-size:22px;flex-shrink:0;line-height:1">💪</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#92400e;margin-bottom:6px">${dateLabel} · ${latest.workout_name}</div>
-          <div style="font-size:14px;line-height:1.55;color:#451a03;font-weight:500">${latest.finish_motivation}</div>
-        </div>
-      </div>
-    </div>`;
-}
-
 function renderPercentilesCard() {
   const history = state.history || [];
   const offset = state.percentilesMonthOffset || 0;
@@ -790,7 +763,6 @@ function renderHome() {
 
       <div class="dashboard-grid">
         <div style="display:flex; flex-direction:column; gap:16px;">
-          ${renderLastFinishCard()}
           ${renderWorkoutSummaryCard()}
         </div>
         <div style="display:flex; flex-direction:column; gap:16px;">
