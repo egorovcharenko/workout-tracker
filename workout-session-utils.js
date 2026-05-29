@@ -249,7 +249,9 @@ function buildSet({ kind, idx, template, last, setNumber, saveExerciseName, isAs
     if (fallbackGrip) set.lastGrip = fallbackGrip;
   }
   if (template.assist) {
-    set.bodyweight = set.lastBodyweight || 175;
+    // Prefer the globally-remembered bodyweight, then this set's last value,
+    // then a 175 default. Keeps every assist exercise consistent on a fresh load.
+    set.bodyweight = loadBodyweight() || set.lastBodyweight || 175;
     set.bands = (set.lastBands || []).slice();
     set.grip = set.lastGrip || (template.grips ? template.grips[0] : null);
   } else if (isBandOnly) {

@@ -101,7 +101,7 @@ const WORKOUTS = [
     exercises: [
       { name: "Goblet Squat", sets: 3, warmups: 2, reps: "10-12", notes: "Hold DB at chest, sit deep. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, rest: 120 },
       { name: "Dumbbell Flat Bench Press", sets: 4, reps: "10-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
-      { name: "Assisted Pull-Ups", sets: 3, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
+      { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
       { name: "Seated Overhead Press", sets: 4, reps: "8-10", notes: "Seated, controlled", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw", rest: 120, noWarmup: true },
       { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
       { name: "Single-Leg DB RDL", sets: 3, reps: "8", notes: "One DB in each hand, rear leg lifts as you hinge — slow tempo, 8 per leg. Warmup 1 set @ ~20lb, work @ ~30lb.", rest: 120 },
@@ -271,6 +271,24 @@ function applyDeferredOrder(exercises, deferredNames) {
     .filter(Boolean)
     .map(e => ({ ...e, deferred: true }));
   return [...kept, ...moved];
+}
+
+// Bodyweight is a property of YOU, not of a set — one value shared across every
+// bodyweight/assist exercise (Assisted Pull-Ups, Bench Dips, …) and remembered
+// across sessions. Global key (not workout/date scoped).
+const BODYWEIGHT_LS_KEY = "v2-bodyweight";
+function loadBodyweight() {
+  try {
+    const v = parseFloat(localStorage.getItem(BODYWEIGHT_LS_KEY));
+    return isFinite(v) && v > 0 ? v : null;
+  } catch { return null; }
+}
+function saveBodyweight(w) {
+  try {
+    if (isFinite(w) && w > 0) localStorage.setItem(BODYWEIGHT_LS_KEY, String(w));
+  } catch (e) {
+    console.warn("[V2-BODYWEIGHT] localStorage save failed:", e);
+  }
 }
 
 const SETS_LS_KEY = (workoutName, date) => `v2-session-sets:${workoutName}:${date}`;

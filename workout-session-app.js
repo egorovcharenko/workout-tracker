@@ -151,7 +151,16 @@ function App() {
   };
 
   const onPickWeight = (eIdx, sIdx, w) => { startTimer(); updateAndSave(patchSet(eIdx, sIdx, { weight: w })); };
-  const onPickBodyweight = (eIdx, sIdx, w) => { startTimer(); updateAndSave(patchSet(eIdx, sIdx, { bodyweight: w })); };
+  // Bodyweight is global: adjusting it on any set updates every assist
+  // exercise's sets at once and persists it for future sessions.
+  const onPickBodyweight = (eIdx, sIdx, w) => {
+    startTimer();
+    saveBodyweight(w);
+    const next = exercises.map(e => e.assist
+      ? { ...e, sets: e.sets.map(s => ({ ...s, bodyweight: w })) }
+      : e);
+    updateAndSave(next);
+  };
   const onPickGrip = (eIdx, sIdx, g) => { startTimer(); updateAndSave(patchSet(eIdx, sIdx, { grip: g })); };
 
   const onToggleBand = (eIdx, sIdx, b) => {
