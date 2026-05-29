@@ -121,6 +121,12 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                     textDecoration: m.status === "skipped" ? "line-through" : "none",
                   }}>{e.name}</span>
+                  {e.deferred && m.status !== "done" && (
+                    <span title="Deferred — moved to later" style={{
+                      color: T.amber, fontFamily: T.mono, fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5,
+                      padding: "1px 4px", borderRadius: 3, background: "rgba(251,191,36,0.12)", flexShrink: 0,
+                    }}>↓ LATER</span>
+                  )}
                   <span style={{ fontFamily: T.mono, fontSize: 10, color: m.status === "done" ? T.green : T.faint, flexShrink: 0 }}>
                     {m.doneWork}/{m.totalWork}
                   </span>

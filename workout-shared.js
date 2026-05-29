@@ -241,6 +241,38 @@ function saveSkippedExercises(workoutName, date, namesSet) {
   }
 }
 
+// Deferred ("do later") exercises — an ordered list of names moved to the end
+// of the workout. Scoped to (workout, date) like skips/swaps so a reload mid-
+// session keeps the order you set.
+const DEFERRED_LS_KEY = (workoutName, date) => `v2-deferred:${workoutName}:${date}`;
+function loadDeferred(workoutName, date) {
+  try {
+    const raw = localStorage.getItem(DEFERRED_LS_KEY(workoutName, date));
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+function saveDeferred(workoutName, date, names) {
+  try {
+    if (names && names.length) localStorage.setItem(DEFERRED_LS_KEY(workoutName, date), JSON.stringify(names));
+    else localStorage.removeItem(DEFERRED_LS_KEY(workoutName, date));
+  } catch (e) {
+    console.warn("[V2-DEFERRED] localStorage save failed:", e);
+  }
+}
+// Move deferred exercises to the end (in deferredNames order) and flag them
+// with `deferred: true`. Non-deferred exercises keep their relative order, so
+// supersets stay contiguous (only standalone exercises are ever deferrable).
+function applyDeferredOrder(exercises, deferredNames) {
+  if (!deferredNames || !deferredNames.length) return exercises;
+  const deferredSet = new Set(deferredNames);
+  const kept = exercises.filter(e => !deferredSet.has(e.name));
+  const moved = deferredNames
+    .map(name => exercises.find(e => e.name === name))
+    .filter(Boolean)
+    .map(e => ({ ...e, deferred: true }));
+  return [...kept, ...moved];
+}
+
 const SETS_LS_KEY = (workoutName, date) => `v2-session-sets:${workoutName}:${date}`;
 function loadSessionSets(workoutName, date) {
   try {

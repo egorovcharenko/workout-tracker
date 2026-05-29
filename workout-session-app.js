@@ -109,8 +109,10 @@ function App() {
         const skippedNames = loadSkippedExercises(workout.name, activeDate);
         if (skippedNames.size) {
           exs = exs.map(e => skippedNames.has(e.name) ? { ...e, skipped: true } : e);
-          activateNextSet(exs);
         }
+        const deferredNames = loadDeferred(workout.name, activeDate);
+        if (deferredNames.length) exs = applyDeferredOrder(exs, deferredNames);
+        if (skippedNames.size || deferredNames.length) activateNextSet(exs);
 
         setExercises(exs);
         setLoaded(true);
@@ -479,6 +481,21 @@ function App() {
     updateAndSave(next);
   };
 
+  // Defer ("do later"): move this exercise to the end of the workout so the
+  // flow continues with the next one and you come back to it after everything
+  // else. Distinct from skip (which drops it entirely). Standalone exercises
+  // only — superset members can't be deferred without breaking interleaving.
+  // Persisted (workout, date) so a reload keeps the new order.
+  const onDeferExercise = (eIdx) => {
+    const target = exercises[eIdx];
+    if (!target || target.superset) return;
+    const moved = { ...target, deferred: true, sets: target.sets.map(s => ({ ...s, active: false })) };
+    const next = [...exercises.filter((_, i) => i !== eIdx), moved];
+    activateNextSet(next);
+    saveDeferred(workout.name, sessionDate, next.filter(e => e.deferred).map(e => e.name));
+    updateAndSave(next);
+  };
+
   const onSwapExercise = (eIdx, newName) => {
     const ex = exercises[eIdx];
     const tIdx = ex.templateExIdx;
@@ -679,6 +696,7 @@ function App() {
                   onLogReps={(sIdx, r) => onLogReps(i, sIdx, r)}
                   onSkipWarmup={() => onSkipWarmup(i)}
                   onSkipExercise={() => onSkipExercise(i)}
+                  onDeferExercise={() => onDeferExercise(i)}
                   onSwapExercise={(newName) => onSwapExercise(i, newName)}
                   onReopenSet={(sIdx) => onReopenSet(i, sIdx)}
                   onAddSet={() => onAddSet(i)}

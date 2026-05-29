@@ -1,4 +1,4 @@
-function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onSwapExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup }) {
+function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onDeferExercise, onSwapExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup }) {
   // Full swap group (includes the current exercise) — drives the first-class
   // variant selector rendered under the title. null / single-member groups
   // render no selector.
@@ -188,6 +188,9 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
       <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.cardBorder}`, flexWrap: "wrap" }}>
         {footerBtn("+ set", onAddSet)}
         {footerBtn("− set", onRemoveSet, !canRemove)}
+        {/* Defer: do this exercise later (moves it to the end). Standalone
+            exercises only — superset members can't be reordered individually. */}
+        {!exercise.superset && onDeferExercise && footerBtn("↓ do later", onDeferExercise)}
         {footerBtn("× skip exercise", onSkipExercise)}
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           {hasWarmup && warmupActive && footerBtn("Skip warmup →", onSkipWarmup)}
