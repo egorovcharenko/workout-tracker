@@ -74,8 +74,8 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
                 <span style={{ marginLeft: "auto", fontFamily: T.mono, fontSize: 9, color: m.status === "done" ? T.green : T.faint }}>{m.doneWork}/{m.totalWork}</span>
               </div>
               <div style={{
-                color: sel ? T.strong : m.status === "skipped" ? T.disabled : T.text,
-                fontSize: 12, fontWeight: 600, lineHeight: 1.25,
+                color: m.status === "skipped" ? T.muted : T.strong,
+                fontSize: 12, fontWeight: 700, lineHeight: 1.25,
                 display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
                 textDecoration: m.status === "skipped" ? "line-through" : "none",
                 minHeight: 30,
@@ -101,7 +101,10 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
           const hasVariants = swapGroup && swapGroup.length > 1;
           const workLogged = e.sets.some(s => s.completed && s.kind === "work");
           const swapOpen = swapOpenIdx === i;
-          const nameColor = m.status === "skipped" ? T.disabled : sel ? T.strong : T.text;
+          // Names render at max brightness for every active exercise (done
+          // included — a finished lift is an achievement, not something to
+          // mute). Only skipped exercises dim down.
+          const nameColor = m.status === "skipped" ? T.muted : T.strong;
           return (
             <React.Fragment key={e.id}>
               {firstInSuperset && (
@@ -181,16 +184,18 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
                         {workLogged && <span style={{ color: T.disabled, fontFamily: T.mono, fontSize: 9, paddingLeft: 2 }}>locked — sets logged</span>}
                       </div>
                     )}
-                    {/* per-set weight × reps */}
+                    {/* per-set weight × reps — logged sets bright, the active
+                        set in accent, upcoming previews in a readable muted
+                        (not the near-invisible disabled gray). */}
                     {m.work.length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 0", fontFamily: T.mono, fontSize: 11 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 0", fontFamily: T.mono, fontSize: 11.5 }}>
                         {m.work.map((s, k) => {
                           const d = navSetDisplay(s, e);
-                          const color = d.state === "done" ? T.text : d.state === "current" ? T.accentLight : T.disabled;
+                          const color = d.state === "done" ? T.strong : d.state === "current" ? T.accentLight : T.muted;
                           return (
                             <span key={k} style={{ color, fontWeight: 700, fontStyle: d.preview ? "italic" : "normal" }}>
-                              {d.lb || "—"}<span style={{ color: T.disabled, fontWeight: 400 }}>×</span>{d.reps != null ? d.reps : "—"}
-                              {k < m.work.length - 1 && <span style={{ color: T.disabled, fontWeight: 400 }}>{"  ·  "}</span>}
+                              {d.lb || "—"}<span style={{ color: T.faint, fontWeight: 400 }}>×</span>{d.reps != null ? d.reps : "—"}
+                              {k < m.work.length - 1 && <span style={{ color: T.faint, fontWeight: 400 }}>{"  ·  "}</span>}
                             </span>
                           );
                         })}
