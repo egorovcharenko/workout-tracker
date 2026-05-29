@@ -57,7 +57,9 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
   const warmupActive = warmups.some(s => s.active);
   const activeWarmupPos = activeSet && activeSet.kind === "warmup" ? warmups.indexOf(activeSet) + 1 : null;
   const lastWork = [...exercise.sets].reverse().find(s => s.kind === "work");
-  const canRemove = totalWork > 1 && lastWork && !lastWork.active && !lastWork.completed;
+  // −set now works from any state (active or completed), only gated by needing
+  // more than one working set to remove.
+  const canRemove = totalWork > 1;
 
   const footerBtn = (label, onClick, disabled) => (
     <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{

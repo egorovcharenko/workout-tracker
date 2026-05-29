@@ -531,14 +531,24 @@ function App() {
     updateAndSave(next);
   };
 
+  // Remove the trailing working set — now unconditional (works even if that
+  // set is the active one or already completed), as long as >1 working set
+  // remains. If the removed set was active, the new trailing incomplete set
+  // becomes active so focus/logging continues seamlessly.
   const onRemoveSet = (eIdx) => {
     const next = exercises.map((e, i) => {
       if (i !== eIdx) return e;
-      const workCount = e.sets.filter(s => s.kind === "work").length;
-      if (workCount <= 1) return e;
-      const lastIdx = [...e.sets].map((s, k) => ({ s, k })).reverse().find(x => x.s.kind === "work" && !x.s.active && !x.s.completed)?.k;
-      if (lastIdx == null) return e;
-      return { ...e, sets: e.sets.filter((_, j) => j !== lastIdx) };
+      const workEntries = e.sets.map((s, k) => ({ s, k })).filter(x => x.s.kind === "work");
+      if (workEntries.length <= 1) return e;
+      const trailing = workEntries[workEntries.length - 1];
+      const wasActive = trailing.s.active;
+      let sets = e.sets.filter((_, j) => j !== trailing.k);
+      if (wasActive) {
+        const reactivate = [...sets].map((s, k) => ({ s, k })).reverse()
+          .find(x => x.s.kind === "work" && !x.s.completed)?.k;
+        if (reactivate != null) sets = sets.map((s, k) => k === reactivate ? { ...s, active: true } : s);
+      }
+      return { ...e, sets };
     });
     updateAndSave(next);
   };
@@ -614,6 +624,7 @@ function App() {
       shownIdx={shownIdx}
       currentIdx={currentIdx}
       onSelect={onSelectExercise}
+      onSwapExercise={onSwapExercise}
       variant={variant}
     />
   );
