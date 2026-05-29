@@ -37,7 +37,7 @@
 <script type="text/babel" src="/workout-session-volume-bar.js" data-presets="react"></script>
 <script type="text/babel" src="/workout-session-sparkline.js" data-presets="react"></script>
 <script type="text/babel" src="/workout-session-projection.js" data-presets="react"></script>
-<script type="text/babel" src="/workout-session-motivations.js" data-presets="react"></script>
+<script type="text/babel" src="/workout-session-exercise-nav.js" data-presets="react"></script>
 
 <!-- Intermediate Components -->
 <script type="text/babel" src="/workout-session-activeset.js" data-presets="react"></script>
@@ -94,44 +94,44 @@
     min-height: 100%;
   }
   .session-main { width: 100%; max-width: 448px; padding-bottom: 60px; }
-  .stats-pane-wrap, .motivations-pane-wrap { display: none; }
-  /* Inline motivation chips show on mobile/narrow; hidden when the dedicated
-     motivations column is visible at wide viewports. */
-  .inline-motivation { display: flex; }
-  @media (min-width: 960px) {
+  /* The exercise list lives in the LEFT pane on wide screens and as a
+     horizontal strip at the top of the column on mobile — mutually exclusive. */
+  .exercise-nav-pane { display: none; }
+  .exercise-nav-strip { display: block; }
+  .stats-pane-wrap { display: none; }
+  @media (min-width: 900px) {
     .session-shell {
       flex-direction: row;
       align-items: flex-start;
       justify-content: center;
-      gap: 24px;
-      padding: 0 24px;
+      gap: 20px;
+      padding: 0 20px;
     }
     .session-main { flex-shrink: 0; }
-    .stats-pane-wrap {
+    .exercise-nav-strip { display: none; }
+    .exercise-nav-pane {
       display: block;
-      width: 320px;
+      width: 240px;
       flex-shrink: 0;
       position: sticky;
       top: 16px;
-      margin-top: 64px; /* align with the first exercise card, past the header row */
+      margin-top: 64px; /* align with the first card, past the header row */
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
     }
   }
-  /* Add the third (motivations) column when there's room. Hides the inline
-     motivation chips so AI takes aren't duplicated. */
+  /* Stats column joins as the third pane when there's room. */
   @media (min-width: 1240px) {
-    .session-shell { padding: 0 16px; }
-    .motivations-pane-wrap {
+    .stats-pane-wrap {
       display: block;
-      width: 280px;
+      width: 300px;
       flex-shrink: 0;
       position: sticky;
       top: 16px;
       margin-top: 64px;
-      align-self: flex-start;
       max-height: calc(100vh - 32px);
       overflow-y: auto;
     }
-    .inline-motivation { display: none; }
   }
 </style>
 </head>

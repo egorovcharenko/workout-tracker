@@ -1,4 +1,4 @@
-function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onSwapExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup, motivation }) {
+function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onSwapExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup }) {
   // Full swap group (includes the current exercise) — drives the first-class
   // variant selector rendered under the title. null / single-member groups
   // render no selector.
@@ -58,7 +58,6 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
   const activeWarmupPos = activeSet && activeSet.kind === "warmup" ? warmups.indexOf(activeSet) + 1 : null;
   const lastWork = [...exercise.sets].reverse().find(s => s.kind === "work");
   const canRemove = totalWork > 1 && lastWork && !lastWork.active && !lastWork.completed;
-  const allDone = !activeSet && exercise.sets.every(s => s.completed);
 
   const footerBtn = (label, onClick, disabled) => (
     <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{
@@ -182,21 +181,6 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
             (activeSet.lastBands || []).forEach(b => onToggleBand(activeIdx, b));
           }}
         />
-      )}
-
-      {allDone && motivation && (
-        <div className="inline-motivation" style={{
-          marginTop: 10, padding: "10px 12px",
-          background: "linear-gradient(135deg, rgba(192,132,252,0.10), rgba(96,165,250,0.10))",
-          border: "1px solid rgba(192,132,252,0.2)",
-          borderRadius: 10,
-          alignItems: "flex-start", gap: 9,
-        }}>
-          <span style={{ fontSize: 14, flexShrink: 0 }}>✨</span>
-          <span style={{ fontSize: 13, color: "#E9D5FF", lineHeight: 1.45, fontWeight: 500 }}>
-            {motivation === "__loading__" ? <span style={{ opacity: 0.6 }}>thinking…</span> : motivation}
-          </span>
-        </div>
       )}
 
       <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.cardBorder}`, flexWrap: "wrap" }}>

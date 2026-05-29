@@ -19,6 +19,11 @@ function App() {
   const [sessionDate, setSessionDate] = useState(() => localDate());
   const [loaded, setLoaded] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  // Which exercise the center column shows. null = follow the current (active)
+  // exercise automatically. A number = the user tapped a row in the exercise
+  // nav to focus it; cleared back to auto-follow whenever the active exercise
+  // advances (see effect below).
+  const [focusIdx, setFocusIdx] = useState(null);
   const {
     elapsed,
     running,
@@ -97,16 +102,7 @@ function App() {
             if (!isNaN(startedMs)) setStartedAt(startedMs);
           }
           setElapsed(today.duration_sec || 0);
-          try {
-            const mots = await api.motivations(today.id);
-            if (cancelled) return;
-            const m = {};
-            Object.entries(mots || {}).forEach(([exName, msg]) => {
-              const ex = exs.find(e => e.name === exName);
-              if (ex) m[ex.id] = msg;
-            });
-            setMotivations(m);
-          } catch (_) {}
+          // (AI motivation hydration removed — the feature's UI is disabled.)
         } else {
           if (exs.length && exs[0].sets.length) exs[0].sets[0].active = true;
         }
@@ -255,11 +251,8 @@ function App() {
 
     setExercises(next);
     queueSave(next, sessionId, startedAt, elapsed);
-
-    const justFinishedAll = next[eIdx].sets.every(s => s.completed);
-    if (justFinishedAll && kind !== "warmup") {
-      requestMotivation(next[eIdx], sessionId);
-    }
+    // AI motivation messages are disabled for now (the UI surface was removed),
+    // so we no longer fire requestMotivation on exercise completion.
   };
 
   const buildMotivatePayload = (exercise, sid) => {
@@ -555,7 +548,43 @@ function App() {
     updateAndSave(next);
   };
 
+  // The current (active) exercise's index: the one with an active set, else the
+  // next non-skipped incomplete, else the last. Drives the nav highlight and
+  // the auto-follow behavior for the center column.
+  const currentIdx = (() => {
+    let i = exercises.findIndex(e => !e.skipped && e.sets.some(s => s.active));
+    if (i !== -1) return i;
+    i = exercises.findIndex(e => !e.skipped && e.sets.some(s => !s.completed));
+    if (i !== -1) return i;
+    return exercises.length - 1;
+  })();
 
+  // Auto-follow: when the active exercise advances (currentIdx changes), drop
+  // any manual focus so the center column tracks the live workout again.
+  useEffect(() => { setFocusIdx(null); }, [currentIdx]);
+
+  // Tap an exercise in the nav → focus it in the center. If it has work left
+  // and nothing in it is active yet, also make its next set active so it can
+  // be logged immediately (deactivating whatever was active elsewhere). A
+  // finished exercise just gets focused for review.
+  const onSelectExercise = (idx) => {
+    setFocusIdx(idx);
+    const ex = exercises[idx];
+    if (!ex || ex.skipped) return;
+    const hasActiveHere = ex.sets.some(s => s.active);
+    const firstIncomplete = ex.sets.findIndex(s => !s.completed);
+    if (!hasActiveHere && firstIncomplete !== -1) {
+      const next = exercises.map((e) => ({
+        ...e,
+        sets: e.sets.map(s => s.active ? { ...s, active: false } : s),
+      }));
+      next[idx] = {
+        ...next[idx],
+        sets: next[idx].sets.map((s, j) => j === firstIncomplete ? { ...s, active: true } : s),
+      };
+      updateAndSave(next);
+    }
+  };
 
   const totalSets = exercises.reduce((n, e) => n + e.sets.length, 0);
   const doneSets = exercises.reduce((n, e) =>
@@ -574,19 +603,26 @@ function App() {
     );
   }
 
-  const currentExercise = (() => {
-    const active = exercises.find(e => !e.skipped && e.sets.some(s => s.active));
-    if (active) return active;
-    const nextIncomplete = exercises.find(e => !e.skipped && e.sets.some(s => !s.completed));
-    if (nextIncomplete) return nextIncomplete;
-    return exercises.length ? exercises[exercises.length - 1] : null;
-  })();
+  // The exercise shown in the center column: the user's manual focus if set
+  // and still valid, otherwise the current (active) exercise.
+  const shownIdx = (focusIdx != null && exercises[focusIdx]) ? focusIdx : currentIdx;
+  const shownExercise = exercises[shownIdx] || null;
+
+  const nav = (variant) => (
+    <ExerciseNav
+      exercises={exercises}
+      shownIdx={shownIdx}
+      currentIdx={currentIdx}
+      onSelect={onSelectExercise}
+      variant={variant}
+    />
+  );
 
   return (
     <div style={{ height: "100%", overflowY: "auto", background: T.page }}>
       <div className="session-shell">
-        <aside className="motivations-pane-wrap">
-          <MotivationsList exercises={exercises} motivations={motivations} />
+        <aside className="exercise-nav-pane">
+          {nav("list")}
         </aside>
         <div className="session-main">
           <Header
@@ -599,14 +635,16 @@ function App() {
             running={running}
             onToggleTimer={() => setRunning(r => !r)}
           />
-          {exercises.map((ex, i) => {
-            const prev = i > 0 ? exercises[i - 1] : null;
-            const isFirstInSuperset = ex.superset && (!prev || prev.superset !== ex.superset);
+          <div className="exercise-nav-strip">
+            {nav("strip")}
+          </div>
+          {shownExercise && (() => {
+            const i = shownIdx;
+            const ex = shownExercise;
             const supersetTag = ex.superset ? `${ex.superset}${ex.supersetPos || ''}` : null;
-
             return (
               <React.Fragment key={ex.id}>
-                {isFirstInSuperset && (
+                {ex.superset && (
                   <div style={{ margin: "4px 16px 6px", display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ flex: 1, height: 1, background: "rgba(192,132,252,0.18)" }} />
                     <span style={{ color: T.bands, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1.2 }}>
@@ -635,15 +673,14 @@ function App() {
                   onAddSet={() => onAddSet(i)}
                   onRemoveSet={() => onRemoveSet(i)}
                   onRemoveWarmup={() => onRemoveWarmup(i)}
-                  motivation={motivations[ex.id]}
                 />
               </React.Fragment>
             );
-          })}
+          })()}
         </div>
         <aside className="stats-pane-wrap">
           <StatsPane
-            exercise={currentExercise}
+            exercise={shownExercise}
             history={history}
             statHistory={statHistory}
             exercises={exercises}
