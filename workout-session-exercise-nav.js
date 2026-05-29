@@ -4,9 +4,9 @@
 // exercise in the center column; the App's onSelect also activates the
 // exercise's next set so you can log it (or, for a finished one, review it).
 //
-// The list variant also shows per-set weight×reps and — for exercises that
-// belong to a SWAP_GROUP — inline variant pills so you can swap straight from
-// the list (locked once a working set is logged, matching the main card).
+// The list variant shows per-set weight×reps and — for exercises in a
+// SWAP_GROUP — a ⇄ toggle that expands inline variant pills so you can swap
+// straight from the list without it cluttering every row.
 
 // Mode-aware displayed weight for one set (mirrors SetCard's math).
 function navSetDisplay(s, exercise) {
@@ -28,6 +28,8 @@ function navSetDisplay(s, exercise) {
 }
 
 function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise, variant }) {
+  const [swapOpenIdx, setSwapOpenIdx] = useState(null);
+
   const STATUS_COLOR = { done: T.green, current: T.accentLight, skipped: T.disabled, upcoming: T.faint };
   const STATUS_GLYPH = { done: "✓", current: "●", skipped: "×", upcoming: "○" };
 
@@ -60,21 +62,23 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
           const sel = i === shownIdx;
           return (
             <button key={e.id} onClick={() => onSelect(i)} style={{
-              flex: "0 0 auto", minWidth: 98, maxWidth: 150, textAlign: "left",
+              flex: "0 0 auto", width: 132, textAlign: "left",
               padding: "8px 10px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
               border: sel ? `1px solid ${T.accentLight}` : `1px solid ${T.cardBorder}`,
               background: sel ? "rgba(96,165,250,0.14)" : "rgba(255,255,255,0.03)",
               transition: "all 150ms ease",
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
                 <span style={{ color: STATUS_COLOR[m.status], fontSize: 10, flexShrink: 0 }}>{STATUS_GLYPH[m.status]}</span>
                 {m.tag && tagChip(m.tag)}
-                <span style={{ marginLeft: "auto", fontFamily: T.mono, fontSize: 9, color: T.faint }}>{m.doneWork}/{m.totalWork}</span>
+                <span style={{ marginLeft: "auto", fontFamily: T.mono, fontSize: 9, color: m.status === "done" ? T.green : T.faint }}>{m.doneWork}/{m.totalWork}</span>
               </div>
               <div style={{
-                color: sel ? T.strong : T.muted, fontSize: 12, fontWeight: 600,
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                color: sel ? T.strong : m.status === "skipped" ? T.disabled : T.text,
+                fontSize: 12, fontWeight: 600, lineHeight: 1.25,
+                display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
                 textDecoration: m.status === "skipped" ? "line-through" : "none",
+                minHeight: 30,
               }}>{e.name}</div>
             </button>
           );
@@ -83,7 +87,7 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
     );
   }
 
-  // variant "list" — desktop left pane (rich cards)
+  // variant "list" — desktop left pane (rich, readable)
   return (
     <div style={{ padding: 12, borderRadius: 14, background: T.cardBg, border: `1px solid ${T.cardBorder}` }}>
       <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0, marginBottom: 10, padding: "0 2px" }}>EXERCISES</div>
@@ -96,6 +100,8 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
           const swapGroup = getSwapGroup(e.name);
           const hasVariants = swapGroup && swapGroup.length > 1;
           const workLogged = e.sets.some(s => s.completed && s.kind === "work");
+          const swapOpen = swapOpenIdx === i;
+          const nameColor = m.status === "skipped" ? T.disabled : sel ? T.strong : T.text;
           return (
             <React.Fragment key={e.id}>
               {firstInSuperset && (
@@ -105,76 +111,84 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
               )}
               <div style={{
                 borderRadius: 10, overflow: "hidden",
-                border: sel ? "1px solid rgba(96,165,250,0.5)" : `1px solid ${T.cardBorder}`,
+                border: sel ? "1px solid rgba(96,165,250,0.55)" : `1px solid ${T.cardBorder}`,
                 background: sel ? "rgba(96,165,250,0.10)" : "rgba(255,255,255,0.02)",
                 transition: "all 150ms ease",
               }}>
-                {/* clickable header → focus this exercise */}
+                {/* header — click anywhere (except ⇄) to focus */}
                 <div onClick={() => onSelect(i)} role="button" style={{
-                  display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", cursor: "pointer",
+                  display: "flex", alignItems: "flex-start", gap: 8, padding: "9px 11px", cursor: "pointer",
                 }}>
-                  <span style={{ width: 14, textAlign: "center", color: STATUS_COLOR[m.status], fontSize: 11, flexShrink: 0 }}>{STATUS_GLYPH[m.status]}</span>
-                  <span style={{
-                    minWidth: 0, flex: 1,
-                    color: sel ? T.strong : m.status === "done" ? T.muted : T.text,
-                    fontSize: 13, fontWeight: sel ? 700 : 600,
-                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                    textDecoration: m.status === "skipped" ? "line-through" : "none",
-                  }}>{e.name}</span>
+                  <span style={{ width: 13, textAlign: "center", color: STATUS_COLOR[m.status], fontSize: 11, flexShrink: 0, marginTop: 1 }}>{STATUS_GLYPH[m.status]}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {m.tag && <span style={{ marginRight: 6 }}>{tagChip(m.tag)}</span>}
+                    <span style={{
+                      color: nameColor, fontSize: 13.5, fontWeight: sel ? 700 : 600, letterSpacing: -0.2,
+                      lineHeight: 1.3,
+                      textDecoration: m.status === "skipped" ? "line-through" : "none",
+                    }}>{e.name}</span>
+                  </div>
+                  {hasVariants && (
+                    <button
+                      onClick={(ev) => { ev.stopPropagation(); setSwapOpenIdx(o => o === i ? null : i); }}
+                      title="Swap variant"
+                      style={{
+                        flexShrink: 0, marginTop: -1,
+                        width: 24, height: 22, padding: 0, borderRadius: 6,
+                        cursor: "pointer", fontFamily: "inherit", fontSize: 12, lineHeight: 1,
+                        border: swapOpen ? "1px solid rgba(96,165,250,0.6)" : `1px solid ${T.cardBorder}`,
+                        background: swapOpen ? "rgba(96,165,250,0.15)" : "transparent",
+                        color: swapOpen ? T.accentLight : T.faint,
+                      }}
+                    >⇄</button>
+                  )}
                   {e.deferred && m.status !== "done" && (
                     <span title="Deferred — moved to later" style={{
-                      color: T.amber, fontFamily: T.mono, fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5,
-                      padding: "1px 4px", borderRadius: 3, background: "rgba(251,191,36,0.12)", flexShrink: 0,
-                    }}>↓ LATER</span>
+                      color: T.amber, fontFamily: T.mono, fontSize: 8, fontWeight: 800, letterSpacing: 0.4,
+                      padding: "2px 4px", borderRadius: 3, background: "rgba(251,191,36,0.12)", flexShrink: 0, marginTop: 1, whiteSpace: "nowrap",
+                    }}>↓</span>
                   )}
-                  <span style={{ fontFamily: T.mono, fontSize: 10, color: m.status === "done" ? T.green : T.faint, flexShrink: 0 }}>
+                  <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: m.status === "done" ? T.green : T.faint, flexShrink: 0, marginTop: 2 }}>
                     {m.doneWork}/{m.totalWork}
                   </span>
                 </div>
 
                 {!e.skipped && (
-                  <div style={{ padding: "0 10px 9px" }}>
-                    {/* inline variant swap */}
-                    {hasVariants && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: m.work.length ? 7 : 0 }}>
+                  <div style={{ padding: "0 11px 9px" }}>
+                    {/* inline variant swap (only when toggled open) */}
+                    {hasVariants && swapOpen && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: m.work.length ? 8 : 0 }}>
                         {swapGroup.map(opt => {
                           const isSel = opt.name === e.name;
                           const locked = workLogged && !isSel;
                           return (
                             <button
                               key={opt.name}
-                              onClick={(ev) => { ev.stopPropagation(); if (!isSel && !locked) onSwapExercise(i, opt.name); }}
+                              onClick={(ev) => { ev.stopPropagation(); if (!isSel && !locked) { onSwapExercise(i, opt.name); setSwapOpenIdx(null); } }}
                               disabled={isSel || locked}
-                              title={opt.name}
                               style={{
-                                flex: "1 1 auto", minWidth: 0,
-                                padding: "4px 8px", borderRadius: 7, fontFamily: "inherit",
-                                fontSize: 10.5, fontWeight: 700, letterSpacing: -0.2,
-                                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                                textAlign: "left", padding: "6px 9px", borderRadius: 7, fontFamily: "inherit",
+                                fontSize: 12, fontWeight: 600,
                                 cursor: isSel ? "default" : locked ? "not-allowed" : "pointer",
                                 border: isSel ? "1px solid rgba(96,165,250,0.6)" : `1px solid ${T.cardBorder}`,
-                                background: isSel ? "rgba(96,165,250,0.18)" : locked ? "transparent" : "rgba(255,255,255,0.04)",
-                                color: isSel ? "#DBEAFE" : locked ? T.disabled : T.muted,
+                                background: isSel ? "rgba(96,165,250,0.16)" : locked ? "transparent" : "rgba(255,255,255,0.04)",
+                                color: isSel ? "#DBEAFE" : locked ? T.disabled : T.text,
                                 opacity: locked ? 0.5 : 1,
                               }}
-                            >{opt.name}</button>
+                            >{isSel && <span style={{ color: T.accentLight, marginRight: 6 }}>●</span>}{opt.name}</button>
                           );
                         })}
+                        {workLogged && <span style={{ color: T.disabled, fontFamily: T.mono, fontSize: 9, paddingLeft: 2 }}>locked — sets logged</span>}
                       </div>
                     )}
                     {/* per-set weight × reps */}
                     {m.work.length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 0", fontFamily: T.mono, fontSize: 11 }}>
                         {m.work.map((s, k) => {
                           const d = navSetDisplay(s, e);
-                          const color = d.state === "done" ? T.text
-                                      : d.state === "current" ? T.accentLight
-                                      : T.disabled;
+                          const color = d.state === "done" ? T.text : d.state === "current" ? T.accentLight : T.disabled;
                           return (
-                            <span key={k} style={{
-                              fontFamily: T.mono, fontSize: 10.5, fontWeight: 700,
-                              color, fontStyle: d.preview ? "italic" : "normal",
-                            }}>
+                            <span key={k} style={{ color, fontWeight: 700, fontStyle: d.preview ? "italic" : "normal" }}>
                               {d.lb || "—"}<span style={{ color: T.disabled, fontWeight: 400 }}>×</span>{d.reps != null ? d.reps : "—"}
                               {k < m.work.length - 1 && <span style={{ color: T.disabled, fontWeight: 400 }}>{"  ·  "}</span>}
                             </span>
