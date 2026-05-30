@@ -232,32 +232,38 @@ function renderWorkoutSummaryCard() {
     return { date: s.date, volume: vol };
   });
 
-  // ---- enriched per-exercise data: PR flag, volume Δ vs prior session, sparkline ----
+  // ---- enriched per-exercise data ----
+  // Both the sparkline and the % trend track the SAME metric: estimated 1RM,
+  // one point per session. So the line and the number always agree in
+  // direction (line up ⇒ green +%, line down ⇒ red −%). The 1RM est is the
+  // best working set of each session (Epley: w·(1+reps/30)).
   const _assist = (n) => n === "Bench Dips" || n === "Assisted Pull-Ups";
   const exList = Object.entries(exerciseSummary).map(([exName, sum]) => {
-    const historicList = [];
-    let prBest = _assist(exName) ? -Infinity : 0;
-    history.forEach(s => (s.sets || []).forEach(set => {
-      if (set.exercise === exName && set.set_type === 'working' && set.reps) {
-        const w = parseFloat(set.weight_lb) || 0;
-        const r = parseInt(set.reps) || 0;
-        const est = calcSet1RM(exName, w, r, set.bands_json);
-        if (s.date !== latest.date) historicList.push(est);
-        if (est > prBest) prBest = est;
-      }
-    }));
-    const isPR = sum.best1RM >= prBest && sum.best1RM > 0;
-    let deltaPct = null;
-    const priorIdx = history.findIndex(s => s.date !== latest.date && (s.sets || []).some(x => x.exercise === exName && x.set_type === 'working' && x.reps));
-    if (priorIdx >= 0) {
-      let priorVol = 0;
-      history[priorIdx].sets.forEach(set => {
-        if (set.exercise === exName && set.set_type === 'working' && set.reps)
-          priorVol += (parseInt(set.reps) || 0) * (parseFloat(set.weight_lb) || 0);
+    // Best estimated 1RM per session, oldest → newest (history is newest-first).
+    const perSession = [];
+    history.forEach(s => {
+      let best = _assist(exName) ? -Infinity : 0;
+      let has = false;
+      (s.sets || []).forEach(set => {
+        if (set.exercise === exName && set.set_type === 'working' && set.reps) {
+          has = true;
+          const est = calcSet1RM(exName, parseFloat(set.weight_lb) || 0, parseInt(set.reps) || 0, set.bands_json);
+          if (est > best) best = est;
+        }
       });
-      if (priorVol > 0) deltaPct = Math.round(((sum.totalVol - priorVol) / priorVol) * 100);
-    }
-    return { exName, sum, isPR, deltaPct, sparkVals: historicList.slice(-6).concat(sum.best1RM) };
+      if (has) perSession.push(best);
+    });
+    perSession.reverse(); // oldest → newest; last entry is today (latest)
+    const today1RM = perSession.length ? perSession[perSession.length - 1] : sum.best1RM;
+    const prior1RM = perSession.length > 1 ? perSession[perSession.length - 2] : null;
+    const priorMax = perSession.length > 1
+      ? Math.max(...perSession.slice(0, -1))
+      : (_assist(exName) ? -Infinity : 0);
+    const isPR = today1RM >= priorMax && today1RM > 0;
+    const deltaPct = (prior1RM != null && prior1RM > 0)
+      ? Math.round(((today1RM - prior1RM) / prior1RM) * 100)
+      : null;
+    return { exName, sum, isPR, deltaPct, sparkVals: perSession.slice(-6) };
   });
 
   const totalSets = exList.reduce((n, e) => n + e.sum.setsCount, 0);
@@ -373,7 +379,7 @@ function renderWorkoutSummaryCard() {
 
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 10px">
         <span style="font-size:10px;font-weight:800;letter-spacing:0.1em;color:#6B7280;font-family:${MONO}">ALL EXERCISES</span>
-        <span style="font-size:11px;color:#6B7280">${numLifts} lifts · best set + trend</span>
+        <span style="font-size:11px;color:#6B7280">${numLifts} lifts · est. 1RM trend</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">
         ${exHTML || '<div style="color:#6B7280;font-size:12px;padding:8px 0">No working sets logged.</div>'}
