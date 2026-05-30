@@ -232,132 +232,151 @@ function renderWorkoutSummaryCard() {
     return { date: s.date, volume: vol };
   });
 
-  const chartBars = historyData.map(h => {
+  // ---- enriched per-exercise data: PR flag, volume Δ vs prior session, sparkline ----
+  const _assist = (n) => n === "Bench Dips" || n === "Assisted Pull-Ups";
+  const exList = Object.entries(exerciseSummary).map(([exName, sum]) => {
+    const historicList = [];
+    let prBest = _assist(exName) ? -Infinity : 0;
+    history.forEach(s => (s.sets || []).forEach(set => {
+      if (set.exercise === exName && set.set_type === 'working' && set.reps) {
+        const w = parseFloat(set.weight_lb) || 0;
+        const r = parseInt(set.reps) || 0;
+        const est = calcSet1RM(exName, w, r, set.bands_json);
+        if (s.date !== latest.date) historicList.push(est);
+        if (est > prBest) prBest = est;
+      }
+    }));
+    const isPR = sum.best1RM >= prBest && sum.best1RM > 0;
+    let deltaPct = null;
+    const priorIdx = history.findIndex(s => s.date !== latest.date && (s.sets || []).some(x => x.exercise === exName && x.set_type === 'working' && x.reps));
+    if (priorIdx >= 0) {
+      let priorVol = 0;
+      history[priorIdx].sets.forEach(set => {
+        if (set.exercise === exName && set.set_type === 'working' && set.reps)
+          priorVol += (parseInt(set.reps) || 0) * (parseFloat(set.weight_lb) || 0);
+      });
+      if (priorVol > 0) deltaPct = Math.round(((sum.totalVol - priorVol) / priorVol) * 100);
+    }
+    return { exName, sum, isPR, deltaPct, sparkVals: historicList.slice(-6).concat(sum.best1RM) };
+  });
+
+  const totalSets = exList.reduce((n, e) => n + e.sum.setsCount, 0);
+  const numLifts = exList.length;
+  const prsList = exList.filter(e => e.isPR);
+  const upCount = exList.filter(e => e.deltaPct != null && e.deltaPct > 0).length;
+  const downCount = exList.filter(e => e.deltaPct != null && e.deltaPct < 0).length;
+  const latestVol = historyData.length ? historyData[historyData.length - 1].volume : 0;
+  const prevVol = historyData.length > 1 ? historyData[historyData.length - 2].volume : 0;
+  const netTrend = prevVol > 0 ? Math.round(((latestVol - prevVol) / prevVol) * 100) : null;
+
+  const musRows = muscleVolumeList.slice(0, 6).map(([mn, vol]) => ({
+    label: (MUSCLE_GROUPS[mn] && MUSCLE_GROUPS[mn].label) || mn,
+    pct: Math.round((vol / totalMusVolume) * 100),
+  }));
+  const maxMusPct = Math.max(1, ...musRows.map(r => r.pct));
+
+  const MONO = 'ui-monospace,Menlo,monospace';
+  const fmtW = (w) => (Math.round(w * 10) / 10);
+  const spark = (vals) => {
+    const v = (vals || []).filter(x => isFinite(x));
+    if (v.length < 2) return '<div style="width:52px;flex-shrink:0"></div>';
+    const mx = Math.max(...v), mn = Math.min(...v), rng = mx - mn || 1;
+    const w = 52, h = 22, pad = 2;
+    const pts = v.map((x, i) => `${pad + (i / (v.length - 1)) * (w - pad * 2)},${pad + (1 - (x - mn) / rng) * (h - pad * 2)}`).join(' ');
+    const lx = w - pad, ly = pad + (1 - (v[v.length - 1] - mn) / rng) * (h - pad * 2);
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="flex-shrink:0"><polyline points="${pts}" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${lx}" cy="${ly}" r="2" fill="#a78bfa"/></svg>`;
+  };
+
+  const bars = historyData.map(h => {
     const pct = maxSessionVol ? (h.volume / maxSessionVol) * 100 : 0;
-    const dateLabel = (() => {
-      const parts = h.date.split('-');
-      return parts.length === 3 ? `${parts[1]}/${parts[2]}` : h.date;
-    })();
     const isLatest = h.date === latest.date;
-    const barBg = isLatest ? '#c084fc' : '#e9d5ff';
-    const textWeight = isLatest ? 'bold' : 'normal';
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
-      <div style="height:45px;width:100%;display:flex;align-items:end;background:#f3f4f6;border-radius:3px;overflow:hidden">
-        <div style="height:${pct}%;width:100%;background:${barBg};border-radius:2px"></div>
+    const parts = h.date.split('-');
+    const dl = parts.length === 3 ? `${parts[1]}/${parts[2]}` : h.date;
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">
+      <div style="height:54px;width:100%;display:flex;align-items:end">
+        <div style="width:100%;height:${Math.max(8, pct)}%;background:${isLatest ? '#a78bfa' : 'rgba(255,255,255,0.09)'};border-radius:4px"></div>
       </div>
-      <span style="font-size:8px;font-family:ui-monospace,Menlo,monospace;color:#9ca3af;font-weight:${textWeight}">${dateLabel}</span>
+      <span style="font-size:9px;font-family:${MONO};color:${isLatest ? '#a78bfa' : '#6B7280'};font-weight:${isLatest ? '800' : '500'}">${dl}</span>
     </div>`;
   }).join('');
 
-  const rows = Object.entries(exerciseSummary).map(([exName, sum]) => {
-    const historicList = [];
-    const exercisePRs = {};
-    history.forEach(s => {
-      (s.sets || []).forEach(set => {
-        if (set.exercise === exName && set.set_type === 'working' && set.reps) {
-          const w = parseFloat(set.weight_lb) || 0;
-          const r = parseInt(set.reps) || 0;
-          const est = calcSet1RM(exName, w, r, set.bands_json);
-          const isAssist = exName === "Bench Dips" || exName === "Assisted Pull-Ups";
-          if (s.date !== latest.date) {
-            historicList.push(est);
-          }
-          if (exercisePRs[exName] === undefined) {
-            exercisePRs[exName] = isAssist ? -Infinity : 0;
-          }
-          if (est > exercisePRs[exName]) {
-            exercisePRs[exName] = est;
-          }
-        }
-      });
-    });
+  const big = (txt, color) => `<span style="font-size:27px;font-weight:800;color:${color || '#F3F4F6'};font-family:${MONO};letter-spacing:-0.03em">${txt}</span>`;
+  const unit = (txt) => `<span style="font-size:12px;color:#6B7280;font-weight:600">${txt}</span>`;
+  const tile = (label, valHTML, sub) => `
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:13px 14px">
+      <div style="display:flex;align-items:baseline;gap:3px;line-height:1">${valHTML}</div>
+      <div style="font-size:9px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-top:8px">${label}</div>
+      ${sub ? `<div style="font-size:10px;color:#6B7280;margin-top:3px">${sub}</div>` : ''}
+    </div>`;
+  const netColor = netTrend == null ? '#6B7280' : netTrend > 0 ? '#34D399' : netTrend < 0 ? '#F87171' : '#6B7280';
+  const tilesHTML = [
+    tile('DURATION', big(m) + unit('min')),
+    tile('SETS', big(totalSets), `across ${numLifts} lifts`),
+    tile('NEW PRS', big(prsList.length, '#FBBF24'), 'personal records'),
+    tile('NET TREND', big(netTrend == null ? '—' : `${netTrend > 0 ? '+' : ''}${netTrend}%`, netColor), `${upCount} up · ${downCount} down`),
+  ].join('');
 
-    const isPR = sum.best1RM >= (exercisePRs[exName] || 0) && sum.best1RM > 0;
-    const lastSessionIndex = history.findIndex(s => s.date !== latest.date && (s.sets || []).some(x => x.exercise === exName && x.set_type === 'working' && x.reps));
-    let deltaText = '';
-    let deltaColor = '#9CA3AF';
-    if (lastSessionIndex >= 0) {
-      let priorVol = 0;
-      history[lastSessionIndex].sets.forEach(set => {
-        if (set.exercise === exName && set.set_type === 'working' && set.reps) {
-          priorVol += (parseInt(set.reps) || 0) * (parseFloat(set.weight_lb) || 0);
-        }
-      });
-      if (priorVol > 0) {
-        const diff = ((sum.totalVol - priorVol) / priorVol) * 100;
-        deltaText = `${diff >= 0 ? '+' : ''}${Math.round(diff)}%`;
-        deltaColor = diff >= 0 ? '#10B981' : '#EF4444';
-      }
-    }
+  const prRowsHTML = prsList.length ? prsList.map(e => `
+    <div style="display:flex;align-items:center;gap:10px;padding:5px 0">
+      <span style="color:#FBBF24;font-size:12px;flex-shrink:0">★</span>
+      <span style="flex:1;min-width:0;color:#F3F4F6;font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(e.exName)}</span>
+      <span style="color:#FBBF24;font-family:${MONO};font-size:13px;font-weight:800;flex-shrink:0">${fmtW(e.sum.bestW)}×${e.sum.bestR}</span>
+    </div>`).join('') : `<div style="color:#6B7280;font-size:12px;padding:6px 0">No new PRs this session.</div>`;
 
-    const sparkHTML = microSparkline(historicList.slice(-6).concat(sum.best1RM), '#c084fc');
-    const best1RMText = Math.round(sum.best1RM);
+  const musHTML = musRows.map(r => `
+    <div style="display:flex;align-items:center;gap:12px;padding:3px 0">
+      <span style="width:84px;flex-shrink:0;color:#D1D5DB;font-size:13px">${_esc(r.label)}</span>
+      <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden"><div style="height:100%;width:${(r.pct / maxMusPct) * 100}%;background:rgba(255,255,255,0.22);border-radius:99px"></div></div>
+      <span style="width:34px;text-align:right;color:#9CA3AF;font-size:12px;font-family:${MONO}">${r.pct}%</span>
+    </div>`).join('');
 
-    const exMap = EXERCISE_MUSCLES[exName];
-    let badgesHTML = '';
-    if (exMap) {
-      const exMusclesList = [];
-      exMap.primary.forEach(m => {
-        const vol = sum.totalVol * getMuscleImpact(exName, m, true);
-        const pct = Math.round((vol / totalMusVolume) * 100);
-        if (pct > 0) {
-          exMusclesList.push({ name: m, pct, isPrimary: true });
-        }
-      });
-      exMap.secondary.forEach(m => {
-        const vol = sum.totalVol * getMuscleImpact(exName, m, false);
-        const pct = Math.round((vol / totalMusVolume) * 100);
-        if (pct > 0) {
-          exMusclesList.push({ name: m, pct, isPrimary: false });
-        }
-      });
-      exMusclesList.sort((a, b) => b.pct - a.pct);
-      badgesHTML = exMusclesList.map(item => {
-        const label = MUSCLE_GROUPS[item.name]?.label || item.name;
-        const pillColor = item.isPrimary ? 'color:#c084fc;background:#f3e8ff;' : 'color:#9ca3af;background:#f3f4f6;';
-        return `<span style="font-size:9px;font-weight:700;${pillColor}padding:1px 5px;border-radius:4px;white-space:nowrap;margin-right:4px;display:inline-block;margin-top:2px">${label} ${item.pct}%</span>`;
-      }).join('');
-    }
-
-    return `<div style="display:flex;justify-content:between;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid #f9fafb;gap:10px">
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:4px">
-          <span style="font-weight:600;color:#1F2937;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${exName}</span>
-          ${isPR ? `<span style="font-size:8px;font-weight:800;color:#d97706;background:#fef3c7;border:1px solid #fde68a;padding:0 3px;border-radius:4px;text-transform:uppercase;letter-spacing:0.05em">★ PR</span>` : ''}
-        </div>
-        <div style="font-size:10px;color:#9CA3AF;font-family:ui-monospace,Menlo,monospace;margin-top:1px">
-          Best: ${sum.bestW}lb × ${sum.bestR} <span style="color:#d1d5db;font-weight:normal">(${best1RMText} est)</span> · ${sum.setsCount}s
-        </div>
-        <div style="display:flex;flex-wrap:wrap;margin-top:2px">
-          ${badgesHTML}
-        </div>
-      </div>
+  const exHTML = exList.map(e => {
+    const pr = e.isPR;
+    const dc = e.deltaPct == null ? '#6B7280' : e.deltaPct > 0 ? '#34D399' : e.deltaPct < 0 ? '#F87171' : '#6B7280';
+    const dt = e.deltaPct == null ? '' : `${e.deltaPct > 0 ? '+' : ''}${e.deltaPct}%`;
+    return `<div style="background:${pr ? 'rgba(251,191,36,0.05)' : 'rgba(255,255,255,0.02)'};border:1px solid ${pr ? 'rgba(251,191,36,0.22)' : 'rgba(255,255,255,0.05)'};${pr ? 'border-left:3px solid #FBBF24;' : ''}border-radius:10px;padding:11px 13px">
       <div style="display:flex;align-items:center;gap:8px">
-        ${sparkHTML}
-        ${deltaText ? `<span style="font-size:11px;font-weight:700;color:${deltaColor};font-family:ui-monospace,Menlo,monospace;min-width:32px;text-align:right">${deltaText}</span>` : ''}
+        ${pr ? `<span style="color:#FBBF24;font-size:11px;flex-shrink:0">★</span>` : ''}
+        <span style="flex:1;min-width:0;color:#F3F4F6;font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(e.exName)}</span>
+        ${spark(e.sparkVals)}
+        ${dt ? `<span style="flex-shrink:0;min-width:42px;text-align:right;color:${dc};font-family:${MONO};font-size:13px;font-weight:800">${dt}</span>` : ''}
       </div>
+      <div style="margin-top:6px;color:#6B7280;font-size:11px;font-family:${MONO}">Top <span style="color:#D1D5DB;font-weight:700">${fmtW(e.sum.bestW)}×${e.sum.bestR}</span> · 1RM ${Math.round(e.sum.best1RM)} · ${e.sum.setsCount} sets</div>
     </div>`;
   }).join('');
 
   return `
-    <div class="card" style="margin-bottom:16px;overflow:hidden">
-      <div style="padding:16px 16px 12px;background:linear-gradient(180deg,#fafafa,#ffffff);border-bottom:1px solid #f3f4f6">
-        <div style="display:flex;justify-content:between;align-items:start">
-          <div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <span style="font-size:10px;font-weight:800;color:#9333ea;background:#f3e8ff;padding:2px 6px;border-radius:5px;text-transform:uppercase;letter-spacing:0.05em">✓ DONE</span>
-              ${elapsedLabel ? `<span style="font-size:11px;color:#9ca3af;font-weight:600">${elapsedLabel}</span>` : ''}
-            </div>
-            <h3 style="font-size:18px;font-weight:800;color:#111827;margin:4px 0 2px">${name}</h3>
-            <span style="font-size:11px;color:#9ca3af;font-family:ui-monospace,Menlo,monospace">${dateStr}</span>
-          </div>
-          ${historyData.length > 1 ? `<div style="width:90px;display:flex;gap:4px">${chartBars}</div>` : ''}
+    <div data-noinvert style="margin-bottom:16px;overflow:hidden;background:#0B0F14;border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px 18px 20px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px">
+        <div style="min-width:0">
+          <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;letter-spacing:0.08em;color:#C4B5FD;background:rgba(139,92,246,0.16);border:1px solid rgba(139,92,246,0.35);padding:4px 10px;border-radius:99px;font-family:${MONO}">✓ DONE</span>
+          <h3 style="font-size:30px;font-weight:800;color:#F3F4F6;margin:10px 0 3px;letter-spacing:-0.02em;line-height:1.05">${name}</h3>
+          <span style="font-size:12px;color:#6B7280;font-family:${MONO}">${dateStr}</span>
+        </div>
+        ${historyData.length > 1 ? `<div style="width:210px;max-width:44%;flex-shrink:0"><div style="display:flex;gap:8px;align-items:end">${bars}</div></div>` : ''}
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-bottom:14px">
+        ${tilesHTML}
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:18px">
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:15px 16px">
+          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#FBBF24;font-family:${MONO};margin-bottom:8px">★ PERSONAL RECORDS</div>
+          ${prRowsHTML}
+        </div>
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:15px 16px">
+          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-bottom:10px">MUSCLE FOCUS</div>
+          ${musHTML}
         </div>
       </div>
-      <div style="padding:10px 16px 12px">
-        <div style="display:flex;flex-direction:column;gap:4px">
-          ${rows || '<div style="color:#6B7280;font-size:12px;padding:8px 0">No working sets logged.</div>'}
-        </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 10px">
+        <span style="font-size:10px;font-weight:800;letter-spacing:0.1em;color:#6B7280;font-family:${MONO}">ALL EXERCISES</span>
+        <span style="font-size:11px;color:#6B7280">${numLifts} lifts · best set + trend</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">
+        ${exHTML || '<div style="color:#6B7280;font-size:12px;padding:8px 0">No working sets logged.</div>'}
       </div>
     </div>
   `;
@@ -758,12 +777,13 @@ function renderHome() {
 
       ${workoutButtonHTML}
 
+      ${renderWorkoutSummaryCard()}
+
       <div class="dashboard-grid">
         <div style="display:flex; flex-direction:column; gap:16px;">
-          ${renderWorkoutSummaryCard()}
+          ${renderPercentilesCard()}
         </div>
         <div style="display:flex; flex-direction:column; gap:16px;">
-          ${renderPercentilesCard()}
           ${renderCalendar()}
         </div>
       </div>
