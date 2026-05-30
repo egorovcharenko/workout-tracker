@@ -1,5 +1,32 @@
 // UI rendering logic for the Home tab of Workout Tracker
 
+// Floating tooltip for sparkline points (and any element that wants one).
+// Appended to <body> — outside #app's invert filter — so its dark styling
+// renders as-authored, and position:fixed is viewport-relative (a filter on
+// #app would otherwise become the containing block). Hover shows it; tap
+// (sticky) shows it for ~2.2s so it works on touch where :hover doesn't.
+function sparkTip(evt, text, sticky) {
+  let el = document.getElementById('spark-tip');
+  if (!text) { if (el) el.style.opacity = '0'; return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'spark-tip';
+    el.style.cssText = 'position:fixed;z-index:99999;pointer-events:none;background:#1f2937;color:#f3f4f6;'
+      + 'border:1px solid rgba(255,255,255,0.18);border-radius:8px;padding:6px 9px;font-size:12px;'
+      + 'font-family:ui-monospace,Menlo,monospace;box-shadow:0 8px 24px rgba(0,0,0,0.5);white-space:nowrap;'
+      + 'transform:translate(-50%,-138%);opacity:0;transition:opacity 90ms ease';
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  const t = evt && evt.target;
+  const r = t && t.getBoundingClientRect ? t.getBoundingClientRect() : null;
+  el.style.left = (r ? r.left + r.width / 2 : (evt ? evt.clientX : 0)) + 'px';
+  el.style.top = (r ? r.top : (evt ? evt.clientY : 0)) + 'px';
+  el.style.opacity = '1';
+  if (sticky) { clearTimeout(sparkTip._t); sparkTip._t = setTimeout(() => { el.style.opacity = '0'; }, 2200); }
+}
+if (typeof window !== 'undefined') window.sparkTip = sparkTip;
+
 function microSparkline(vals, color) {
   if (!vals || vals.length < 2) return '';
   const max = Math.max(...vals), min = Math.min(...vals), range = max - min || 1;
@@ -239,31 +266,36 @@ function renderWorkoutSummaryCard() {
   // best working set of each session (Epley: w·(1+reps/30)).
   const _assist = (n) => n === "Bench Dips" || n === "Assisted Pull-Ups";
   const exList = Object.entries(exerciseSummary).map(([exName, sum]) => {
-    // Best estimated 1RM per session, oldest → newest (history is newest-first).
+    // Best working set (by est 1RM) per session, oldest → newest. Each entry
+    // keeps the set's weight/reps so the PR card can show before → after.
     const perSession = [];
     history.forEach(s => {
-      let best = _assist(exName) ? -Infinity : 0;
-      let has = false;
+      let best = _assist(exName) ? -Infinity : 0, bw = 0, br = 0, has = false;
       (s.sets || []).forEach(set => {
         if (set.exercise === exName && set.set_type === 'working' && set.reps) {
           has = true;
-          const est = calcSet1RM(exName, parseFloat(set.weight_lb) || 0, parseInt(set.reps) || 0, set.bands_json);
-          if (est > best) best = est;
+          const w = parseFloat(set.weight_lb) || 0, r = parseInt(set.reps) || 0;
+          const est = calcSet1RM(exName, w, r, set.bands_json);
+          if (est > best) { best = est; bw = w; br = r; }
         }
       });
-      if (has) perSession.push({ date: s.date, value: best });
+      if (has) perSession.push({ date: s.date, value: best, w: bw, r: br });
     });
     perSession.reverse(); // oldest → newest; last entry is today (latest)
     const today1RM = perSession.length ? perSession[perSession.length - 1].value : sum.best1RM;
     const prior1RM = perSession.length > 1 ? perSession[perSession.length - 2].value : null;
-    const priorMax = perSession.length > 1
-      ? Math.max(...perSession.slice(0, -1).map(p => p.value))
-      : (_assist(exName) ? -Infinity : 0);
-    const isPR = today1RM >= priorMax && today1RM > 0;
+    const priors = perSession.slice(0, -1);
+    const priorMax = priors.length ? Math.max(...priors.map(p => p.value)) : (_assist(exName) ? -Infinity : 0);
+    // Previous best-ever set (across all prior sessions) — the record this
+    // session is measured against.
+    const prevBest = priors.length ? priors.reduce((m, p) => p.value > m.value ? p : m, priors[0]) : null;
+    // Strictly beat the previous best (or a debut, where priorMax is 0/−∞) —
+    // merely tying isn't a new PR, and tie rows would show "68 → 68".
+    const isPR = today1RM > priorMax && today1RM > 0;
     const deltaPct = (prior1RM != null && prior1RM > 0)
       ? Math.round(((today1RM - prior1RM) / prior1RM) * 100)
       : null;
-    return { exName, sum, isPR, deltaPct, sparkPts: perSession.slice(-6) };
+    return { exName, sum, isPR, deltaPct, prevBest, sparkPts: perSession.slice(-6) };
   });
 
   const totalSets = exList.reduce((n, e) => n + e.sum.setsCount, 0);
@@ -308,9 +340,9 @@ function renderWorkoutSummaryCard() {
   const MONO = 'ui-monospace,Menlo,monospace';
   const fmtW = (w) => (Math.round(w * 10) / 10);
   const mmdd = (d) => { const p = String(d || '').split('-'); return p.length === 3 ? `${p[1]}/${p[2]}` : (d || ''); };
-  // Sparkline of per-session estimated 1RM. Each data point carries a native
-  // <title> tooltip (date · 1RM) and a wide transparent hit-circle so hovering
-  // anywhere near a point reveals it. The final point is emphasized.
+  // Sparkline of per-session estimated 1RM. Each point has a wide transparent
+  // hit-circle wired to the custom sparkTip() tooltip (date · 1RM) — hover on
+  // desktop, tap on touch. The final point is emphasized.
   const spark = (pts) => {
     const data = (pts || []).filter(p => p && isFinite(p.value));
     if (data.length < 2) return '<div style="width:52px;flex-shrink:0"></div>';
@@ -323,10 +355,11 @@ function renderWorkoutSummaryCard() {
     }));
     const poly = xy.map(c => `${c.x},${c.y}`).join(' ');
     const dots = xy.map((c, i) => {
-      const tip = `${mmdd(data[i].date)} · ${Math.round(data[i].value)} lb est 1RM`;
+      const tip = `${mmdd(data[i].date)} · ${Math.round(data[i].value)} lb est 1RM`.replace(/'/g, "\\'");
       const isLast = i === xy.length - 1;
       return `<circle cx="${c.x}" cy="${c.y}" r="${isLast ? 2 : 1.5}" fill="#a78bfa"/>`
-        + `<circle cx="${c.x}" cy="${c.y}" r="7" fill="transparent" style="cursor:pointer"><title>${tip}</title></circle>`;
+        + `<circle cx="${c.x}" cy="${c.y}" r="7" fill="transparent" style="cursor:pointer"`
+        + ` onmouseenter="sparkTip(event,'${tip}')" onmouseleave="sparkTip()" onclick="sparkTip(event,'${tip}',true)"></circle>`;
     }).join('');
     return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="flex-shrink:0;overflow:visible"><polyline points="${poly}" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}</svg>`;
   };
@@ -360,12 +393,24 @@ function renderWorkoutSummaryCard() {
     tile('NET TREND', big(netTrend == null ? '—' : `${netTrend > 0 ? '+' : ''}${netTrend}%`, netColor), `${upCount} up · ${downCount} down`),
   ].join('');
 
-  const prRowsHTML = prsList.length ? prsList.map(e => `
-    <div style="display:flex;align-items:center;gap:10px;padding:5px 0">
-      <span style="color:#FBBF24;font-size:12px;flex-shrink:0">★</span>
-      <span style="flex:1;min-width:0;color:#F3F4F6;font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(e.exName)}</span>
-      <span style="color:#FBBF24;font-family:${MONO};font-size:13px;font-weight:800;flex-shrink:0">${fmtW(e.sum.bestW)}×${e.sum.bestR}</span>
-    </div>`).join('') : `<div style="color:#6B7280;font-size:12px;padding:6px 0">No new PRs this session.</div>`;
+  const prRowsHTML = prsList.length ? prsList.map(e => {
+    const curSet = `${fmtW(e.sum.bestW)}×${e.sum.bestR}`;
+    const curOrm = Math.round(e.sum.best1RM);
+    const p = e.prevBest;
+    const detail = p
+      ? `${fmtW(p.w)}×${p.r} <span style="color:#4B5563">→</span> <span style="color:#E5E7EB">${curSet}</span>`
+        + `<span style="color:#374151"> · </span>`
+        + `1RM ${Math.round(p.value)} <span style="color:#4B5563">→</span> <span style="color:#34D399;font-weight:700">${curOrm}</span>`
+      : `<span style="color:#A78BFA;font-weight:700">debut</span><span style="color:#374151"> · </span>1RM <span style="color:#34D399;font-weight:700">${curOrm}</span>`;
+    return `<div style="padding:6px 0">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="color:#FBBF24;font-size:12px;flex-shrink:0">★</span>
+        <span style="flex:1;min-width:0;color:#F3F4F6;font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(e.exName)}</span>
+        <span style="color:#FBBF24;font-family:${MONO};font-size:13px;font-weight:800;flex-shrink:0">${curSet}</span>
+      </div>
+      <div style="margin-top:3px;padding-left:20px;color:#6B7280;font-size:11px;font-family:${MONO}">${detail}</div>
+    </div>`;
+  }).join('') : `<div style="color:#6B7280;font-size:12px;padding:6px 0">No new PRs this session.</div>`;
 
   const musHTML = musRows.map(r => `
     <div title="${_esc(r.label)}: ${r.pct}% of this session's muscle-weighted volume" style="display:flex;align-items:center;gap:12px;padding:3px 0;cursor:default">
