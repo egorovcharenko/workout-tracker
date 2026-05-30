@@ -281,6 +281,35 @@ function renderWorkoutSummaryCard() {
   }));
   const maxMusPct = Math.max(1, ...musRows.map(r => r.pct));
 
+  // ---- HARD REPS · LAST 7 DAYS, allocated per muscle ----
+  // "Hard reps" = working-set reps (warmups excluded), over the 7-day window
+  // ending with this session. Each set's reps are distributed across the
+  // exercise's muscles by the same allocation weights MUSCLE FOCUS uses
+  // (getMuscleImpact: primary 1.0 / secondary 0.5, or explicit ratios), so a
+  // 12-rep bench set adds 12 to chest and 6 to triceps/shoulders.
+  const weekAnchorMs = Date.parse(latest.date + 'T00:00:00');
+  const weekStartMs = weekAnchorMs - 6 * 86400000;
+  const weeklyReps = {};
+  let weeklySessions = 0;
+  history.forEach(s => {
+    const sMs = Date.parse(s.date + 'T00:00:00');
+    if (isNaN(sMs) || sMs < weekStartMs || sMs > weekAnchorMs) return;
+    let counted = false;
+    (s.sets || []).forEach(set => {
+      if (set.set_type !== 'working' || !set.reps) return;
+      const reps = parseInt(set.reps) || 0;
+      if (reps <= 0) return;
+      const map = EXERCISE_MUSCLES[set.exercise];
+      if (!map) return;
+      counted = true;
+      map.primary.forEach(mm => { weeklyReps[mm] = (weeklyReps[mm] || 0) + reps * getMuscleImpact(set.exercise, mm, true); });
+      map.secondary.forEach(mm => { weeklyReps[mm] = (weeklyReps[mm] || 0) + reps * getMuscleImpact(set.exercise, mm, false); });
+    });
+    if (counted) weeklySessions++;
+  });
+  const weeklyRepsList = Object.entries(weeklyReps).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxWeeklyReps = Math.max(1, ...weeklyRepsList.map(r => r[1]));
+
   const MONO = 'ui-monospace,Menlo,monospace';
   const fmtW = (w) => (Math.round(w * 10) / 10);
   const mmdd = (d) => { const p = String(d || '').split('-'); return p.length === 3 ? `${p[1]}/${p[2]}` : (d || ''); };
@@ -344,11 +373,21 @@ function renderWorkoutSummaryCard() {
     </div>`).join('') : `<div style="color:#6B7280;font-size:12px;padding:6px 0">No new PRs this session.</div>`;
 
   const musHTML = musRows.map(r => `
-    <div style="display:flex;align-items:center;gap:12px;padding:3px 0">
+    <div title="${_esc(r.label)}: ${r.pct}% of this session's muscle-weighted volume" style="display:flex;align-items:center;gap:12px;padding:3px 0;cursor:default">
       <span style="width:84px;flex-shrink:0;color:#D1D5DB;font-size:13px">${_esc(r.label)}</span>
       <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden"><div style="height:100%;width:${(r.pct / maxMusPct) * 100}%;background:rgba(255,255,255,0.22);border-radius:99px"></div></div>
       <span style="width:34px;text-align:right;color:#9CA3AF;font-size:12px;font-family:${MONO}">${r.pct}%</span>
     </div>`).join('');
+
+  const weeklyRepsHTML = weeklyRepsList.length ? weeklyRepsList.map(([mn, reps]) => {
+    const label = (MUSCLE_GROUPS[mn] && MUSCLE_GROUPS[mn].label) || mn;
+    const n = Math.round(reps);
+    return `<div title="${_esc(label)}: ${n} allocated working reps over the last 7 days" style="display:flex;align-items:center;gap:12px;padding:3px 0;cursor:default">
+      <span style="width:84px;flex-shrink:0;color:#D1D5DB;font-size:13px">${_esc(label)}</span>
+      <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden"><div style="height:100%;width:${(reps / maxWeeklyReps) * 100}%;background:rgba(167,139,250,0.55);border-radius:99px"></div></div>
+      <span style="width:38px;text-align:right;color:#C4B5FD;font-size:12px;font-weight:700;font-family:${MONO}">${n}</span>
+    </div>`;
+  }).join('') : `<div style="color:#6B7280;font-size:12px;padding:6px 0">No working reps in the last 7 days.</div>`;
 
   const exHTML = exList.map(e => {
     const pr = e.isPR;
@@ -386,8 +425,12 @@ function renderWorkoutSummaryCard() {
           ${prRowsHTML}
         </div>
         <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:15px 16px">
-          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-bottom:10px">MUSCLE FOCUS</div>
+          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-bottom:10px">MUSCLE FOCUS <span style="color:#4B5563;font-weight:600;letter-spacing:0.04em">· THIS SESSION</span></div>
           ${musHTML}
+        </div>
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:15px 16px">
+          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#A78BFA;font-family:${MONO};margin-bottom:10px">HARD REPS <span style="color:#6D5B9E;font-weight:600;letter-spacing:0.04em">· LAST 7 DAYS</span></div>
+          ${weeklyRepsHTML}
         </div>
       </div>
 
