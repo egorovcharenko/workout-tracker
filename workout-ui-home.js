@@ -749,14 +749,11 @@ function renderHome() {
 
   return `
     <div style="max-width: 1200px; margin: 0 auto; padding: 16px 16px 80px; background:#f9fafb; min-height:100vh">
-      <div style="display:flex;justify-content:between;align-items:center;margin-bottom:16px">
+      <div style="display:flex;align-items:center;margin-bottom:16px">
         <div>
           <span style="font-size:11px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">${getSessionDateStr()}</span>
           <h2 style="font-size:22px;font-weight:800;color:#111827;margin:0">Workout Tracker</h2>
         </div>
-        <button onclick="promptBodyweight()" style="font-size:12px;font-weight:600;color:#4b5563;background:white;border:1px solid #d1d5db;padding:6px 12px;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,0.05)">
-          ⚖️ ${state.bodyweight} lb
-        </button>
       </div>
 
       ${workoutButtonHTML}
