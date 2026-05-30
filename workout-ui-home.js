@@ -251,19 +251,19 @@ function renderWorkoutSummaryCard() {
           if (est > best) best = est;
         }
       });
-      if (has) perSession.push(best);
+      if (has) perSession.push({ date: s.date, value: best });
     });
     perSession.reverse(); // oldest → newest; last entry is today (latest)
-    const today1RM = perSession.length ? perSession[perSession.length - 1] : sum.best1RM;
-    const prior1RM = perSession.length > 1 ? perSession[perSession.length - 2] : null;
+    const today1RM = perSession.length ? perSession[perSession.length - 1].value : sum.best1RM;
+    const prior1RM = perSession.length > 1 ? perSession[perSession.length - 2].value : null;
     const priorMax = perSession.length > 1
-      ? Math.max(...perSession.slice(0, -1))
+      ? Math.max(...perSession.slice(0, -1).map(p => p.value))
       : (_assist(exName) ? -Infinity : 0);
     const isPR = today1RM >= priorMax && today1RM > 0;
     const deltaPct = (prior1RM != null && prior1RM > 0)
       ? Math.round(((today1RM - prior1RM) / prior1RM) * 100)
       : null;
-    return { exName, sum, isPR, deltaPct, sparkVals: perSession.slice(-6) };
+    return { exName, sum, isPR, deltaPct, sparkPts: perSession.slice(-6) };
   });
 
   const totalSets = exList.reduce((n, e) => n + e.sum.setsCount, 0);
@@ -283,22 +283,36 @@ function renderWorkoutSummaryCard() {
 
   const MONO = 'ui-monospace,Menlo,monospace';
   const fmtW = (w) => (Math.round(w * 10) / 10);
-  const spark = (vals) => {
-    const v = (vals || []).filter(x => isFinite(x));
-    if (v.length < 2) return '<div style="width:52px;flex-shrink:0"></div>';
-    const mx = Math.max(...v), mn = Math.min(...v), rng = mx - mn || 1;
+  const mmdd = (d) => { const p = String(d || '').split('-'); return p.length === 3 ? `${p[1]}/${p[2]}` : (d || ''); };
+  // Sparkline of per-session estimated 1RM. Each data point carries a native
+  // <title> tooltip (date · 1RM) and a wide transparent hit-circle so hovering
+  // anywhere near a point reveals it. The final point is emphasized.
+  const spark = (pts) => {
+    const data = (pts || []).filter(p => p && isFinite(p.value));
+    if (data.length < 2) return '<div style="width:52px;flex-shrink:0"></div>';
+    const vals = data.map(p => p.value);
+    const mx = Math.max(...vals), mn = Math.min(...vals), rng = mx - mn || 1;
     const w = 52, h = 22, pad = 2;
-    const pts = v.map((x, i) => `${pad + (i / (v.length - 1)) * (w - pad * 2)},${pad + (1 - (x - mn) / rng) * (h - pad * 2)}`).join(' ');
-    const lx = w - pad, ly = pad + (1 - (v[v.length - 1] - mn) / rng) * (h - pad * 2);
-    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="flex-shrink:0"><polyline points="${pts}" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${lx}" cy="${ly}" r="2" fill="#a78bfa"/></svg>`;
+    const xy = data.map((p, i) => ({
+      x: pad + (i / (data.length - 1)) * (w - pad * 2),
+      y: pad + (1 - (p.value - mn) / rng) * (h - pad * 2),
+    }));
+    const poly = xy.map(c => `${c.x},${c.y}`).join(' ');
+    const dots = xy.map((c, i) => {
+      const tip = `${mmdd(data[i].date)} · ${Math.round(data[i].value)} lb est 1RM`;
+      const isLast = i === xy.length - 1;
+      return `<circle cx="${c.x}" cy="${c.y}" r="${isLast ? 2 : 1.5}" fill="#a78bfa"/>`
+        + `<circle cx="${c.x}" cy="${c.y}" r="7" fill="transparent" style="cursor:pointer"><title>${tip}</title></circle>`;
+    }).join('');
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="flex-shrink:0;overflow:visible"><polyline points="${poly}" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}</svg>`;
   };
 
   const bars = historyData.map(h => {
     const pct = maxSessionVol ? (h.volume / maxSessionVol) * 100 : 0;
     const isLatest = h.date === latest.date;
-    const parts = h.date.split('-');
-    const dl = parts.length === 3 ? `${parts[1]}/${parts[2]}` : h.date;
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">
+    const dl = mmdd(h.date);
+    const tip = `${dl} · ${Math.round(h.volume).toLocaleString()} lb volume`;
+    return `<div title="${tip}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer">
       <div style="height:54px;width:100%;display:flex;align-items:end">
         <div style="width:100%;height:${Math.max(8, pct)}%;background:${isLatest ? '#a78bfa' : 'rgba(255,255,255,0.09)'};border-radius:4px"></div>
       </div>
@@ -344,7 +358,7 @@ function renderWorkoutSummaryCard() {
       <div style="display:flex;align-items:center;gap:8px">
         ${pr ? `<span style="color:#FBBF24;font-size:11px;flex-shrink:0">★</span>` : ''}
         <span style="flex:1;min-width:0;color:#F3F4F6;font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(e.exName)}</span>
-        ${spark(e.sparkVals)}
+        ${spark(e.sparkPts)}
         ${dt ? `<span style="flex-shrink:0;min-width:42px;text-align:right;color:${dc};font-family:${MONO};font-size:13px;font-weight:800">${dt}</span>` : ''}
       </div>
       <div style="margin-top:6px;color:#6B7280;font-size:11px;font-family:${MONO}">Top <span style="color:#D1D5DB;font-weight:700">${fmtW(e.sum.bestW)}×${e.sum.bestR}</span> · 1RM ${Math.round(e.sum.best1RM)} · ${e.sum.setsCount} sets</div>
