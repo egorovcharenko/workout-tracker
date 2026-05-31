@@ -12,7 +12,7 @@ import os
 import urllib.parse
 import datetime
 
-PORT = 8000
+PORT = int(os.environ.get("PORT", "8000"))
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workouts.db")
 
 # Vercel Postgres injects POSTGRES_URL (pooled) + POSTGRES_URL_NON_POOLING.
@@ -813,6 +813,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-Type", "application/javascript")
                 self.send_header("Access-Control-Allow-Origin", "*")
+                # App JS iterates frequently — never serve a stale module.
+                self.send_header("Cache-Control", "no-cache, must-revalidate")
                 self.end_headers()
                 with open(filepath, "rb") as f:
                     self.wfile.write(f.read())
@@ -825,6 +827,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/css")
                 self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache, must-revalidate")
                 self.end_headers()
                 with open(filepath, "rb") as f:
                     self.wfile.write(f.read())

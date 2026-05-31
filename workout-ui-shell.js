@@ -2181,13 +2181,16 @@ function applyBandSelection(exIdx, setKey, bandsCSV) {
 // Load home screen data
 async function loadHomeData() {
   try {
-    const [histRes, activeRes] = await Promise.all([
+    const [histRes, activeRes, measRes] = await Promise.all([
       fetch("/api/history?limit=100"),
       fetch("/api/active-sessions"),
+      fetch("/api/measurements"),
     ]);
     state.history = await histRes.json();
     muscleStatus = computeMuscleStatus(state.history);
     state._activeSessions = await activeRes.json();
+    try { state.measurements = await measRes.json(); }
+    catch (e) { state.measurements = []; }
     render();
   } catch (e) { console.error("[HOME] Error:", e); }
 }

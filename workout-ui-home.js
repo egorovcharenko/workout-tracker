@@ -861,21 +861,8 @@ function renderHome() {
     </a>
   `;
 
-  const menuHTML = `
-    <div style="display:flex;justify-content:space-around;padding:12px 0;background:white;border-top:1px solid #e5e7eb;position:fixed;bottom:0;left:0;right:0;max-width:448px;margin:0 auto;z-index:1000">
-      <button onclick="state.screen='home';render()" style="background:none;border:none;color:#3b82f6;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
-        <span style="font-size:18px">🏠</span>
-        <span style="font-size:10px;font-weight:700">Home</span>
-      </button>
-      <button onclick="showMeasurements()" style="background:none;border:none;color:#9ca3af;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
-        <span style="font-size:18px">📏</span>
-        <span style="font-size:10px;font-weight:700">Size</span>
-      </button>
-    </div>
-  `;
-
   return `
-    <div style="max-width: 1200px; margin: 0 auto; padding: 16px 16px 80px; background:#f9fafb; min-height:100vh">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 16px 16px 40px; background:#f9fafb; min-height:100vh">
       <div style="display:flex;align-items:center;margin-bottom:16px">
         <div>
           <span style="font-size:11px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">${getSessionDateStr()}</span>
@@ -888,15 +875,14 @@ function renderHome() {
       ${renderWorkoutSummaryCard()}
 
       <div class="dashboard-grid">
-        <div style="display:flex; flex-direction:column; gap:16px;">
+        <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
           ${renderPercentilesCard()}
+          ${renderMeasurementsSection()}
         </div>
-        <div style="display:flex; flex-direction:column; gap:16px;">
+        <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
           ${renderCalendar()}
         </div>
       </div>
-
-      ${menuHTML}
     </div>
   `;
 }

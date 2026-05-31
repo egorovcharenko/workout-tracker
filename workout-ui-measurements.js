@@ -60,7 +60,9 @@ function _measurementSparkline(values, color, direction) {
   else if ((direction === 'up' && last > first) || (direction === 'down' && last < first)) trendColor = '#16a34a';
   const lastX = pad + ((values.length - 1) / (values.length - 1)) * (w - pad * 2);
   const lastY = pad + (1 - (last - min) / range) * (h - pad * 2);
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block">
+  // width:100% so the sparkline shrinks to fit narrow (mobile) cells instead of
+  // forcing its intrinsic 110px and overflowing the card.
+  return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%">
     <polyline points="${pts}" fill="none" stroke="${trendColor}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
     <circle cx="${lastX}" cy="${lastY}" r="2.5" fill="${trendColor}"/>
   </svg>`;
@@ -84,41 +86,120 @@ function _measurementDelta(latest, prev, direction) {
   return { d, color, sign: d > 0 ? '+' : '' };
 }
 
-function renderMeasurements() {
+// Self-contained measurements block: latest-snapshot graphs (sparkline + value
+// + delta per metric, grouped Core/Limbs/Other), a collapsible history list and
+// a collapsible add-entry form. Rendered inline on the home screen — no page
+// wrapper, no back button. Reads everything from state.measurements.
+function renderMeasurementsSection() {
   const list = state.measurements;
   const loading = list === undefined;
   const entries = list || [];
   const sortedAsc = [...entries].sort((a, b) => (a.taken_at || '').localeCompare(b.taken_at || ''));
   const latest = entries[0];
   const prev = entries[1];
+  const formOpen = !!state.showMeasForm;
+  const histOpen = !!state.showMeasHistory;
 
+  const addBtn = `<button onclick="state.showMeasForm=!state.showMeasForm;render()" style="font-size:11px;font-weight:700;color:${formOpen ? '#6b7280' : '#2563eb'};background:none;border:1px solid ${formOpen ? '#e5e7eb' : '#bfdbfe'};border-radius:7px;padding:4px 10px;cursor:pointer">${formOpen ? '✕ Close' : '＋ Add'}</button>`;
+
+  const header = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <h3 style="font-size:13px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin:0">Body Measurements</h3>
+        ${latest ? `<span style="font-size:11px;color:#9ca3af;font-family:monospace">latest · ${_formatMeasurementDate(latest.taken_at)}</span>` : ''}
+      </div>
+      ${addBtn}
+    </div>`;
+
+  if (loading) {
+    return `<div class="card" style="padding:16px">${header}<div style="padding:16px;text-align:center;color:#9ca3af;font-size:13px">Loading…</div></div>`;
+  }
+
+  if (entries.length === 0) {
+    return `<div class="card" style="padding:16px">
+      ${header}
+      <p style="color:#6b7280;text-align:center;margin:16px 0;font-size:13px">No measurements logged yet.</p>
+      ${formOpen ? _renderMeasurementForm() : ''}
+    </div>`;
+  }
+
+  // Per-metric graphs grouped by region. Sparkline reads oldest → newest.
+  function metricBlock(m) {
+    const vals = sortedAsc.map(e => e[m.id]).filter(v => v != null);
+    if (!vals.length) return '';
+    const v = latest?.[m.id], pv = prev?.[m.id];
+    const delta = _measurementDelta(v, pv, m.direction);
+    const range = vals.length > 1 ? `${Math.min(...vals).toFixed(1)} → ${Math.max(...vals).toFixed(1)}` : `${vals[0].toFixed(1)}`;
+    const unit = m.unit || 'cm';
+    return `<div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:12px;color:#374151;font-weight:600">${m.label}</span>
+        ${delta ? `<span style="font-size:10px;font-family:monospace;color:${delta.color}">${delta.sign}${Math.abs(delta.d).toFixed(1)}</span>` : ''}
+      </div>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px">
+        <div style="flex:1;min-width:0">${_measurementSparkline(vals, m.color, m.direction)}</div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:14px;font-family:monospace;font-weight:700;color:${m.color}">${(v != null ? v.toFixed(1) : '—')}<span style="font-size:9px;color:#9ca3af;margin-left:1px">${unit}</span></div>
+          <div style="font-size:9px;color:#9ca3af;font-family:monospace">${range}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  const groupBlock = (title, group) => {
+    const blocks = MEASUREMENT_METRICS.filter(m => m.group === group).map(metricBlock).filter(Boolean).join('');
+    if (!blocks) return '';
+    return `<div style="margin-bottom:14px">
+      <h4 style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px">${title}</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${blocks}</div>
+    </div>`;
+  };
+
+  const graphsHTML = `
+    ${groupBlock('Core', 'core')}
+    ${groupBlock('Limbs', 'limbs')}
+    ${groupBlock('Other', 'misc')}`;
+
+  // History list — compact rows with date and key metrics, collapsible.
+  const historyRows = entries.map(e => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-bottom:1px solid #f3f4f6">
+      <span style="font-size:11px;color:#6b7280;font-family:monospace;min-width:60px">${_formatMeasurementDate(e.taken_at)}</span>
+      <span style="font-size:11px;font-family:monospace;color:#374151;flex:1;text-align:center">
+        ${e.chest_cm != null ? `<span style="color:#ef4444">${e.chest_cm.toFixed(1)}c</span>` : '—'} ·
+        ${e.waist_cm != null ? `<span style="color:#3b82f6">${e.waist_cm.toFixed(1)}w</span>` : '—'} ·
+        ${e.l_arm_cm != null ? `<span style="color:#dc2626">${e.l_arm_cm.toFixed(1)}a</span>` : '—'}
+      </span>
+      <button onclick="deleteMeasurement(${e.id})" style="font-size:9px;color:#9ca3af;background:none;border:1px solid #e5e7eb;border-radius:4px;padding:2px 6px;cursor:pointer">×</button>
+    </div>`).join('');
+
+  const historyHTML = `
+    <button onclick="state.showMeasHistory=!state.showMeasHistory;render()" style="width:100%;text-align:left;font-size:11px;font-weight:700;color:#6b7280;background:none;border:none;border-top:1px solid #f3f4f6;padding:10px 0 ${histOpen ? '6px' : '0'};cursor:pointer;display:flex;align-items:center;gap:6px">
+      <span style="display:inline-block;transform:rotate(${histOpen ? '90deg' : '0deg'});transition:transform 0.15s">▸</span>
+      History · ${entries.length} entries
+    </button>
+    ${histOpen ? `<div>${historyRows}</div>` : ''}`;
+
+  return `<div class="card" style="padding:16px">
+    ${header}
+    ${graphsHTML}
+    ${historyHTML}
+    ${formOpen ? `<div style="margin-top:12px">${_renderMeasurementForm()}</div>` : ''}
+  </div>`;
+}
+
+// Standalone #measurements route — kept working as a deep-link fallback even
+// though the home screen now surfaces measurements inline. Wraps the shared
+// section with a back-to-home header.
+function renderMeasurements() {
   const back = `
     <div style="position:sticky;top:0;background:white;border-bottom:1px solid #f3f4f6;padding:12px 16px;z-index:10;display:flex;align-items:center;gap:12px">
       <button onclick="state.screen='home';history.replaceState(null,'','#');render()" style="color:#2563eb;font-size:14px;font-weight:500;background:none;border:none;cursor:pointer">← Back</button>
       <h2 style="font-size:18px;font-weight:700;margin:0">Measurements</h2>
     </div>`;
-
-  const innerHTML = (() => {
-    if (loading) return `<div style="padding:32px;text-align:center;color:#9ca3af">Loading…</div>`;
-    if (entries.length === 0) {
-      return `<div style="padding:24px 16px">
-        <p style="color:#6b7280;text-align:center;margin:24px 0">No measurements logged yet.</p>
-        ${_renderMeasurementForm()}
-      </div>`;
-    }
-    return `
-      <div style="padding:16px">
-        ${snapshotCard}
-        ${graphsHTML}
-        ${historyCard}
-        ${_renderMeasurementForm()}
-      </div>`;
-  })();
-
   return `
     <div style="max-width: 448px; margin: 0 auto; min-height: 100vh; background: #f9fafb; position: relative;">
       ${back}
-      ${innerHTML}
+      <div style="padding:16px">${renderMeasurementsSection()}</div>
     </div>
   `;
 }
@@ -140,6 +221,18 @@ function _renderMeasurementForm() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">${inputs}</div>
       <button onclick="submitMeasurement()" style="width:100%;background:#2563eb;color:white;border:none;padding:10px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Save measurement</button>
     </div>`;
+}
+
+// Refetch measurements and re-render whatever screen is active (home or the
+// standalone page) — so add/delete works inline on home without navigating.
+async function reloadMeasurements() {
+  try {
+    const res = await fetch('/api/measurements');
+    state.measurements = await res.json();
+  } catch (e) {
+    console.warn('[MEASUREMENTS] reload failed:', e);
+  }
+  render();
 }
 
 async function submitMeasurement() {
@@ -167,8 +260,8 @@ async function submitMeasurement() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`status ${res.status}`);
-    state.measurements = undefined;
-    await showMeasurements();
+    state.showMeasForm = false;
+    await reloadMeasurements();
   } catch (e) {
     alert('Save failed: ' + e.message);
   }
@@ -179,8 +272,7 @@ async function deleteMeasurement(id) {
   try {
     const res = await fetch(`/api/measurements/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(`status ${res.status}`);
-    state.measurements = undefined;
-    await showMeasurements();
+    await reloadMeasurements();
   } catch (e) {
     alert('Delete failed: ' + e.message);
   }
