@@ -111,8 +111,11 @@
     .exercise-nav-strip { display: none; }
     .exercise-nav-pane {
       display: block;
-      width: 268px;
-      flex-shrink: 0;
+      /* Grow to consume the free horizontal space instead of sitting cramped at
+         a fixed 268px — capped so the cards stay readable on ultrawide screens. */
+      flex: 1 1 320px;
+      min-width: 300px;
+      max-width: 520px;
       position: sticky;
       top: 16px;
       margin-top: 64px; /* align with the first card, past the header row */

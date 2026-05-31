@@ -193,7 +193,8 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
         {!exercise.superset && onDeferExercise && footerBtn("↓ do later", onDeferExercise)}
         {footerBtn("× skip exercise", onSkipExercise)}
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          {hasWarmup && warmupActive && footerBtn("Skip warmup →", onSkipWarmup)}
+          {/* "Skip warmup" lives on the active warm-up set itself (ActiveSetBlock);
+              the footer only offers removing the warm-up ramp once past it. */}
           {hasWarmup && !warmupActive && footerBtn("× warmup", onRemoveWarmup)}
         </div>
       </div>
