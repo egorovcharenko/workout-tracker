@@ -8,6 +8,7 @@ const SWAP_GROUPS = [
     { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
     { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "8-12", notes: "Hinge at hips, slight knee bend", video: "https://www.youtube.com/shorts/cGMaBqaExBo", rest: 120, noWarmup: true },
     { name: "Single-Leg DB RDL", sets: 3, reps: "8", notes: "One DB in each hand, rear leg lifts as you hinge — slow tempo, 8 per leg. Warmup 1 set @ ~20lb, work @ ~30lb.", rest: 120 },
+    { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", rest: 180 },
   ],
   [
     { name: "Band Tricep Pushdowns", sets: 3, reps: "12-15", notes: "Elbows glued to ribs, squeeze at bottom", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", rest: 60 },
@@ -16,6 +17,19 @@ const SWAP_GROUPS = [
   [
     { name: "Goblet Squat", sets: 3, warmups: 2, reps: "10-12", notes: "Hold DB at chest, sit deep. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, rest: 120 },
     { name: "Bulgarian Split Squat", sets: 3, warmups: 2, reps: "8-10", notes: "Rear foot on bench, DB in each hand — 8-10 per leg, controlled. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/2C-uNgKwPLE", bandAddon: true, rest: 120 },
+    { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", notes: "Bar on upper back, set the rack safety pins low so you can bail. Brace, sit between your hips, drive up.", rest: 180 },
+  ],
+  [
+    { name: "Dumbbell Flat Bench Press", sets: 4, reps: "8-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 150 },
+    { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", notes: "Bench at ~30°. Control the descent, press up and slightly back.", rest: 150 },
+  ],
+  [
+    { name: "Seated Overhead Press", sets: 3, reps: "8-12", notes: "Seated, controlled", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw", rest: 120, noWarmup: true },
+    { name: "Standing Overhead Press", sets: 3, warmups: 2, reps: "6-8", notes: "From the rack, brace hard, press overhead, don't lean back.", rest: 150 },
+  ],
+  [
+    { name: "Reverse Flyes", sets: 3, reps: "15-20", notes: "Rear delts & upper back, light weight, squeeze at the top", video: "https://www.youtube.com/shorts/LsT-bR_zxLo", rest: 60, noWarmup: true },
+    { name: "Face Pulls", sets: 3, reps: "15-20", notes: "Anchor band at face height, pull toward your face, elbows high, squeeze rear delts.", equipment: "band", rest: 60, noWarmup: true },
   ],
 ];
 
@@ -331,7 +345,7 @@ function activateNextSet(exercises) {
   return exercises;
 }
 
-const SWAP_LS_KEY = (workoutName, date) => `v2-swaps:${workoutName}:${date}`;
+const SWAP_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-swaps:${workoutName}:${date}`;
 function loadSwaps(workoutName, date) {
   try {
     const raw = localStorage.getItem(SWAP_LS_KEY(workoutName, date));
@@ -350,7 +364,7 @@ function saveSwaps(workoutName, date, swapMap) {
   }
 }
 
-const PM_STARTED_LS_KEY = (workoutName, date) => `v2-pm-started:${workoutName}:${date}`;
+const PM_STARTED_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-pm-started:${workoutName}:${date}`;
 function loadPmStarted(workoutName, date) {
   try { return localStorage.getItem(PM_STARTED_LS_KEY(workoutName, date)) === "1"; }
   catch { return false; }
@@ -436,6 +450,8 @@ function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed,
 let _saveInFlight = false;
 let _savePending = null;
 async function autoSavePayload(payload, onResolved) {
+  // Sandbox: never write to the backend in test mode.
+  if (TEST_MODE) return;
   if (_saveInFlight) {
     _savePending = { payload, onResolved };
     return;

@@ -16,7 +16,7 @@ function useWorkoutTimers(workoutId, exercises) {
 
     if (!workoutId) return;
 
-    const savedRestRaw = localStorage.getItem(`v2-rest-timer:${workoutId}`);
+    const savedRestRaw = localStorage.getItem(`${LS_PREFIX}v2-rest-timer:${workoutId}`);
     if (savedRestRaw) {
       try {
         const savedRest = JSON.parse(savedRestRaw);
@@ -26,7 +26,7 @@ function useWorkoutTimers(workoutId, exercises) {
             setRest({ ...savedRest, left });
           }
         } else {
-          localStorage.removeItem(`v2-rest-timer:${workoutId}`);
+          localStorage.removeItem(`${LS_PREFIX}v2-rest-timer:${workoutId}`);
         }
       } catch (_) {}
     }
@@ -35,7 +35,7 @@ function useWorkoutTimers(workoutId, exercises) {
   // Persist rest timer state to localStorage whenever it changes
   useEffect(() => {
     if (!workoutId) return;
-    const key = `v2-rest-timer:${workoutId}`;
+    const key = `${LS_PREFIX}v2-rest-timer:${workoutId}`;
     if (rest) {
       localStorage.setItem(key, JSON.stringify(rest));
     } else {

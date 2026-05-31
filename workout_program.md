@@ -1,32 +1,55 @@
-# Barbell Transition Strategy (A/B Split)
+# Barbell A/B Split (home: power rack + barbell + dumbbells)
 
-**Context:** The user recently acquired a power rack and a barbell and wants to slowly transition their current single "Full Body" dumbbell/band routine to a barbell-focused A/B split. The primary goal is to safely introduce the Barbell Back Squat and Barbell Deadlift without frying the Central Nervous System (CNS) or causing overtraining, while keeping their highly successful upper-body dumbbell work intact.
+Two full-body days run on a ~3-day week, alternating **A-B-A / B-A-B**. The app
+auto-selects the next day by alternating from your last A/B session (override on
+the home screen). Squat and deadlift are the only lifts not duplicated — they're
+too heavy to run both days, so each owns one day.
 
-## The New A/B Split Structure
-This split should be alternated across a ~3-day training week (e.g., A-B-A week one, B-A-B week two).
+## Workout A — Squat Day
+1. **Barbell Back Squat** — 3×6–8  *(3 warm-up ramp sets; safety pins set low)*
+2. **Dumbbell Flat Bench Press** — 4×8–12
+3. **Single-Arm Dumbbell Row** — 3×8–12
+4. **Seated Overhead Press** — 3×8–12
+5. **Reverse Flyes** — 3×15–20  *(rear delts / mid-traps)*
+6. **Superset** — Band Tricep Pushdowns + DB Hammer Curls — 3 rounds
+7. **Band Torso Rotation** — 3×10–12/side  *(rotational core)*
 
-### Workout A: Squat Focus
-* **Barbell Back Squat**: 3 sets × 5-8 reps (Heavy compound)
-* **Dumbbell Flat Bench Press**: 4 sets × 8-12 reps
-* **Barbell Bent-Over Row** or **Single-Arm DB Row**: 3 sets × 8-12 reps
-* **Seated Overhead Dumbbell Press**: 4 sets × 8-12 reps
-* **Dumbbell RDLs**: 3 sets × 10-15 reps (Light hinge for a hamstring stretch)
-* **Sleeve-Buster Superset**: 
-  * Band Tricep Pushdowns (12-15 reps)
-  * Dumbbell Hammer Curls (10-15 reps)
+## Workout B — Deadlift Day
+1. **Barbell Deadlift** — 3×5  *(3 warm-up ramp sets; reset each rep)*
+2. **Incline Dumbbell Press** — 4×8–12
+3. **Assisted Pull-Ups** — 4×5–8
+4. **Standing Overhead Press** — 3×6–8  *(from the rack; 2 warm-ups)*
+5. **Superset** — Face Pulls + Bulgarian Split Squat — 3 rounds  *(rear delts + quads)*
+6. **Superset** — Band Tricep Pushdowns + DB Bicep Curls (supinated) — 3 rounds
+7. **Hanging Knee Raise** — 3×10–15  *(core)*
 
-### Workout B: Deadlift Focus
-* **Barbell Deadlift**: 3 sets × 5-8 reps (Heavy compound)
-* **Dumbbell Flat Bench Press**: 4 sets × 8-12 reps
-* **Assisted Pull-Ups**: 4 sets × 5-8 reps
-* **Seated Overhead Dumbbell Press**: 4 sets × 8-12 reps
-* **Bulgarian Split Squats** or **Goblet Squats**: 3 sets × 10-15 reps (Light quads)
-* **Sleeve-Buster Superset**:
-  * Band Tricep Pushdowns (12-15 reps)
-  * Supinated (Palms Up) DB Curls (10-15 reps)
+## Progression
+- **Barbell lifts:** hit the top of the rep range on all working sets → add ~5 lb
+  (squat) / ~10 lb (deadlift) next time. Stall twice → drop 10% and build back.
+- **DB accessories:** double progression — add reps to the top of the range, then
+  bump the dumbbell and reset to the bottom.
 
-## Volume & Programming Notes for the Implementing Agent
-1. **Back Volume:** The user's previous routine had them doing *both* pull-ups and rows in the same session (21 sets/week). This routine cuts it to an optimal 10 sets/week by alternating horizontal and vertical pulls.
-2. **CNS Load:** Barbell Squats and Deadlifts are separated into different days so they can be pushed hard without systemic burnout.
-3. **Rep Ranges:** Barbell compounds are programmed for 5-8 reps (strength/hypertrophy balance). DB accessories are in the 8-12 range. Arms and isolations are 12-15+ reps.
-4. **JS Implementation:** The agent implementing this will need to update `workout-shared.js` to add the new barbell exercises to `EXERCISE_MUSCLES`, register their standards in `STRENGTH_STANDARDS`, and create these two new workout structures in the `WORKOUTS` array.
+## Why it's built this way
+- **Squat ≠ deadlift on the same day** — they share the low-back/posterior recovery
+  bottleneck, so they're split. No redundant hinge on squat day, no redundant squat
+  on deadlift day.
+- **Pressing balanced with pulling** — Reverse Flyes (A) and Face Pulls (B) keep
+  rear delts / traps from lagging behind all the bench + OHP volume.
+- **Everything trained both days with a different variation** (bench ↔ incline,
+  seated ↔ standing press, row ↔ pull-up, hammer ↔ supinated curls).
+
+## Known gaps (deliberate, low priority)
+- **Side (lateral) delts** — no direct work; add lateral raises if you want width.
+- **Calves** — none; add calf raises if you care about them.
+- Quad/hamstring volume is on the lower side (one source each) — fine for a
+  strength-first transition.
+
+## In the app
+- Workouts live in `workout-shared.js` (`WORKOUTS`: ids `squat-day`, `deadlift-day`),
+  with muscle maps in `EXERCISE_MUSCLES` and tiers in `STRENGTH_STANDARDS`.
+- **Swap** any main slot from the session screen (CHOOSE VARIANT): squat ↔ goblet ↔
+  bulgarian, deadlift ↔ RDL variants, flat ↔ incline bench, seated ↔ standing press,
+  reverse fly ↔ face pull (`SWAP_GROUPS` in `workout-session-utils.js`).
+- **Test mode:** open a workout with `?test=1` (or the "🧪 Test" links on home) to
+  rehearse the flow — auto-select, override, swaps, logging — while **nothing is
+  saved** (no `/api/save`; session localStorage is namespaced under `test:`).

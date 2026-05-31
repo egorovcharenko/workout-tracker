@@ -828,7 +828,16 @@ function renderHome() {
   };
 
   const activeSess = state._activeSessions && state._activeSessions[0];
-  let activeWorkout = WORKOUTS.find(w => w.id === 'full-body') || WORKOUTS[0];
+  const A = WORKOUTS.find(w => w.id === 'squat-day') || WORKOUTS[0];
+  const B = WORKOUTS.find(w => w.id === 'deadlift-day') || WORKOUTS[0];
+  // Auto-pick the next A/B workout by alternating from the most recent A/B
+  // session in history (state.history is newest-first). Defaults to A.
+  let nextW = A;
+  for (const s of (state.history || [])) {
+    if (s.workout_name === A.name) { nextW = B; break; }
+    if (s.workout_name === B.name) { nextW = A; break; }
+  }
+  let activeWorkout = nextW;
   let isOngoing = false;
   let logged = 0;
   let expected = 0;
@@ -847,18 +856,27 @@ function renderHome() {
     }
   }
 
+  const otherW = activeWorkout.id === A.id ? B : A;
+  const abLabel = activeWorkout.abSplit ? `${activeWorkout.abSplit} · ` : '';
   const workoutUrl = `/workout?w=${activeWorkout.id}`;
   const workoutButtonHTML = `
-    <a href="${workoutUrl}" style="text-decoration:none;display:block;margin-bottom:16px;">
+    <a href="${workoutUrl}" style="text-decoration:none;display:block;margin-bottom:8px;">
       <div style="background:linear-gradient(135deg, #eff6ff, #dbeafe); border:1px solid #bfdbfe; border-radius:14px; padding:18px; text-align:center; box-shadow:0 4px 12px rgba(59,130,246,0.08); transition:all 0.2s;" class="clickable">
         <div style="font-size:16px; font-weight:800; color:#1d4ed8; margin-bottom:4px; display:flex; align-items:center; justify-content:center; gap:8px;">
-          <span>${isOngoing ? '⚡️ Continue Workout' : '🏋️‍♂️ Start Workout'}</span>
+          <span>${isOngoing ? '⚡️ Continue' : '🏋️‍♂️ Start'} · ${activeWorkout.name}</span>
         </div>
         <div style="font-size:12px; color:#60a5fa; font-weight:600;">
-          ${isOngoing ? `${logged} of ${expected} sets logged (${pct}%)` : 'Full Body · ~40 min'}
+          ${isOngoing ? `${logged} of ${expected} sets logged (${pct}%)` : `${abLabel}${activeWorkout.duration} · auto-selected`}
         </div>
       </div>
     </a>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+      ${isOngoing ? '<span></span>' : `<a href="/workout?w=${otherW.id}" style="font-size:12px; color:#2563eb; font-weight:700; text-decoration:none;">↔︎ Switch to ${otherW.name}</a>`}
+      <span style="font-size:11px; color:#9ca3af;">🧪 Test (nothing saved):
+        <a href="/workout?w=${A.id}&test=1" style="color:#6b7280; text-decoration:underline;">${A.name}</a> ·
+        <a href="/workout?w=${B.id}&test=1" style="color:#6b7280; text-decoration:underline;">${B.name}</a>
+      </span>
+    </div>
   `;
 
   return `

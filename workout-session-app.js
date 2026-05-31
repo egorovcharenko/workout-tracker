@@ -657,6 +657,11 @@ function App() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto", background: T.page }}>
+      {TEST_MODE && (
+        <div style={{ position: "sticky", top: 0, zIndex: 9000, background: "#F59E0B", color: "#1A1A1A", textAlign: "center", fontFamily: T.mono, fontWeight: 800, fontSize: 12, letterSpacing: 1, padding: "6px 10px" }}>
+          ⚠ TEST MODE — nothing is being saved
+        </div>
+      )}
       <div className="session-shell">
         <aside className="exercise-nav-pane">
           {nav("list")}

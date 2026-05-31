@@ -1,5 +1,14 @@
 // Shared constants and utility functions for Workout Tracker
 
+// Test/sandbox mode: ?test=1 in the URL runs a session normally but persists
+// NOTHING real — no /api/save (gated in autoSavePayload), and every session
+// localStorage key is namespaced under a throwaway "test:" prefix. So you can
+// rehearse a workout (auto-select, override, swaps, logging) without polluting
+// real history or clobbering an in-progress real session.
+const TEST_MODE = (typeof location !== "undefined") &&
+  new URLSearchParams(location.search).get("test") === "1";
+const LS_PREFIX = TEST_MODE ? "test:" : "";
+
 // Design tokens — single source so a future tweak flows through the tree.
 const T = {
   page:       "#0B0F14",
@@ -65,7 +74,14 @@ const EXERCISE_MUSCLES = {
   "Pallof Press": { primary: ["core"], secondary: [], ratios: { core: 1.0 } },
   "Lunges": { primary: ["quads", "glutes"], secondary: ["hamstrings"], ratios: { quads: 1.0, glutes: 1.0, hamstrings: 0.3 } },
   "Calf Raises": { primary: ["calves"], secondary: [], ratios: { calves: 1.0 } },
-  "Single-Leg DB RDL": { primary: ["hamstrings", "glutes"], secondary: ["lower_back", "core"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.4, core: 0.3 } }
+  "Single-Leg DB RDL": { primary: ["hamstrings", "glutes"], secondary: ["lower_back", "core"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.4, core: 0.3 } },
+  "Barbell Back Squat": { primary: ["quads", "glutes"], secondary: ["lower_back", "core"], ratios: { quads: 1.0, glutes: 0.8, lower_back: 0.4, core: 0.4 } },
+  "Barbell Deadlift": { primary: ["hamstrings", "glutes", "lower_back"], secondary: ["upper_back", "lats", "quads", "forearms", "core"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 1.0, upper_back: 0.5, lats: 0.3, quads: 0.3, forearms: 0.4, core: 0.3 } },
+  "Incline Dumbbell Press": { primary: ["chest"], secondary: ["shoulders", "triceps"], ratios: { chest: 1.0, shoulders: 0.6, triceps: 0.4 } },
+  "Standing Overhead Press": { primary: ["shoulders"], secondary: ["triceps", "upper_back", "core"], ratios: { shoulders: 1.0, triceps: 0.5, upper_back: 0.3, core: 0.4 } },
+  "Face Pulls": { primary: ["rear_delts"], secondary: ["upper_back"], ratios: { rear_delts: 1.0, upper_back: 0.5 } },
+  "Band Torso Rotation": { primary: ["core"], secondary: [], ratios: { core: 1.0 } },
+  "Hanging Knee Raise": { primary: ["core"], secondary: ["forearms"], ratios: { core: 1.0, forearms: 0.2 } }
 };
 
 const STRENGTH_STANDARDS = {
@@ -87,14 +103,66 @@ const STRENGTH_STANDARDS = {
   "Band Romanian Deadlift": { beg: 25, nov: 45, int: 70, adv: 100, elite: 130 },
   "Band Bicep Curls": { beg: 8, nov: 15, int: 25, adv: 38, elite: 52 },
   "Band Tricep Pushdowns": { beg: 10, nov: 20, int: 35, adv: 52, elite: 70 },
-  "Pallof Press": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 }
+  "Pallof Press": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 },
+  "Barbell Back Squat": { beg: 95, nov: 135, int: 205, adv: 285, elite: 365 },
+  "Barbell Deadlift": { beg: 135, nov: 185, int: 275, adv: 365, elite: 465 },
+  "Incline Dumbbell Press": { beg: 25, nov: 40, int: 65, adv: 90, elite: 115 },
+  "Standing Overhead Press": { beg: 65, nov: 95, int: 135, adv: 175, elite: 225 }
 };
 
 const WORKOUTS = [
   {
+    id: "squat-day",
+    name: "Squat Day",
+    main: true,
+    abSplit: "A",
+    duration: "~50 min",
+    rest: 90,
+    warmup: "Empty-bar squats + arm circles, then ramp the bar",
+    exercises: [
+      { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", notes: "Bar on upper back. Set the rack safety pins at the bottom of your range so you can bail a missed rep. Brace, sit between your hips, drive up. Ramp the warm-up sets.", rest: 180 },
+      { name: "Dumbbell Flat Bench Press", sets: 4, reps: "8-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 150 },
+      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", notes: "Each side, brace on bench", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
+      { name: "Seated Overhead Press", sets: 3, reps: "8-12", notes: "Seated, controlled", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw", rest: 120, noWarmup: true },
+      { name: "Reverse Flyes", sets: 3, reps: "15-20", notes: "Rear delts & upper back, light weight, squeeze at the top", video: "https://www.youtube.com/shorts/LsT-bR_zxLo", rest: 60, noWarmup: true },
+      { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
+        supersetExercises: [
+          { name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
+          { name: "Dumbbell Hammer Curls", reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Hammer grip default · toggle for variants", grips: ['hammer', 'supinated', 'reverse'] },
+        ]},
+      { name: "Band Torso Rotation", sets: 3, reps: "10-12", notes: "Anchor band at chest height, arms extended out front, rotate left and right under control. 10-12 per side.", equipment: "band", rest: 60, noWarmup: true },
+    ],
+  },
+  {
+    id: "deadlift-day",
+    name: "Deadlift Day",
+    hidden: true,
+    abSplit: "B",
+    duration: "~50 min",
+    rest: 90,
+    warmup: "Light hinges + band pull-aparts, then ramp the bar",
+    exercises: [
+      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", rest: 180 },
+      { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", notes: "Bench at ~30°. Control the descent, press up and slightly back.", rest: 150 },
+      { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
+      { name: "Standing Overhead Press", sets: 3, reps: "6-8", notes: "Un-rack from the pins at shoulder height. Brace hard, press overhead, don't lean back. Ramp the warm-ups.", warmups: 2, rest: 150 },
+      { name: "Face Pull + Split Squat Superset", sets: 3, rest: 90, notes: "Alternate the two — rear delts while your legs recover. ~90s between rounds.",
+        supersetExercises: [
+          { name: "Face Pulls", reps: "15-20", equipment: "band", notes: "Anchor band at face height, pull toward your face, elbows high, squeeze the rear delts." },
+          { name: "Bulgarian Split Squat", reps: "10-15", video: "https://www.youtube.com/shorts/2C-uNgKwPLE", notes: "Rear foot on bench, DB in each hand — 10-15 per leg, controlled." },
+        ]},
+      { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
+        supersetExercises: [
+          { name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
+          { name: "Dumbbell Bicep Curls", reps: "8-12", video: "https://www.youtube.com/shorts/MKWBV29S6c0", notes: "Supinated (palms up) default · toggle for variants", grips: ['supinated', 'hammer', 'reverse'] },
+        ]},
+      { name: "Hanging Knee Raise", sets: 3, reps: "10-15", notes: "Hang from the bar, raise knees toward chest, control the lower. No swinging.", rest: 60, noWarmup: true },
+    ],
+  },
+  {
     id: "full-body",
     name: "Full Body",
-    main: true,
+    hidden: true,
     duration: "~40 min",
     rest: 75,
     warmup: "Light goblet squats and arm circles to warm up",
@@ -226,7 +294,7 @@ function localDate() {
 
 const interleavedSetNumber = (round, subIdx, subCount) => round * subCount + subIdx + 1;
 
-const SKIPPED_LS_KEY = (workoutName, date) => `v2-skipped:${workoutName}:${date}`;
+const SKIPPED_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-skipped:${workoutName}:${date}`;
 function loadSkippedExercises(workoutName, date) {
   try {
     const raw = localStorage.getItem(SKIPPED_LS_KEY(workoutName, date));
@@ -244,7 +312,7 @@ function saveSkippedExercises(workoutName, date, namesSet) {
 // Deferred ("do later") exercises — an ordered list of names moved to the end
 // of the workout. Scoped to (workout, date) like skips/swaps so a reload mid-
 // session keeps the order you set.
-const DEFERRED_LS_KEY = (workoutName, date) => `v2-deferred:${workoutName}:${date}`;
+const DEFERRED_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-deferred:${workoutName}:${date}`;
 function loadDeferred(workoutName, date) {
   try {
     const raw = localStorage.getItem(DEFERRED_LS_KEY(workoutName, date));
@@ -276,7 +344,7 @@ function applyDeferredOrder(exercises, deferredNames) {
 // Bodyweight is a property of YOU, not of a set — one value shared across every
 // bodyweight/assist exercise (Assisted Pull-Ups, Bench Dips, …) and remembered
 // across sessions. Global key (not workout/date scoped).
-const BODYWEIGHT_LS_KEY = "v2-bodyweight";
+const BODYWEIGHT_LS_KEY = LS_PREFIX + "v2-bodyweight";
 function loadBodyweight() {
   try {
     const v = parseFloat(localStorage.getItem(BODYWEIGHT_LS_KEY));
@@ -291,7 +359,7 @@ function saveBodyweight(w) {
   }
 }
 
-const SETS_LS_KEY = (workoutName, date) => `v2-session-sets:${workoutName}:${date}`;
+const SETS_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-session-sets:${workoutName}:${date}`;
 function loadSessionSets(workoutName, date) {
   try {
     const raw = localStorage.getItem(SETS_LS_KEY(workoutName, date));
