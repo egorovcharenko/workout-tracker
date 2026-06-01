@@ -29,15 +29,14 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
   const STATUS_GLYPH = { done: "✓", current: "●", skipped: "×", upcoming: "○" };
 
   const meta = (e, i) => {
-    const work = e.sets.filter(s => s.kind === "work");
-    const doneWork = work.filter(s => s.completed).length;
+    const doneWork = e.sets.filter(s => s.completed).length;
     const allDone = e.sets.length > 0 && e.sets.every(s => s.completed);
     let status = "upcoming";
     if (e.skipped) status = "skipped";
     else if (allDone) status = "done";
     else if (i === currentIdx) status = "current";
     return {
-      work, doneWork, totalWork: work.length, status,
+      work: e.sets, doneWork, totalWork: e.sets.length, status,
       tag: e.superset ? `${e.superset}${e.supersetPos || ""}` : null,
     };
   };
@@ -66,7 +65,7 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
   };
 
   const chipRow = (e) => {
-    const work = e.sets.filter(s => s.kind === "work");
+    const work = e.sets;
     if (!work.length) return null;
     return (
       <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 10 }}>
