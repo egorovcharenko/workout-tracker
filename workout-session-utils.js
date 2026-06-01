@@ -31,6 +31,12 @@ const SWAP_GROUPS = [
     { name: "Reverse Flyes", sets: 3, reps: "15-20", notes: "Rear delts & upper back, light weight, squeeze at the top", video: "https://www.youtube.com/shorts/LsT-bR_zxLo", rest: 60, noWarmup: true },
     { name: "Face Pulls", sets: 3, reps: "15-20", notes: "Anchor band at face height, pull toward your face, elbows high, squeeze rear delts.", equipment: "band", rest: 60, noWarmup: true },
   ],
+  [
+    { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band ASSISTS. Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
+    { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", notes: "Each side, brace on bench", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
+    { name: "Dumbbell Bent-Over Rows", sets: 3, reps: "8-12", notes: "Keep back flat, pull to hips", video: "https://www.youtube.com/shorts/dpYI8K6e-jE", rest: 120 },
+    { name: "Band Row", sets: 3, reps: "12-15", notes: "Stand on band, pull to chest, squeeze back", video: "https://www.youtube.com/shorts/BAlsaA1wIhY", equipment: "band", rest: 120 }
+  ],
 ];
 
 function getSwapGroup(exerciseName) {
