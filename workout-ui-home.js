@@ -393,24 +393,7 @@ function renderWorkoutSummaryCard() {
     tile('NET TREND', big(netTrend == null ? '—' : `${netTrend > 0 ? '+' : ''}${netTrend}%`, netColor), `${upCount} up · ${downCount} down`),
   ].join('');
 
-  const prRowsHTML = prsList.length ? prsList.map(e => {
-    const curSet = `${fmtW(e.sum.bestW)}×${e.sum.bestR}`;
-    const curOrm = Math.round(e.sum.best1RM);
-    const p = e.prevBest;
-    const detail = p
-      ? `${fmtW(p.w)}×${p.r} <span style="color:#4B5563">→</span> <span style="color:#E5E7EB">${curSet}</span>`
-        + `<span style="color:#374151"> · </span>`
-        + `1RM ${Math.round(p.value)} <span style="color:#4B5563">→</span> <span style="color:#34D399;font-weight:700">${curOrm}</span>`
-      : `<span style="color:#A78BFA;font-weight:700">debut</span><span style="color:#374151"> · </span>1RM <span style="color:#34D399;font-weight:700">${curOrm}</span>`;
-    return `<div style="padding:6px 0">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="color:#FBBF24;font-size:12px;flex-shrink:0">★</span>
-        <span style="flex:1;min-width:0;color:#F3F4F6;font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(e.exName)}</span>
-        <span style="color:#FBBF24;font-family:${MONO};font-size:13px;font-weight:800;flex-shrink:0">${curSet}</span>
-      </div>
-      <div style="margin-top:3px;padding-left:20px;color:#6B7280;font-size:11px;font-family:${MONO}">${detail}</div>
-    </div>`;
-  }).join('') : `<div style="color:#6B7280;font-size:12px;padding:6px 0">No new PRs this session.</div>`;
+
 
   const musHTML = musRows.map(r => `
     <div title="${_esc(r.label)}: ${r.pct}% of this session's muscle-weighted volume" style="display:flex;align-items:center;gap:12px;padding:3px 0;cursor:default">
@@ -466,10 +449,6 @@ function renderWorkoutSummaryCard() {
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:18px">
         <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:15px 16px">
-          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#FBBF24;font-family:${MONO};margin-bottom:8px">★ PERSONAL RECORDS</div>
-          ${prRowsHTML}
-        </div>
-        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:15px 16px">
           <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-bottom:10px">MUSCLE FOCUS <span style="color:#4B5563;font-weight:600;letter-spacing:0.04em">· THIS SESSION</span></div>
           ${musHTML}
         </div>
@@ -494,19 +473,17 @@ function renderPercentilesCard() {
   const history = state.history || [];
   const offset = state.percentilesMonthOffset || 0;
   
-  const baseDate = new Date();
-  const targetMonthDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + offset, 1);
-  const targetYear = targetMonthDate.getFullYear();
-  const targetMonth = targetMonthDate.getMonth();
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + offset * 30);
+  const endMs = endDate.setHours(23, 59, 59, 999);
   
-  const startMs = Date.parse(`${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-01T00:00:00`);
-  const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - 30);
+  const startMs = startDate.setHours(0, 0, 0, 0);
   
-  const endMs = (offset === 0)
-    ? Date.parse(localDate() + 'T23:59:59')
-    : Date.parse(`${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59`);
-    
-  const monthName = targetMonthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  let timeLabel = "Last 30 Days";
+  if (offset === -1) timeLabel = "Previous 30 Days";
+  else if (offset < -1) timeLabel = `${Math.abs(offset - 1) * 30} - ${Math.abs(offset) * 30} Days Ago`;
   
   const exerciseDates = {};
 
@@ -691,7 +668,7 @@ function renderPercentilesCard() {
   if (activeExercises.size === 0) {
     cardBody = `
       <div style="text-align:center;padding:24px 0;color:#9ca3af;font-size:12px;border:1px dashed rgba(0,0,0,0.1);border-radius:8px;margin-top:12px">
-        No strength exercises logged in ${monthName}.
+        No strength exercises logged in this period.
       </div>`;
   } else {
     const exercisesList = Array.from(activeExercises).map(exName => {
@@ -775,7 +752,7 @@ function renderPercentilesCard() {
   return `
     <div class="card" style="padding:16px;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px">
-        <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0">Strength Progress (${monthName})</h3>
+        <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0">Strength Progress (${timeLabel})</h3>
         <div style="display:flex;gap:4px">
           <button onclick="changePercentileMonth(-1)" style="background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.08);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center">&lt;</button>
           <button onclick="changePercentileMonth(1)" ${offset === 0 ? 'disabled style="background:rgba(0,0,0,0.01);border:1px solid rgba(0,0,0,0.03);color:rgba(0,0,0,0.2);cursor:default;border-radius:6px;display:flex;align-items:center;justify-content:center"' : 'style="background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.08);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center"'} onclick="changePercentileMonth(1)">&gt;</button>
