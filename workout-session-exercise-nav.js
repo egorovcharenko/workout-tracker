@@ -14,12 +14,12 @@ function navSetDisplay(s, exercise) {
   const lastBandSum = (s.lastBands || []).reduce((a, b) => a + b, 0);
   const cur = isAssist ? Math.max(0, baseW - bandSum) : (isBandsOnly ? bandSum : baseW + bandSum);
   const prevW = isAssist ? Math.max(0, lastBaseW - lastBandSum) : (isBandsOnly ? lastBandSum : lastBaseW + lastBandSum);
-  if (s.completed) return { lb: cur, reps: s.reps, state: "done" };
+  if (s.completed) return { lb: cur, reps: s.reps, state: "done", kind: s.kind };
   if (s.active) {
     const reps = s.reps != null ? s.reps : (s.lastReps != null ? s.lastReps : null);
-    return { lb: cur || prevW, reps, state: "current" };
+    return { lb: cur || prevW, reps, state: "current", kind: s.kind };
   }
-  return { lb: prevW || cur, reps: s.lastReps != null ? s.lastReps : null, state: "upcoming", preview: true };
+  return { lb: prevW || cur, reps: s.lastReps != null ? s.lastReps : null, state: "upcoming", preview: true, kind: s.kind };
 }
 
 function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise, variant }) {
@@ -50,6 +50,18 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
       box = { border: "1px solid rgba(52,211,153,0.32)", background: "rgba(52,211,153,0.07)", color: T.strong, xColor: T.faint };
     } else {
       box = { border: "1px dashed rgba(255,255,255,0.16)", background: "transparent", color: T.muted, xColor: T.disabled };
+    }
+
+    if (d.kind === "warmup") {
+      if (d.state === "current") {
+        box.border = "1px solid rgba(251,191,36,0.85)";
+        box.background = "rgba(251,191,36,0.85)";
+      } else if (d.state === "done") {
+        box.border = "1px solid rgba(251,191,36,0.4)";
+        box.background = "rgba(251,191,36,0.08)";
+      } else {
+        box.border = "1px dashed rgba(251,191,36,0.4)";
+      }
     }
     return (
       <span key={k} style={{
