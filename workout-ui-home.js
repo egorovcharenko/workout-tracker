@@ -821,7 +821,7 @@ function renderPercentilesCard() {
         const sparklineHTML = renderMeasurementSparkline(vals, m.color, m.direction);
 
         return `
-          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:8px;border:1px solid #f3f4f6;background:#ffffff;border-radius:8px;margin-bottom:6px;gap:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:8px;border:1px solid #f3f4f6;background:#ffffff;border-radius:8px;gap:12px">
             <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
               <div style="display:flex;align-items:center;gap:6px">
                 <span style="width:7px;height:7px;border-radius:50%;background:${m.color};display:inline-block;flex-shrink:0"></span>
@@ -851,7 +851,7 @@ function renderPercentilesCard() {
         const sparklineHTML = renderSparkline(ex.pts, color);
         
         return `
-          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:8px;border:1px solid #f3f4f6;background:#ffffff;border-radius:8px;margin-bottom:6px;gap:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:8px;border:1px solid #f3f4f6;background:#ffffff;border-radius:8px;gap:12px">
             <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
               <div style="display:flex;align-items:center;gap:6px">
                 <span style="width:7px;height:7px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
@@ -871,12 +871,12 @@ function renderPercentilesCard() {
       }).join('');
 
       return `
-        <div style="margin-bottom:12px">
-          <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;display:flex;align-items:center;gap:6px">
             <span>${g.label}</span>
             <span style="flex:1;height:1px;background:rgba(0,0,0,0.05)"></span>
           </div>
-          <div style="padding-left:4px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px;padding-left:4px">
             ${renderedMetrics}
             ${renderedExercises}
           </div>
@@ -1033,13 +1033,9 @@ function renderHome() {
 
       ${renderWorkoutSummaryCard()}
 
-      <div class="dashboard-grid">
-        <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
-          ${renderPercentilesCard()}
-        </div>
-        <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
-          ${renderCalendar()}
-        </div>
+      <div style="display:flex; flex-direction:column; gap:16px; width:100%;">
+        ${renderPercentilesCard()}
+        ${renderCalendar()}
       </div>
     </div>
   `;
