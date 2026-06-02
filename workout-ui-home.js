@@ -377,23 +377,7 @@ function renderWorkoutSummaryCard() {
     </div>`;
   }).join('');
 
-  const big = (txt, color) => `<span style="font-size:27px;font-weight:800;color:${color || '#F3F4F6'};font-family:${MONO};letter-spacing:-0.03em">${txt}</span>`;
-  const unit = (txt) => `<span style="font-size:12px;color:#6B7280;font-weight:600">${txt}</span>`;
-  const tile = (label, valHTML, sub) => `
-    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:13px 14px">
-      <div style="display:flex;align-items:baseline;gap:3px;line-height:1">${valHTML}</div>
-      <div style="font-size:9px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-top:8px">${label}</div>
-      ${sub ? `<div style="font-size:10px;color:#6B7280;margin-top:3px">${sub}</div>` : ''}
-    </div>`;
   const netColor = netTrend == null ? '#6B7280' : netTrend > 0 ? '#34D399' : netTrend < 0 ? '#F87171' : '#6B7280';
-  const tilesHTML = [
-    tile('DURATION', big(m) + unit('min')),
-    tile('SETS', big(totalSets), `across ${numLifts} lifts`),
-    tile('NEW PRS', big(prsList.length, '#FBBF24'), 'personal records'),
-    tile('NET TREND', big(netTrend == null ? '—' : `${netTrend > 0 ? '+' : ''}${netTrend}%`, netColor), `${upCount} up · ${downCount} down`),
-  ].join('');
-
-
 
   const musHTML = musRows.map(r => `
     <div title="${_esc(r.label)}: ${r.pct}% of this session's muscle-weighted volume" style="display:flex;align-items:center;gap:12px;padding:3px 0;cursor:default">
@@ -434,17 +418,33 @@ function renderWorkoutSummaryCard() {
 
   return `
     <div data-noinvert style="margin-bottom:16px;overflow:hidden;background:#0B0F14;border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px 18px 20px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px">
-        <div style="min-width:0">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:18px">
+        <div style="min-width:140px;flex:1">
           <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;letter-spacing:0.08em;color:#C4B5FD;background:rgba(139,92,246,0.16);border:1px solid rgba(139,92,246,0.35);padding:4px 10px;border-radius:99px;font-family:${MONO}">✓ DONE</span>
           <h3 style="font-size:30px;font-weight:800;color:#F3F4F6;margin:10px 0 3px;letter-spacing:-0.02em;line-height:1.05">${name}</h3>
           <span style="font-size:12px;color:#6B7280;font-family:${MONO}">${dateStr}</span>
         </div>
-        ${historyData.length > 1 ? `<div style="width:210px;max-width:44%;flex-shrink:0"><div style="display:flex;gap:8px;align-items:end">${bars}</div></div>` : ''}
-      </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-bottom:14px">
-        ${tilesHTML}
+        <div style="display:flex;gap:10px;align-items:center;flex-shrink:0">
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:10px 14px;min-width:80px;text-align:center">
+            <div style="font-size:20px;font-weight:800;color:#F3F4F6;font-family:${MONO};line-height:1">${m}<span style="font-size:10px;color:#6B7280;margin-left:2px">min</span></div>
+            <div style="font-size:8px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-top:6px">DURATION</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:10px 14px;min-width:80px;text-align:center">
+            <div style="font-size:20px;font-weight:800;color:#F3F4F6;font-family:${MONO};line-height:1">${totalSets}</div>
+            <div style="font-size:8px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-top:6px">SETS</div>
+            <div style="font-size:8px;color:#6B7280;margin-top:2px;line-height:1">${numLifts} lifts</div>
+          </div>
+        </div>
+
+        ${historyData.length > 1 ? `
+          <div style="width:180px;flex-shrink:0;display:flex;flex-direction:column;gap:6px">
+            <div style="font-size:8px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};text-align:right">
+              VOL TREND: <span style="color:${netColor};font-weight:800">${netTrend == null ? '—' : `${netTrend > 0 ? '+' : ''}${netTrend}%`}</span>
+            </div>
+            <div style="display:flex;gap:6px;align-items:end">${bars}</div>
+          </div>
+        ` : ''}
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:18px">
@@ -460,7 +460,7 @@ function renderWorkoutSummaryCard() {
 
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 10px">
         <span style="font-size:10px;font-weight:800;letter-spacing:0.1em;color:#6B7280;font-family:${MONO}">ALL EXERCISES</span>
-        <span style="font-size:11px;color:#6B7280">${numLifts} lifts · est. 1RM trend</span>
+        <span style="font-size:11px;color:#6B7280">${numLifts} lifts · est. 1RM trend${upCount || downCount ? ` (${upCount} up · ${downCount} down)` : ''}</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">
         ${exHTML || '<div style="color:#6B7280;font-size:12px;padding:8px 0">No working sets logged.</div>'}
