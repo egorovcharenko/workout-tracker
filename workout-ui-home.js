@@ -876,9 +876,23 @@ function renderPercentilesCard() {
             <span>${g.label}</span>
             <span style="flex:1;height:1px;background:rgba(0,0,0,0.05)"></span>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px;padding-left:4px">
-            ${renderedMetrics}
-            ${renderedExercises}
+          <div style="display:flex;flex-direction:column;gap:12px;padding-left:4px">
+            ${renderedExercises ? `
+              <div>
+                <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Lifts</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px">
+                  ${renderedExercises}
+                </div>
+              </div>
+            ` : ''}
+            ${renderedMetrics ? `
+              <div>
+                <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Measurements</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px">
+                  ${renderedMetrics}
+                </div>
+              </div>
+            ` : ''}
           </div>
         </div>
       `;
