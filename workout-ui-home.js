@@ -870,29 +870,52 @@ function renderPercentilesCard() {
         `;
       }).join('');
 
+      let groupContent = '';
+      if (renderedExercises && renderedMetrics) {
+        groupContent = `
+          <div style="display:flex; flex-wrap:wrap; gap:16px;">
+            <div style="flex:1; min-width:280px;">
+              <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Lifts</div>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                ${renderedExercises}
+              </div>
+            </div>
+            <div style="flex:1; min-width:280px;">
+              <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Measurements</div>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                ${renderedMetrics}
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (renderedExercises) {
+        groupContent = `
+          <div>
+            <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Lifts</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px">
+              ${renderedExercises}
+            </div>
+          </div>
+        `;
+      } else if (renderedMetrics) {
+        groupContent = `
+          <div>
+            <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Measurements</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px">
+              ${renderedMetrics}
+            </div>
+          </div>
+        `;
+      }
+
       return `
         <div style="margin-bottom:16px">
           <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;display:flex;align-items:center;gap:6px">
             <span>${g.label}</span>
             <span style="flex:1;height:1px;background:rgba(0,0,0,0.05)"></span>
           </div>
-          <div style="display:flex;flex-direction:column;gap:12px;padding-left:4px">
-            ${renderedExercises ? `
-              <div>
-                <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Lifts</div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px">
-                  ${renderedExercises}
-                </div>
-              </div>
-            ` : ''}
-            ${renderedMetrics ? `
-              <div>
-                <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Measurements</div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px">
-                  ${renderedMetrics}
-                </div>
-              </div>
-            ` : ''}
+          <div style="padding-left:4px">
+            ${groupContent}
           </div>
         </div>
       `;
