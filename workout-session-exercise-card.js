@@ -1,4 +1,11 @@
 function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onDeferExercise, onSwapExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup }) {
+  const [showAllFamilies, setShowAllFamilies] = useState(false);
+  const currentFamilyName = getSwapGroupName(exercise.name) || "Other";
+
+  useEffect(() => {
+    setShowAllFamilies(false);
+  }, [exercise.name]);
+
   // Full swap group (includes the current exercise) — drives the first-class
   // variant selector rendered under the title. null / single-member groups
   // render no selector.
@@ -103,7 +110,7 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
             color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0,
           }}>
             <span aria-hidden style={{ fontSize: 11 }}>⇄</span>
-            CHOOSE VARIANT
+            CHOOSE VARIANT ({currentFamilyName})
             {anyLogged && (
               <span style={{ marginLeft: "auto", color: T.disabled, fontWeight: 600, letterSpacing: 0.4, textTransform: "none" }}>
                 locked — sets logged
@@ -142,6 +149,73 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
                 </button>
               );
             })}
+          </div>
+
+          <div style={{ marginTop: 8 }}>
+            <button
+              onClick={() => setShowAllFamilies(!showAllFamilies)}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: T.accentLight,
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 600,
+                padding: "4px 0",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <span>{showAllFamilies ? "▾ Hide other families" : "▸ Swap with another family..."}</span>
+            </button>
+
+            {showAllFamilies && (
+              <div style={{
+                marginTop: 8,
+                padding: 12,
+                borderRadius: 12,
+                background: "rgba(255,255,255,0.015)",
+                border: `1px solid ${T.cardBorder}`,
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}>
+                {SWAP_GROUPS.map(grp => {
+                  if (grp.family === currentFamilyName) return null;
+                  return (
+                    <div key={grp.family} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 700, borderBottom: `1px dashed rgba(255,255,255,0.06)`, paddingBottom: 2 }}>
+                        {grp.family}
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {grp.exercises.map(opt => {
+                          const locked = anyLogged;
+                          return (
+                            <button
+                              key={opt.name}
+                              onClick={locked ? undefined : () => onSwapExercise(opt.name)}
+                              disabled={locked}
+                              style={{
+                                padding: "6px 10px", borderRadius: 8,
+                                fontFamily: "inherit", fontSize: 11.5, fontWeight: 600,
+                                cursor: locked ? "not-allowed" : "pointer",
+                                border: `1px solid ${T.cardBorder}`,
+                                background: "rgba(255,255,255,0.02)",
+                                color: T.text,
+                                opacity: locked ? 0.45 : 1,
+                              }}
+                            >
+                              {opt.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}

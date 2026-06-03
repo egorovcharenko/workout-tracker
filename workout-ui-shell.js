@@ -507,47 +507,10 @@ function removeLastSet(exIdx) {
   triggerSave();
   render();
 }
-// Swappable exercise groups — any exercise can be swapped for others in its group
-const SWAP_GROUPS = [
-  [
-    { name: "Dumbbell Bicep Curls", sets: 2, reps: "8-12", notes: "Finish strong", superset: false, video: "https://www.youtube.com/shorts/MKWBV29S6c0", grips: ['supinated', 'hammer', 'reverse'] },
-    { name: "Band Bicep Curls", sets: 2, reps: "12-15", notes: "Stand on band, curl handles up", superset: false, video: "https://www.youtube.com/shorts/5ACsDBt_sMQ", equipment: "band", grips: ['supinated', 'hammer', 'reverse'] },
-    { name: "Bench Dips", sets: 2, reps: "10-15", notes: "Hands on bench behind you, lower until 90°. Band ASSISTS — loop under hips to take weight off; leave empty for full bodyweight.", superset: false, video: "https://www.youtube.com/shorts/0326dy_-CzM", equipment: "band", assist: true },
-    { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", superset: false, video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
-  ],
-  [
-    { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", superset: false, video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band" },
-    { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "8-12", notes: "Hinge at hips, slight knee bend", superset: false, video: "https://www.youtube.com/shorts/cGMaBqaExBo", rest: 120 },
-  ],
-  [
-    { name: "Goblet Squat", sets: 3, reps: "10-12", notes: "Hold DB at chest, sit deep. Optional: stand on bands for extra resistance.", superset: false, video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, extraWeights: [55, 60], rest: 120 },
-    { name: "Bulgarian Split Squat", sets: 3, reps: "8-10", notes: "Rear foot on bench, DB in each hand. Optional: stand on bands for extra resistance.", superset: false, video: "https://www.youtube.com/shorts/2C-uNgKwPLE", bandAddon: true, rest: 120 },
-  ],
-  [
-    { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band ASSISTS. Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
-    { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", notes: "Each side, brace on bench", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
-    { name: "Dumbbell Bent-Over Rows", sets: 3, reps: "8-12", notes: "Keep back flat, pull to hips", video: "https://www.youtube.com/shorts/dpYI8K6e-jE", rest: 120 },
-    { name: "Band Row", sets: 3, reps: "12-15", notes: "Stand on band, pull to chest, squeeze back", video: "https://www.youtube.com/shorts/BAlsaA1wIhY", equipment: "band", rest: 120 }
-  ],
-];
-function getSwapOptions(exerciseName) {
-  for (const group of SWAP_GROUPS) {
-    if (group.some(e => e.name === exerciseName)) {
-      return group.filter(e => e.name !== exerciseName);
-    }
-  }
-  return [];
-}
-function isSwappable(exerciseName) {
-  return SWAP_GROUPS.some(g => g.some(e => e.name === exerciseName));
-}
-function getSwapGroup(exerciseName) {
-  return SWAP_GROUPS.find(g => g.some(e => e.name === exerciseName));
-}
+// Swappable exercise group helpers are loaded globally from workout-shared.js
+
 function swapExercise(exIdx, newName) {
-  const group = getSwapGroup(state.workout.exercises[exIdx].name);
-  if (!group) return;
-  const swap = group.find(e => e.name === newName);
+  const swap = findExerciseConfig(newName);
   if (!swap) return;
   // Clear progress for this exercise
   delete state.completed[`${exIdx}-warmup`];

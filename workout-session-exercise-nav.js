@@ -24,6 +24,12 @@ function navSetDisplay(s, exercise) {
 
 function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise, variant }) {
   const [swapOpenIdx, setSwapOpenIdx] = useState(null);
+  const [showAllFamilies, setShowAllFamilies] = useState(false);
+
+  useEffect(() => {
+    setShowAllFamilies(false);
+  }, [swapOpenIdx]);
+
 
   const STATUS_COLOR = { done: T.green, current: T.accentLight, skipped: T.disabled, upcoming: T.faint };
   const STATUS_GLYPH = { done: "✓", current: "●", skipped: "×", upcoming: "○" };
@@ -183,31 +189,106 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
           </span>
         </div>
 
-        {!e.skipped && hasVariants && swapOpen && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 10 }}>
-            {swapGroup.map(opt => {
-              const isSel = opt.name === e.name;
-              const locked = workLogged && !isSel;
-              return (
+        {!e.skipped && hasVariants && swapOpen && (() => {
+          const currentFamilyName = getSwapGroupName(e.name) || "Other";
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 10 }}>
+              <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 700, paddingLeft: 2 }}>
+                FAMILY: {currentFamilyName.toUpperCase()}
+              </div>
+              {swapGroup.map(opt => {
+                const isSel = opt.name === e.name;
+                const locked = workLogged && !isSel;
+                return (
+                  <button
+                    key={opt.name}
+                    onClick={(ev) => { ev.stopPropagation(); if (!isSel && !locked) { onSwapExercise(i, opt.name); setSwapOpenIdx(null); } }}
+                    disabled={isSel || locked}
+                    style={{
+                      textAlign: "left", padding: "6px 9px", borderRadius: 7, fontFamily: "inherit",
+                      fontSize: 12, fontWeight: 600,
+                      cursor: isSel ? "default" : locked ? "not-allowed" : "pointer",
+                      border: isSel ? "1px solid rgba(96,165,250,0.6)" : `1px solid ${T.cardBorder}`,
+                      background: isSel ? "rgba(96,165,250,0.16)" : locked ? "transparent" : "rgba(255,255,255,0.04)",
+                      color: isSel ? "#DBEAFE" : locked ? T.disabled : T.text,
+                      opacity: locked ? 0.5 : 1,
+                    }}
+                  >{isSel && <span style={{ color: T.accentLight, marginRight: 6 }}>●</span>}{opt.name}</button>
+                );
+              })}
+              {workLogged && <span style={{ color: T.disabled, fontFamily: T.mono, fontSize: 9, paddingLeft: 2 }}>locked — sets logged</span>}
+
+              <div style={{ marginTop: 4 }}>
                 <button
-                  key={opt.name}
-                  onClick={(ev) => { ev.stopPropagation(); if (!isSel && !locked) { onSwapExercise(i, opt.name); setSwapOpenIdx(null); } }}
-                  disabled={isSel || locked}
+                  onClick={(ev) => { ev.stopPropagation(); setShowAllFamilies(!showAllFamilies); }}
                   style={{
-                    textAlign: "left", padding: "6px 9px", borderRadius: 7, fontFamily: "inherit",
-                    fontSize: 12, fontWeight: 600,
-                    cursor: isSel ? "default" : locked ? "not-allowed" : "pointer",
-                    border: isSel ? "1px solid rgba(96,165,250,0.6)" : `1px solid ${T.cardBorder}`,
-                    background: isSel ? "rgba(96,165,250,0.16)" : locked ? "transparent" : "rgba(255,255,255,0.04)",
-                    color: isSel ? "#DBEAFE" : locked ? T.disabled : T.text,
-                    opacity: locked ? 0.5 : 1,
+                    background: "transparent",
+                    border: "none",
+                    color: T.accentLight,
+                    cursor: "pointer",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: "2px 2px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 3,
                   }}
-                >{isSel && <span style={{ color: T.accentLight, marginRight: 6 }}>●</span>}{opt.name}</button>
-              );
-            })}
-            {workLogged && <span style={{ color: T.disabled, fontFamily: T.mono, fontSize: 9, paddingLeft: 2 }}>locked — sets logged</span>}
-          </div>
-        )}
+                >
+                  <span>{showAllFamilies ? "▾ Hide other families" : "▸ Other families..."}</span>
+                </button>
+
+                {showAllFamilies && (
+                  <div style={{
+                    marginTop: 6,
+                    padding: 8,
+                    borderRadius: 8,
+                    background: "rgba(255,255,255,0.01)",
+                    border: `1px solid ${T.cardBorder}`,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    maxHeight: 200,
+                    overflowY: "auto",
+                  }}>
+                    {SWAP_GROUPS.map(grp => {
+                      if (grp.family === currentFamilyName) return null;
+                      return (
+                        <div key={grp.family} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 8.5, fontWeight: 700, borderBottom: `1px dashed ${T.cardBorder}`, paddingBottom: 1 }}>
+                            {grp.family}
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            {grp.exercises.map(opt => {
+                              const locked = workLogged;
+                              return (
+                                <button
+                                  key={opt.name}
+                                  onClick={(ev) => { ev.stopPropagation(); if (!locked) { onSwapExercise(i, opt.name); setSwapOpenIdx(null); } }}
+                                  disabled={locked}
+                                  style={{
+                                    textAlign: "left", padding: "4px 6px", borderRadius: 5,
+                                    fontFamily: "inherit", fontSize: 11, fontWeight: 600,
+                                    cursor: locked ? "not-allowed" : "pointer",
+                                    border: `1px solid ${T.cardBorder}`,
+                                    background: "rgba(255,255,255,0.02)",
+                                    color: T.text,
+                                    opacity: locked ? 0.45 : 1,
+                                  }}
+                                >
+                                  {opt.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {!e.skipped && chipRow(e)}
       </div>

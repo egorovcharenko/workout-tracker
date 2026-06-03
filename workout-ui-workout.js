@@ -486,9 +486,23 @@ function renderWorkout() {
               ${ex.video ? `<a href="${ex.video}" target="_blank" rel="noopener" style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:9999px;font-weight:500;text-decoration:none;display:inline-block">▶ How to</a>` : ''}
               ${isSwappable(ex.name) ? `<div style="position:relative;display:inline-block">
                 <button onclick="toggleSwapMenu(${exIdx})" style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:9999px;font-weight:500;border:none;cursor:pointer">⇄</button>
-                ${state.swapOpen === exIdx ? `<div style="position:absolute;right:0;top:24px;background:white;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:50;min-width:180px;overflow:hidden">
-                  ${getSwapOptions(ex.name).map(opt => `<button onclick="swapExercise(${exIdx},'${opt.name.replace(/'/g,"\\'")}')" style="display:block;width:100%;text-align:left;padding:8px 12px;font-size:12px;color:#374151;background:white;border:none;border-bottom:1px solid #f3f4f6;cursor:pointer">${opt.name}</button>`).join("")}
-                </div>` : ''}
+                ${state.swapOpen === exIdx ? `
+                  <div style="position:absolute;right:0;top:24px;background:white;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:50;min-width:240px;max-height:300px;overflow-y:auto;padding:8px 0">
+                    ${SWAP_GROUPS.map(grp => `
+                      <div style="padding:4px 12px;font-size:10px;font-weight:700;color:#9ca3af;background:#f9fafb;text-transform:uppercase;letter-spacing:0.05em;border-top:1px solid #f3f4f6;margin-top:4px;border-bottom:1px dashed #e5e7eb">
+                        ${grp.family}
+                      </div>
+                      ${grp.exercises.map(opt => {
+                        const isCurrent = opt.name === ex.name;
+                        return `
+                          <button onclick="${isCurrent ? '' : `swapExercise(${exIdx},'${opt.name.replace(/'/g,"\\'")}')`}" 
+                            style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:12px;color:${isCurrent ? '#3b82f6' : '#374151'};background:white;border:none;cursor:${isCurrent ? 'default' : 'pointer'};font-weight:${isCurrent ? '700' : '500'}" 
+                            ${isCurrent ? 'disabled' : ''}>
+                            ${isCurrent ? '● ' : ''}${opt.name}
+                          </button>`;
+                      }).join("")}
+                    `).join("")}
+                  </div>` : ''}
               </div>` : ''}
             </div>
           </div>

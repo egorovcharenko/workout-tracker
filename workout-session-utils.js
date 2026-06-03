@@ -3,50 +3,7 @@
 // Expose React hooks globally to avoid redeclaration issues in Babel Standalone scripts
 var { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-const SWAP_GROUPS = [
-  [
-    { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
-    { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "8-12", notes: "Hinge at hips, slight knee bend", video: "https://www.youtube.com/shorts/cGMaBqaExBo", rest: 120, noWarmup: true },
-    { name: "Single-Leg DB RDL", sets: 3, reps: "8", notes: "One DB in each hand, rear leg lifts as you hinge — slow tempo, 8 per leg. Warmup 1 set @ ~20lb, work @ ~30lb.", rest: 120 },
-    { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", rest: 180 },
-  ],
-  [
-    { name: "Band Tricep Pushdowns", sets: 3, reps: "12-15", notes: "Elbows glued to ribs, squeeze at bottom", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", rest: 60 },
-    { name: "Bench Dips", sets: 3, reps: "10-15", notes: "Hands on bench behind you, lower until elbows ~90°. Band ASSISTS — loop it under your hips to take weight off; leave bands empty for full bodyweight.", equipment: "band", assist: true, video: "https://www.youtube.com/shorts/0326dy_-CzM", rest: 60 },
-  ],
-  [
-    { name: "Goblet Squat", sets: 3, warmups: 2, reps: "10-12", notes: "Hold DB at chest, sit deep. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, rest: 120 },
-    { name: "Bulgarian Split Squat", sets: 3, warmups: 2, reps: "8-10", notes: "Rear foot on bench, DB in each hand — 8-10 per leg, controlled. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/2C-uNgKwPLE", bandAddon: true, rest: 120 },
-    { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", notes: "Bar on upper back, set the rack safety pins low so you can bail. Brace, sit between your hips, drive up.", rest: 180 },
-  ],
-  [
-    { name: "Dumbbell Flat Bench Press", sets: 4, reps: "8-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 150 },
-    { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", notes: "Bench at ~30°. Control the descent, press up and slightly back.", rest: 150 },
-  ],
-  [
-    { name: "Seated Overhead Press", sets: 3, reps: "8-12", notes: "Seated, controlled", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw", rest: 120, noWarmup: true },
-    { name: "Standing Overhead Press", sets: 3, warmups: 2, reps: "6-8", notes: "From the rack, brace hard, press overhead, don't lean back.", rest: 150 },
-  ],
-  [
-    { name: "Reverse Flyes", sets: 3, reps: "15-20", notes: "Rear delts & upper back, light weight, squeeze at the top", video: "https://www.youtube.com/shorts/LsT-bR_zxLo", rest: 60, noWarmup: true },
-    { name: "Face Pulls", sets: 3, reps: "15-20", notes: "Anchor band at face height, pull toward your face, elbows high, squeeze rear delts.", equipment: "band", rest: 60, noWarmup: true },
-  ],
-  [
-    { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band ASSISTS. Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
-    { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", notes: "Each side, brace on bench", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
-    { name: "Dumbbell Bent-Over Rows", sets: 3, reps: "8-12", notes: "Keep back flat, pull to hips", video: "https://www.youtube.com/shorts/dpYI8K6e-jE", rest: 120 },
-    { name: "Band Row", sets: 3, reps: "12-15", notes: "Stand on band, pull to chest, squeeze back", video: "https://www.youtube.com/shorts/BAlsaA1wIhY", equipment: "band", rest: 120 }
-  ],
-];
-
-function getSwapGroup(exerciseName) {
-  return SWAP_GROUPS.find(g => g.some(e => e.name === exerciseName)) || null;
-}
-
-function getSwapOptions(exerciseName) {
-  const g = getSwapGroup(exerciseName);
-  return g ? g.filter(e => e.name !== exerciseName) : [];
-}
+// SWAP_GROUPS and basic helpers are now loaded globally from /workout-shared.js
 
 const fetchT = (url, ms = 6000) => Promise.race([
   fetch(url),
@@ -391,8 +348,7 @@ function applySwaps(workout, swapMap) {
     exercises: workout.exercises.map((ex, idx) => {
       const topWant = swapMap[`${idx}`];
       if (topWant && topWant !== ex.name) {
-        const grp = getSwapGroup(ex.name);
-        const repl = grp && grp.find(e => e.name === topWant);
+        const repl = findExerciseConfig(topWant);
         if (repl) return { ...repl };
       }
       if (ex.supersetExercises) {
@@ -400,8 +356,7 @@ function applySwaps(workout, swapMap) {
         const newSubs = ex.supersetExercises.map((sub, subIdx) => {
           const subWant = swapMap[`${idx}-${subIdx}`];
           if (!subWant || subWant === sub.name) return sub;
-          const grp = getSwapGroup(sub.name);
-          const repl = grp && grp.find(e => e.name === subWant);
+          const repl = findExerciseConfig(subWant);
           if (!repl) return sub;
           changed = true;
           const { sets: _s, rest: _r, warmups: _w, ...subFields } = repl;

@@ -378,3 +378,114 @@ function saveSessionSets(workoutName, date, exercises) {
   }
 }
 
+// Expose the SWAP_GROUPS catalog to categorize exercises into families
+const SWAP_GROUPS = [
+  {
+    family: "Deadlifts & Hinge (Posterior)",
+    exercises: [
+      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", rest: 180 },
+      { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "8-12", notes: "Hinge at hips, slight knee bend", video: "https://www.youtube.com/shorts/cGMaBqaExBo", rest: 120, noWarmup: true },
+      { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
+      { name: "Single-Leg DB RDL", sets: 3, reps: "8", notes: "One DB in each hand, rear leg lifts as you hinge — slow tempo, 8 per leg. Warmup 1 set @ ~20lb, work @ ~30lb.", rest: 120 },
+    ]
+  },
+  {
+    family: "Squats & Quads (Legs)",
+    exercises: [
+      { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", notes: "Bar on upper back. Set the rack safety pins at the bottom of your range so you can bail a missed rep. Brace, sit between your hips, drive up. Ramp the warm-up sets.", rest: 180 },
+      { name: "Bulgarian Split Squat", sets: 3, warmups: 2, reps: "8-10", notes: "Rear foot on bench, DB in each hand — 8-10 per leg, controlled. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/2C-uNgKwPLE", bandAddon: true, rest: 120 },
+      { name: "Goblet Squat", sets: 3, warmups: 2, reps: "10-12", notes: "Hold DB at chest, sit deep. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, rest: 120 },
+      { name: "Band Squat", sets: 3, warmups: 2, reps: "12-15", notes: "Stand on band, handles at shoulders", video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" },
+      { name: "Lunges", sets: 3, reps: "10-12", notes: "Step forward, lower hips until rear knee nearly touches floor, push back. DBs or bands optional.", rest: 90 }
+    ]
+  },
+  {
+    family: "Chest Press (Push)",
+    exercises: [
+      { name: "Dumbbell Flat Bench Press", sets: 4, reps: "8-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 150 },
+      { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", notes: "Bench at ~30°. Control the descent, press up and slightly back.", rest: 150 },
+    ]
+  },
+  {
+    family: "Overhead Press (Shoulders)",
+    exercises: [
+      { name: "Standing Overhead Press", sets: 3, warmups: 2, reps: "6-8", notes: "From the rack, brace hard, press overhead, don't lean back.", rest: 150 },
+      { name: "Seated Overhead Press", sets: 3, reps: "8-12", notes: "Seated, controlled", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw", rest: 120, noWarmup: true },
+    ]
+  },
+  {
+    family: "Back Rows & Pulls (Pull)",
+    exercises: [
+      { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band ASSISTS. Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
+      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", notes: "Each side, brace on bench", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
+      { name: "Dumbbell Bent-Over Rows", sets: 3, reps: "8-12", notes: "Keep back flat, pull to hips", video: "https://www.youtube.com/shorts/dpYI8K6e-jE", rest: 120 },
+      { name: "Band Row", sets: 3, reps: "12-15", notes: "Stand on band, pull to chest, squeeze back", video: "https://www.youtube.com/shorts/BAlsaA1wIhY", equipment: "band", rest: 120 }
+    ]
+  },
+  {
+    family: "Rear Delts & Face Pulls",
+    exercises: [
+      { name: "Face Pulls", sets: 3, reps: "15-20", notes: "Anchor band at face height, pull toward your face, elbows high, squeeze rear delts.", equipment: "band", rest: 60, noWarmup: true },
+      { name: "Reverse Flyes", sets: 3, reps: "15-20", notes: "Rear delts & upper back, light weight, squeeze at the top", video: "https://www.youtube.com/shorts/LsT-bR_zxLo", rest: 60, noWarmup: true },
+    ]
+  },
+  {
+    family: "Triceps (Arm Extension)",
+    exercises: [
+      { name: "Band Tricep Pushdowns", sets: 3, reps: "12-15", notes: "Elbows glued to ribs, squeeze at bottom", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", rest: 60 },
+      { name: "Bench Dips", sets: 3, reps: "10-15", notes: "Hands on bench behind you, lower until elbows ~90°. Band ASSISTS — loop it under your hips to take weight off; leave bands empty for full bodyweight.", equipment: "band", assist: true, video: "https://www.youtube.com/shorts/0326dy_-CzM", rest: 60 },
+      { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
+    ]
+  },
+  {
+    family: "Biceps (Arm Flexion)",
+    exercises: [
+      { name: "Dumbbell Bicep Curls", sets: 2, reps: "8-12", notes: "Finish strong", video: "https://www.youtube.com/shorts/MKWBV29S6c0", grips: ['supinated', 'hammer', 'reverse'] },
+      { name: "Dumbbell Hammer Curls", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Hammer grip default · toggle for variants", grips: ['hammer', 'supinated', 'reverse'] },
+      { name: "Band Bicep Curls", sets: 2, reps: "12-15", notes: "Stand on band, curl handles up", video: "https://www.youtube.com/shorts/5ACsDBt_sMQ", equipment: "band", grips: ['supinated', 'hammer', 'reverse'] },
+    ]
+  },
+  {
+    family: "Calves",
+    exercises: [
+      { name: "Calf Raises", sets: 3, reps: "15-20", notes: "Elevate toes on a block, full stretch at bottom, squeeze at top.", rest: 60 }
+    ]
+  },
+  {
+    family: "Core",
+    exercises: [
+      { name: "Band Torso Rotation", sets: 3, reps: "10-12", notes: "Anchor band at chest height, rotate left and right under control. 10-12 per side.", equipment: "band", rest: 60, noWarmup: true },
+      { name: "Hanging Knee Raise", sets: 3, reps: "10-15", notes: "Hang from the bar, raise knees toward chest, control the lower. No swinging.", rest: 60, noWarmup: true },
+      { name: "Pallof Press", sets: 3, reps: "10-12", notes: "Anti-rotation core finisher: anchor band at chest height, press straight out and resist the twist. Each side.", equipment: "band", rest: 60, noWarmup: true },
+    ]
+  }
+];
+
+function findExerciseConfig(exerciseName) {
+  for (const grp of SWAP_GROUPS) {
+    const found = grp.exercises.find(e => e.name === exerciseName);
+    if (found) return found;
+  }
+  return null;
+}
+
+// Returns the array of exercises within the matching family
+function getSwapGroup(exerciseName) {
+  const grp = SWAP_GROUPS.find(g => g.exercises.some(e => e.name === exerciseName));
+  return grp ? grp.exercises : null;
+}
+
+function getSwapGroupName(exerciseName) {
+  const grp = SWAP_GROUPS.find(g => g.exercises.some(e => e.name === exerciseName));
+  return grp ? grp.family : null;
+}
+
+function getSwapOptions(exerciseName) {
+  const g = getSwapGroup(exerciseName);
+  return g ? g.filter(e => e.name !== exerciseName) : [];
+}
+
+function isSwappable(exerciseName) {
+  return SWAP_GROUPS.some(g => g.exercises.some(e => e.name === exerciseName));
+}
+
