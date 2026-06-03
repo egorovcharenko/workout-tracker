@@ -100,37 +100,16 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   Object.values(muscleSets7d).forEach(arr => arr.sort((a, b) => a.date.localeCompare(b.date)));
 
   const stat = statHistory || {};
-  const pickSiblingForStats = () => {
-    const grp = getSwapGroup(exercise.name);
-    if (!grp) return null;
-    const statOwn = ((stat.orm || {})[exercise.name] || []).length;
-    const histOwn = (history || []).some(s =>
-      (s.sets || []).some(st => st.exercise === exercise.name && st.set_type === 'working'));
-    if (statOwn > 0 || histOwn) return null;
-    let best = null, bestCount = 0;
-    for (const member of grp) {
-      if (member.name === exercise.name) continue;
-      const statCnt = ((stat.orm || {})[member.name] || []).length;
-      const histCnt = (history || []).filter(s =>
-        (s.sets || []).some(st => st.exercise === member.name && st.set_type === 'working')).length;
-      const cnt = statCnt + histCnt;
-      if (cnt > bestCount) { bestCount = cnt; best = member.name; }
-    }
-    return bestCount > 0 ? best : null;
-  };
-  const sibling = pickSiblingForStats();
-  const lookupName = sibling || exercise.name;
-
-  const lookupIsAssist = lookupName === "Bench Dips" || lookupName === "Assisted Pull-Ups";
+  const lookupIsAssist = exercise.name === "Bench Dips" || exercise.name === "Assisted Pull-Ups";
   const histByDate = {};
   (history || []).forEach(sess => {
     if (!sess.date) return;
-    const sets = (sess.sets || []).filter(st => st.exercise === lookupName && st.set_type === 'working');
+    const sets = (sess.sets || []).filter(st => st.exercise === exercise.name && st.set_type === 'working');
     if (!sets.length) return;
     let mo = lookupIsAssist ? -Infinity : 0, sv = 0, mw = lookupIsAssist ? -Infinity : 0, mr = 0;
     sets.forEach(st => {
       const w = +st.weight_lb || 0, r = parseInt(st.reps) || 0;
-      const orm = calcSet1RM(st.exercise || lookupName, w, r, st.bands_json);
+      const orm = calcSet1RM(st.exercise || exercise.name, w, r, st.bands_json);
       let bandSum = 0;
       if (lookupIsAssist && st.bands_json) {
         try {
@@ -157,10 +136,10 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
       .map(([date, v]) => ({ date, [key]: v }))
       .sort((a, b) => a.date.localeCompare(b.date));
   };
-  const ormHistRaw = mergeMetric((stat.orm || {})[lookupName], "orm");
-  const wtHist     = mergeMetric((stat.wt  || {})[lookupName], "wt");
-  const repsHist   = mergeMetric((stat.reps|| {})[lookupName], "reps");
-  const volHistRaw = mergeMetric((stat.vol || {})[lookupName], "vol");
+  const ormHistRaw = mergeMetric((stat.orm || {})[exercise.name], "orm");
+  const wtHist     = mergeMetric((stat.wt  || {})[exercise.name], "wt");
+  const repsHist   = mergeMetric((stat.reps|| {})[exercise.name], "reps");
+  const volHistRaw = mergeMetric((stat.vol || {})[exercise.name], "vol");
 
   let todayOrm = exercise.assist ? -Infinity : 0, todayVol = 0;
   (exercise.sets || []).forEach(s => {
@@ -187,10 +166,10 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   });
   const chartTodayDateStr = new Date(todayMs).toISOString().slice(0, 10);
 
-  const ormHist = (!sibling && todayOrm !== -Infinity)
+  const ormHist = (todayOrm !== -Infinity)
     ? [...ormHistRaw.filter(d => d.date !== chartTodayDateStr), { date: chartTodayDateStr, orm: todayOrm }]
     : ormHistRaw;
-  const volHist = (!sibling && todayVol > 0)
+  const volHist = (todayVol > 0)
     ? [...volHistRaw.filter(d => d.date !== chartTodayDateStr), { date: chartTodayDateStr, vol: todayVol }]
     : volHistRaw;
   const bestOrm = ormHist.length ? Math.max(...ormHist.map(d => d.orm !== undefined ? +d.orm : -Infinity)) : (exercise.assist ? -Infinity : 0);
@@ -250,15 +229,10 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
         </Section>
       )}
 
-      <Section label={sibling ? `PROGRESS · OVER LAST 30 DAYS · ${sibling.toUpperCase()}` : "PROGRESS · OVER LAST 30 DAYS"}>
-        {sibling && (
-          <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 9.5, marginBottom: 6, lineHeight: 1.4 }}>
-            {exercise.name} is new — showing your <span style={{ color: T.muted, fontWeight: 700 }}>{sibling}</span> history (same swap group).
-          </div>
-        )}
-        <Sparkline exerciseName={lookupName} data={ormHist} valueKey="orm" color="#60A5FA" label="1RM EST" fmt={v => `${Math.round(v)} lb`} showTip={showTip} hideTip={hideTip} />
-        <Sparkline exerciseName={lookupName} data={volHist} valueKey="vol" color="#34D399" label="VOLUME" fmt={v => `${Math.round(v).toLocaleString()} lb`} showTip={showTip} hideTip={hideTip} />
-        <PercentileProjectionSparkline exerciseName={lookupName} ormHistory={ormHist} color="#FBBF24" label="PROJECTED PERCENTILE (30D)" showTip={showTip} hideTip={hideTip} />
+      <Section label="PROGRESS · OVER LAST 30 DAYS">
+        <Sparkline exerciseName={exercise.name} data={ormHist} valueKey="orm" color="#60A5FA" label="1RM EST" fmt={v => `${Math.round(v)} lb`} showTip={showTip} hideTip={hideTip} />
+        <Sparkline exerciseName={exercise.name} data={volHist} valueKey="vol" color="#34D399" label="VOLUME" fmt={v => `${Math.round(v).toLocaleString()} lb`} showTip={showTip} hideTip={hideTip} />
+        <PercentileProjectionSparkline exerciseName={exercise.name} ormHistory={ormHist} color="#FBBF24" label="PROJECTED PERCENTILE (30D)" showTip={showTip} hideTip={hideTip} />
       </Section>
 
       {hasPRs && (
