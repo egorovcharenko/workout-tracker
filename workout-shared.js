@@ -107,7 +107,13 @@ const STRENGTH_STANDARDS = {
   "Barbell Back Squat": { beg: 95, nov: 135, int: 205, adv: 285, elite: 365 },
   "Barbell Deadlift": { beg: 135, nov: 185, int: 275, adv: 365, elite: 465 },
   "Incline Dumbbell Press": { beg: 25, nov: 40, int: 65, adv: 90, elite: 115 },
-  "Standing Overhead Press": { beg: 65, nov: 95, int: 135, adv: 175, elite: 225 }
+  "Standing Overhead Press": { beg: 65, nov: 95, int: 135, adv: 175, elite: 225 },
+  "Face Pulls": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 },
+  "Reverse Flyes": { beg: 10, nov: 20, int: 30, adv: 45, elite: 60 },
+  "Overhead Tricep Extension": { beg: 15, nov: 25, int: 45, adv: 65, elite: 85 },
+  "Lunges": { beg: 25, nov: 45, int: 70, adv: 100, elite: 130 },
+  "Calf Raises": { beg: 20, nov: 45, int: 75, adv: 110, elite: 150 },
+  "Band Torso Rotation": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 }
 };
 
 const WORKOUTS = [
