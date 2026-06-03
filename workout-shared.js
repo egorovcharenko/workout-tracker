@@ -146,11 +146,7 @@ const WORKOUTS = [
       { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", notes: "Bench at ~30°. Control the descent, press up and slightly back.", rest: 120 },
       { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
       { name: "Standing Overhead Press", sets: 3, reps: "6-8", notes: "Un-rack from the pins at shoulder height. Brace hard, press overhead, don't lean back. Ramp the warm-ups.", warmups: 1, rest: 120 },
-      { name: "Face Pull + Split Squat Superset", sets: 3, rest: 90, notes: "Alternate the two — rear delts while your legs recover. ~90s between rounds.",
-        supersetExercises: [
-          { name: "Face Pulls", reps: "15-20", equipment: "band", notes: "Anchor band at face height, pull toward your face, elbows high, squeeze the rear delts." },
-          { name: "Bulgarian Split Squat", reps: "10-15", video: "https://www.youtube.com/shorts/2C-uNgKwPLE", notes: "Rear foot on bench, DB in each hand — 10-15 per leg, controlled." },
-        ]},
+      { name: "Face Pulls", sets: 3, reps: "15-20", equipment: "band", notes: "Anchor band at face height, pull toward your face, elbows high, squeeze the rear delts.", rest: 60, noWarmup: true },
       { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
         supersetExercises: [
           { name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
