@@ -58,7 +58,7 @@ function VolumeBar({ exerciseName, muscle, events, isPrimary, showTip, hideTip }
     return {
       background: `hsla(${hue}, ${sat}%, ${light}%, ${alpha})`,
       boxShadow: isToday && ev.weightage === 1.0 ? `0 0 6px hsla(${hue}, ${sat}%, 60%, 0.5)` : "none",
-      border: ev.weightage < 1.0 ? "1px dashed rgba(255,255,255,0.4)" : "none",
+      border: "none",
     };
   };
 
