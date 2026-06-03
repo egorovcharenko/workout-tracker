@@ -145,7 +145,7 @@ const WORKOUTS = [
       { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", rest: 120 },
       { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", notes: "Bench at ~30°. Control the descent, press up and slightly back.", rest: 120 },
       { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
-      { name: "Standing Overhead Press", sets: 3, reps: "6-8", notes: "Un-rack from the pins at shoulder height. Brace hard, press overhead, don't lean back. Ramp the warm-ups.", warmups: 2, rest: 120 },
+      { name: "Standing Overhead Press", sets: 3, reps: "6-8", notes: "Un-rack from the pins at shoulder height. Brace hard, press overhead, don't lean back. Ramp the warm-ups.", warmups: 1, rest: 120 },
       { name: "Face Pull + Split Squat Superset", sets: 3, rest: 90, notes: "Alternate the two — rear delts while your legs recover. ~90s between rounds.",
         supersetExercises: [
           { name: "Face Pulls", reps: "15-20", equipment: "band", notes: "Anchor band at face height, pull toward your face, elbows high, squeeze the rear delts." },
@@ -409,7 +409,7 @@ const SWAP_GROUPS = [
   {
     family: "Overhead Press (Shoulders)",
     exercises: [
-      { name: "Standing Overhead Press", sets: 3, warmups: 2, reps: "6-8", notes: "From the rack, brace hard, press overhead, don't lean back.", rest: 120 },
+      { name: "Standing Overhead Press", sets: 3, warmups: 1, reps: "6-8", notes: "From the rack, brace hard, press overhead, don't lean back.", rest: 120 },
       { name: "Seated Overhead Press", sets: 3, reps: "8-12", notes: "Seated, controlled", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw", rest: 120, noWarmup: true },
     ]
   },
