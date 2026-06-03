@@ -195,12 +195,19 @@ function App() {
     let next = patchSet(eIdx, sIdx, { reps: r, completed: true });
 
     const ex = next[eIdx];
-    const kind = ex.sets[sIdx].kind;
     const inSuperset = !!ex.superset;
-    const partnerHasMore = inSuperset && next.some((e2, j) =>
-      j !== eIdx && e2.superset === ex.superset && e2.sets.some(s => !s.completed)
-    );
-    if (!partnerHasMore) {
+    let shouldRest = !inSuperset;
+    if (inSuperset) {
+      // In a superset, only trigger rest when a round (i.e. set sIdx across all non-skipped exercises in this superset) is completed
+      const isRoundEnd = next.every((e2) => {
+        if (e2.superset !== ex.superset || e2.skipped) return true;
+        const setAtIdx = e2.sets[sIdx];
+        return !setAtIdx || setAtIdx.completed;
+      });
+      shouldRest = isRoundEnd;
+    }
+
+    if (shouldRest) {
       let nextSet = null;
       const sameExNextIdx = ex.sets.findIndex((s, k) => k > sIdx && !s.completed);
       if (sameExNextIdx !== -1) {
@@ -690,7 +697,7 @@ function App() {
                   <div style={{ margin: "4px 16px 6px", display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ flex: 1, height: 1, background: "rgba(192,132,252,0.18)" }} />
                     <span style={{ color: T.bands, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1.2 }}>
-                      SUPERSET {ex.superset} · NO REST
+                      SUPERSET {ex.superset}
                     </span>
                     <div style={{ flex: 1, height: 1, background: "rgba(192,132,252,0.18)" }} />
                   </div>
@@ -698,7 +705,7 @@ function App() {
                 <ExerciseCard
                   exercise={ex}
                   supersetTag={supersetTag}
-                  rest={rest && rest.eIdx === i ? rest : null}
+                  rest={rest}
                   onRestAdd={restAdd}
                   onRestSkip={restSkip}
                   onRestToggle={restToggle}
