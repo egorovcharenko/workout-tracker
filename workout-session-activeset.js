@@ -59,36 +59,54 @@ function BarbellVisualizer({ weight, onWeightChange }) {
         justifyContent: "center",
         overflow: "hidden",
       }}>
-        {/* Steel Shaft */}
+        {/* Central Shaft */}
+        <div style={{
+          position: "absolute",
+          left: "35%",
+          right: "35%",
+          height: 4,
+          background: "linear-gradient(180deg, #94A3B8, #475569)",
+          borderRadius: 1,
+        }} />
+
+        {/* Left Sleeve (where plates go) */}
         <div style={{
           position: "absolute",
           left: "8%",
+          width: "27%",
+          height: 8,
+          background: "linear-gradient(180deg, #CBD5E1, #94A3B8)",
+          borderRadius: "2px 0 0 2px",
+        }} />
+
+        {/* Right Sleeve (where plates go) */}
+        <div style={{
+          position: "absolute",
           right: "8%",
-          height: 6,
-          background: "linear-gradient(180deg, #94A3B8, #475569)",
-          borderRadius: 3,
+          width: "27%",
+          height: 8,
+          background: "linear-gradient(180deg, #CBD5E1, #94A3B8)",
+          borderRadius: "0 2px 2px 0",
         }} />
 
         {/* Left Collar Sleeve Stop */}
         <div style={{
           position: "absolute",
           left: "35%",
-          width: 8,
-          height: 32,
-          background: "#64748B",
-          borderRadius: 2,
-          boxShadow: "1px 0 3px rgba(0,0,0,0.4)",
+          width: 3,
+          height: 16,
+          background: "#475569",
+          borderRadius: 1,
         }} />
 
         {/* Right Collar Sleeve Stop */}
         <div style={{
           position: "absolute",
           right: "35%",
-          width: 8,
-          height: 32,
-          background: "#64748B",
-          borderRadius: 2,
-          boxShadow: "-1px 0 3px rgba(0,0,0,0.4)",
+          width: 3,
+          height: 16,
+          background: "#475569",
+          borderRadius: 1,
         }} />
 
         {/* Left sleeve loaded plates (inside out: right to left) */}
