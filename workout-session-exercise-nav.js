@@ -22,7 +22,7 @@ function navSetDisplay(s, exercise) {
   return { lb: prevW || cur, reps: s.lastReps != null ? s.lastReps : null, state: "upcoming", preview: true, kind: s.kind };
 }
 
-function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise, variant }) {
+function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise, variant, isFinished }) {
   const [swapOpenIdx, setSwapOpenIdx] = useState(null);
   const [showAllFamilies, setShowAllFamilies] = useState(false);
 
@@ -146,6 +146,25 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
             </button>
           );
         })}
+        {isFinished && (
+          <button onClick={() => onSelect(null)} style={{
+            flex: "0 0 auto", width: 132, textAlign: "left",
+            padding: "8px 10px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
+            border: shownIdx === null ? `1px solid ${T.accentLight}` : `1px solid ${T.cardBorder}`,
+            background: shownIdx === null ? "rgba(96,165,250,0.14)" : "rgba(255,255,255,0.03)",
+            transition: "all 150ms ease",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
+              <span style={{ color: T.green, fontSize: 10, flexShrink: 0 }}>🎉</span>
+              <span style={{ marginLeft: "auto", fontFamily: T.mono, fontSize: 9, color: T.green }}>100%</span>
+            </div>
+            <div style={{
+              color: T.strong,
+              fontSize: 12, fontWeight: 700, lineHeight: 1.25,
+              minHeight: 30,
+            }}>Workout Summary</div>
+          </button>
+        )}
       </div>
     );
   }
@@ -374,6 +393,24 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
             </div>
           );
         })}
+        {isFinished && (
+          <div onClick={() => onSelect(null)} style={{
+            borderRadius: 12, overflow: "hidden",
+            border: shownIdx === null ? "1px solid rgba(96,165,250,0.6)" : `1px solid ${T.cardBorder}`,
+            background: shownIdx === null ? "rgba(96,165,250,0.10)" : "rgba(255,255,255,0.02)",
+            boxShadow: shownIdx === null ? "0 6px 22px -10px rgba(59,130,246,0.6)" : "none",
+            transition: "all 150ms ease",
+            cursor: "pointer",
+            padding: "11px 12px",
+            display: "flex",
+            alignItems: "center",
+            gap: 9
+          }}>
+            <span style={{ fontSize: 14 }}>🎉</span>
+            <span style={{ color: T.strong, fontSize: 14, fontWeight: 700, letterSpacing: -0.2 }}>Workout Summary</span>
+            <span style={{ marginLeft: "auto", fontFamily: T.mono, fontSize: 11, fontWeight: 800, color: T.green }}>100%</span>
+          </div>
+        )}
       </div>
     </div>
   );
