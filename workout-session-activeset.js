@@ -1,11 +1,11 @@
 function BarbellVisualizer({ weight, onWeightChange }) {
   const PLATE_COLORS = {
-    45: { bg: "#EF4444", text: "#FFFFFF" },
-    35: { bg: "#3B82F6", text: "#FFFFFF" },
-    25: { bg: "#EAB308", text: "#1E293B" },
-    15: { bg: "#F97316", text: "#FFFFFF" },
-    10: { bg: "#10B981", text: "#FFFFFF" },
-    5: { bg: "#6B7280", text: "#FFFFFF" },
+    45: { bg: "#3B82F6", text: "#FFFFFF" }, // blue
+    35: { bg: "#EAB308", text: "#1E293B" }, // yellow
+    25: { bg: "#10B981", text: "#FFFFFF" }, // green
+    15: { bg: "#F97316", text: "#FFFFFF" }, // orange
+    10: { bg: "#F8FAFC", text: "#1E293B" }, // white
+    5: { bg: "#6B7280", text: "#FFFFFF" },  // grey
   };
 
   const PLATE_SIZES = [45, 35, 25, 15, 10, 5];
