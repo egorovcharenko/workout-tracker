@@ -406,7 +406,7 @@ const SWAP_GROUPS = [
   {
     family: "Chest Press (Push)",
     exercises: [
-      { name: "Barbell Bench Press", sets: 4, warmups: 3, reps: "6-8", notes: "Lower the bar to your mid-chest, drive up. Keep feet flat on the floor.", equipment: "barbell", rest: 120 },
+      { name: "Barbell Bench Press", sets: 4, warmups: 1, reps: "6-8", notes: "Lower the bar to your mid-chest, drive up. Keep feet flat on the floor.", equipment: "barbell", rest: 120 },
       { name: "Dumbbell Flat Bench Press", sets: 4, reps: "8-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
       { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", notes: "Bench at ~30°. Control the descent, press up and slightly back.", rest: 120 },
     ]
