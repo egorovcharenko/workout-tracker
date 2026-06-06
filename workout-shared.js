@@ -66,6 +66,7 @@ const EXERCISE_MUSCLES = {
   "Goblet Squat": { primary: ["quads", "glutes"], secondary: ["core"], ratios: { quads: 1.0, glutes: 1.0, core: 0.3 } },
   "Bulgarian Split Squat": { primary: ["quads", "glutes"], secondary: ["hamstrings", "core"], ratios: { quads: 1.0, glutes: 1.0, hamstrings: 0.4, core: 0.2 } },
   "Dumbbell Flat Bench Press": { primary: ["chest"], secondary: ["triceps", "shoulders"], ratios: { chest: 1.0, triceps: 0.4, shoulders: 0.4 } },
+  "Barbell Bench Press": { primary: ["chest"], secondary: ["triceps", "shoulders"], ratios: { chest: 1.0, triceps: 0.4, shoulders: 0.4 } },
   "Dumbbell Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.5 } },
   "Seated Overhead Press": { primary: ["shoulders"], secondary: ["triceps"], ratios: { shoulders: 1.0, triceps: 0.4 } },
   "Band Squat": { primary: ["quads", "glutes"], secondary: ["core"], ratios: { quads: 1.0, glutes: 1.0, core: 0.3 } },
@@ -86,6 +87,7 @@ const EXERCISE_MUSCLES = {
 
 const STRENGTH_STANDARDS = {
   "Dumbbell Flat Bench Press": { beg: 25, nov: 45, int: 70, adv: 95, elite: 120 },
+  "Barbell Bench Press": { beg: 95, nov: 135, int: 185, adv: 225, elite: 315 },
   "Single-Arm Dumbbell Rows": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
   "Dumbbell Bent-Over Rows": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
   "Overhead Dumbbell Press": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
@@ -404,6 +406,7 @@ const SWAP_GROUPS = [
   {
     family: "Chest Press (Push)",
     exercises: [
+      { name: "Barbell Bench Press", sets: 4, warmups: 3, reps: "6-8", notes: "Lower the bar to your mid-chest, drive up. Keep feet flat on the floor.", equipment: "barbell", rest: 120 },
       { name: "Dumbbell Flat Bench Press", sets: 4, reps: "8-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
       { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", notes: "Bench at ~30°. Control the descent, press up and slightly back.", rest: 120 },
     ]

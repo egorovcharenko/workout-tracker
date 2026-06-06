@@ -267,8 +267,7 @@ function App() {
       });
     }, 350);
 
-    setExercises(next);
-    queueSave(next, sessionId, startedAt, elapsed);
+    updateAndSave(next);
     // AI motivation messages are disabled for now (the UI surface was removed),
     // so we no longer fire requestMotivation on exercise completion.
   };

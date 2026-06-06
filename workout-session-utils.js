@@ -258,7 +258,7 @@ function hydrateToday(exercises, todaySets) {
   });
   const next = exercises.map(ex => ({
     ...ex,
-    sets: ex.sets.map(s => ({ ...s, completed: false, active: false }))
+    sets: ex.sets.map(s => ({ ...s, active: false }))
   }));
   if (todaySets && todaySets.length) {
     todaySets.forEach(row => {
