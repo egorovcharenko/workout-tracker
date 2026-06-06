@@ -126,7 +126,7 @@ const WORKOUTS = [
     rest: 90,
     warmup: "Empty-bar squats + arm circles, then ramp the bar",
     exercises: [
-      { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", notes: "Bar on upper back. Set the rack safety pins at the bottom of your range so you can bail a missed rep. Brace, sit between your hips, drive up. Ramp the warm-up sets.", rest: 120 },
+      { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", notes: "Bar on upper back. Set the rack safety pins at the bottom of your range so you can bail a missed rep. Brace, sit between your hips, drive up. Ramp the warm-up sets.", equipment: "barbell", rest: 120 },
       { name: "Dumbbell Flat Bench Press", sets: 4, reps: "8-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
       { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", notes: "Each side, brace on bench", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
       { name: "Seated Overhead Press", sets: 3, reps: "8-12", notes: "Seated, controlled", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw", rest: 120, noWarmup: true },
@@ -148,10 +148,10 @@ const WORKOUTS = [
     rest: 90,
     warmup: "Light hinges + band pull-aparts, then ramp the bar",
     exercises: [
-      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", rest: 120 },
+      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", equipment: "barbell", rest: 120 },
       { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", notes: "Bench at ~30°. Control the descent, press up and slightly back.", rest: 120 },
       { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
-      { name: "Standing Overhead Press", sets: 3, reps: "6-8", notes: "Un-rack from the pins at shoulder height. Brace hard, press overhead, don't lean back. Ramp the warm-ups.", warmups: 1, rest: 120 },
+      { name: "Standing Overhead Press", sets: 3, reps: "6-8", notes: "Un-rack from the pins at shoulder height. Brace hard, press overhead, don't lean back. Ramp the warm-ups.", equipment: "barbell", warmups: 1, rest: 120 },
       { name: "Face Pulls", sets: 3, reps: "15-20", equipment: "band", notes: "Anchor band at face height, pull toward your face, elbows high, squeeze the rear delts.", rest: 60, noWarmup: true },
       { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
         supersetExercises: [
@@ -385,7 +385,7 @@ const SWAP_GROUPS = [
   {
     family: "Deadlifts & Hinge (Posterior)",
     exercises: [
-      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", rest: 120 },
+      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", equipment: "barbell", rest: 120 },
       { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "8-12", notes: "Hinge at hips, slight knee bend", video: "https://www.youtube.com/shorts/cGMaBqaExBo", rest: 120, noWarmup: true },
       { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
       { name: "Single-Leg DB RDL", sets: 3, reps: "8", notes: "One DB in each hand, rear leg lifts as you hinge — slow tempo, 8 per leg. Warmup 1 set @ ~20lb, work @ ~30lb.", rest: 120 },
@@ -394,7 +394,7 @@ const SWAP_GROUPS = [
   {
     family: "Squats & Quads (Legs)",
     exercises: [
-      { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", notes: "Bar on upper back. Set the rack safety pins at the bottom of your range so you can bail a missed rep. Brace, sit between your hips, drive up. Ramp the warm-up sets.", rest: 120 },
+      { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", notes: "Bar on upper back. Set the rack safety pins at the bottom of your range so you can bail a missed rep. Brace, sit between your hips, drive up. Ramp the warm-up sets.", equipment: "barbell", rest: 120 },
       { name: "Bulgarian Split Squat", sets: 3, warmups: 2, reps: "8-10", notes: "Rear foot on bench, DB in each hand — 8-10 per leg, controlled. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/2C-uNgKwPLE", bandAddon: true, rest: 120 },
       { name: "Goblet Squat", sets: 3, warmups: 2, reps: "10-12", notes: "Hold DB at chest, sit deep. Optional: stand on bands for extra resistance.", video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, rest: 120 },
       { name: "Band Squat", sets: 3, warmups: 2, reps: "12-15", notes: "Stand on band, handles at shoulders", video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" },
@@ -411,7 +411,7 @@ const SWAP_GROUPS = [
   {
     family: "Overhead Press (Shoulders)",
     exercises: [
-      { name: "Standing Overhead Press", sets: 3, warmups: 1, reps: "6-8", notes: "From the rack, brace hard, press overhead, don't lean back.", rest: 120 },
+      { name: "Standing Overhead Press", sets: 3, warmups: 1, reps: "6-8", notes: "From the rack, brace hard, press overhead, don't lean back.", equipment: "barbell", rest: 120 },
       { name: "Seated Overhead Press", sets: 3, reps: "8-12", notes: "Seated, controlled", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw", rest: 120, noWarmup: true },
     ]
   },

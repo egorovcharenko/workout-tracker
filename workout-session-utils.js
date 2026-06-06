@@ -106,6 +106,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
           isBandsOnly: subIsBandOnly,
           bandAddon: !!sub.bandAddon,
           assist: subIsAssist,
+          isBarbell: sub.equipment === "barbell" || sub.name.includes("Barbell") || sub.name === "Standing Overhead Press",
           session: ex.session || null,
           sets,
         });
@@ -189,6 +190,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
         isBandsOnly: isBandOnly,
         bandAddon: !!ex.bandAddon,
         assist: isAssist,
+        isBarbell: ex.equipment === "barbell" || ex.name.includes("Barbell") || ex.name === "Standing Overhead Press",
         session: ex.session || null,
         sets,
       });
@@ -236,7 +238,8 @@ function buildSet({ kind, idx, template, last, setNumber, saveExerciseName, isAs
     set.bands = (set.lastBands || []).slice();
     set.bandsOnly = true;
   } else {
-    set.weight = set.lastWeight || 0;
+    const isBarbell = template.equipment === "barbell" || template.name.includes("Barbell") || template.name === "Standing Overhead Press";
+    set.weight = set.lastWeight || (isBarbell ? 45 : 0);
     set.bands = template.bandAddon ? (set.lastBands || []).slice() : [];
     if (template.grips) set.grip = set.lastGrip || template.grips[0];
   }
