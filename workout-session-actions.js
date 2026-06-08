@@ -252,6 +252,22 @@ function useWorkoutActions({
     });
   };
 
+  const onAddExercise = (name) => {
+    const base = {
+      name, sets: 3, reps: "8-12", notes: "Added from library.",
+      equipment: name.toLowerCase().includes("barbell") ? "barbell" : name.toLowerCase().includes("band") ? "band" : "dumbbell",
+    };
+    const newEx = {
+      ...window.flattenTemplate({ exercises: [base] }, {}, dataRef.current.hints || {})[0],
+      id: `${exercises.length}-${Date.now()}`,
+      templateExIdx: exercises.length,
+      customAdded: true,
+    };
+    if (newEx.sets.length) newEx.sets[0].active = true;
+    const next = [...exercises.map(ex => ({ ...ex, sets: ex.sets.map(s => ({ ...s, active: false })) })), newEx];
+    updateAndSave(next);
+  };
+
   return {
     onPickWeight,
     onPickBodyweight,
@@ -267,7 +283,8 @@ function useWorkoutActions({
     onAddSet,
     onRemoveSet,
     onRemoveWarmup,
-    onFinishWorkout
+    onFinishWorkout,
+    onAddExercise
   };
 }
 

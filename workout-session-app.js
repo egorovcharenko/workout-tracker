@@ -1,18 +1,14 @@
 function App() {
   const [workoutId, setWorkoutId] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    const fromUrl = params.get("w");
-    if (fromUrl && WORKOUTS.some(w => w.id === fromUrl)) return fromUrl;
-    return (WORKOUTS.find(w => w.main) || WORKOUTS[0]).id;
+    const fromUrl = new URLSearchParams(window.location.search).get("w");
+    return (fromUrl && WORKOUTS.some(w => w.id === fromUrl)) ? fromUrl : (WORKOUTS.find(w => w.main) || WORKOUTS[0]).id;
   });
   const workout = useMemo(() => WORKOUTS.find(w => w.id === workoutId) || WORKOUTS[0], [workoutId]);
 
   const onPickWorkout = (id) => {
     if (id === workoutId) return;
-    const url = new URL(window.location.href);
-    url.searchParams.set("w", id);
-    window.history.replaceState({}, "", url);
-    setWorkoutId(id);
+    const url = new URL(window.location.href); url.searchParams.set("w", id);
+    window.history.replaceState({}, "", url); setWorkoutId(id);
   };
 
   const [exercises, setExercises] = useState([]);
@@ -205,6 +201,7 @@ function App() {
       currentIdx={currentIdx}
       onSelect={onSelectExercise}
       onSwapExercise={actions.onSwapExercise}
+      onAddExercise={actions.onAddExercise}
       variant={variant}
       isFinished={isFinished}
     />

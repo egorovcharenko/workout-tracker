@@ -3,9 +3,10 @@
 // Tapping a row focuses that exercise in the center column; the App's onSelect
 // also activates the exercise's next set so you can log it.
 
-function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise, variant, isFinished }) {
+function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise, onAddExercise, variant, isFinished }) {
   const [swapOpenIdx, setSwapOpenIdx] = useState(null);
   const [showAllFamilies, setShowAllFamilies] = useState(false);
+  const [showAddLibrary, setShowAddLibrary] = useState(false);
 
   useEffect(() => {
     setShowAllFamilies(false);
@@ -74,6 +75,44 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
               minHeight: 30,
             }}>Workout Summary</div>
           </button>
+        )}
+        {!showAddLibrary ? (
+          <button onClick={() => setShowAddLibrary(true)} style={{
+            flex: "0 0 auto", width: 132, textAlign: "center",
+            padding: "8px 10px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
+            border: `1px dashed rgba(96,165,250,0.4)`,
+            background: "rgba(96,165,250,0.03)",
+            color: T.accentLight, fontWeight: 700, fontSize: 12,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+            minHeight: 52
+          }}>
+            <span>＋ Add</span>
+            <span style={{ fontSize: 9, opacity: 0.8 }}>from Library</span>
+          </button>
+        ) : (
+          <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 6 }}>
+            <select onChange={(e) => {
+              const name = e.target.value;
+              if (name) {
+                onAddExercise(name);
+                setShowAddLibrary(false);
+              }
+            }} defaultValue="" style={{
+              padding: "8px 6px", borderRadius: 8,
+              border: `1px solid ${T.cardBorder}`, background: T.page,
+              color: T.strong, fontSize: 11, cursor: "pointer", maxWidth: 140
+            }}>
+              <option value="" disabled>-- Select --</option>
+              {Object.keys(window.EXERCISE_MUSCLES || {}).sort().map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+            <button onClick={() => setShowAddLibrary(false)} style={{
+              padding: "8px 10px", borderRadius: 8,
+              border: `1px solid ${T.cardBorder}`, background: "rgba(255,255,255,0.03)",
+              color: T.muted, fontSize: 11, cursor: "pointer"
+            }}>×</button>
+          </div>
         )}
       </div>
     );
@@ -199,6 +238,44 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
             <span style={{ marginLeft: "auto", fontFamily: T.mono, fontSize: 11, fontWeight: 800, color: T.green }}>100%</span>
           </div>
         )}
+        <div style={{ marginTop: 12, borderTop: `1px solid ${T.cardBorder}`, paddingTop: 12 }}>
+          {!showAddLibrary ? (
+            <button onClick={() => setShowAddLibrary(true)} style={{
+              width: "100%", padding: "10px 12px", borderRadius: 12,
+              border: `1px dashed rgba(96,165,250,0.4)`, background: "rgba(96,165,250,0.03)",
+              color: T.accentLight, fontWeight: 700, fontSize: 13, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              transition: "all 150ms ease"
+            }}>
+              <span>＋</span> Add Exercise from Library
+            </button>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 10, color: T.faint, fontWeight: 800, fontFamily: T.mono }}>SELECT EXERCISE</div>
+              <select onChange={(e) => {
+                const name = e.target.value;
+                if (name) {
+                  onAddExercise(name);
+                  setShowAddLibrary(false);
+                }
+              }} defaultValue="" style={{
+                width: "100%", padding: "8px 10px", borderRadius: 8,
+                border: `1px solid ${T.cardBorder}`, background: T.page,
+                color: T.strong, fontSize: 12, cursor: "pointer"
+              }}>
+                <option value="" disabled>-- Choose an exercise --</option>
+                {Object.keys(window.EXERCISE_MUSCLES || {}).sort().map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <button onClick={() => setShowAddLibrary(false)} style={{
+                width: "100%", padding: "6px 10px", borderRadius: 8,
+                border: `1px solid ${T.cardBorder}`, background: "rgba(255,255,255,0.03)",
+                color: T.muted, fontSize: 11, cursor: "pointer"
+              }}>Cancel</button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
