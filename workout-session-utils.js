@@ -29,7 +29,7 @@ const api = {
 
 function flattenTemplate(workout, lastSessionMap, hintsMap) {
   hintsMap = hintsMap || {};
-  const lookupLast = (key) => lastSessionMap[key] || hintsMap[key] || null;
+  const lookupLast = (key) => hintsMap[key] || lastSessionMap[key] || null;
   const exerciseGripCache = {};
   const lookupExerciseGrip = (exName) => {
     if (exerciseGripCache[exName] !== undefined) return exerciseGripCache[exName];
@@ -41,10 +41,10 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
         if (n === exName && (!kindFilter || kind === kindFilter) && src[k].grip) found = src[k].grip;
       });
     };
-    scan(lastSessionMap, "working");
     scan(hintsMap, "working");
-    scan(lastSessionMap, "warmup");
+    scan(lastSessionMap, "working");
     scan(hintsMap, "warmup");
+    scan(lastSessionMap, "warmup");
     exerciseGripCache[exName] = found;
     return found;
   };
@@ -59,7 +59,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
       subs.forEach((sub, subIdx) => {
         const sets = [];
         const subWorkingBySetNum = {};
-        [hintsMap, lastSessionMap].forEach(src => {
+        [lastSessionMap, hintsMap].forEach(src => {
           Object.keys(src || {}).forEach(k => {
             const [exName, kind, setNumStr] = k.split("|");
             if (exName === sub.name && kind === "working") {
@@ -116,7 +116,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
       if (!ex.noWarmup) {
         const warmupCount = Math.max(1, ex.warmups || 1);
         const warmupLastBySetNum = {};
-        [hintsMap, lastSessionMap].forEach(src => {
+        [lastSessionMap, hintsMap].forEach(src => {
           Object.keys(src || {}).forEach(k => {
             const [exName, kind, setNumStr] = k.split("|");
             if (exName === ex.name && kind === "warmup") {
@@ -146,7 +146,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
         }
       }
       const workingLastBySetNum = {};
-      [hintsMap, lastSessionMap].forEach(src => {
+      [lastSessionMap, hintsMap].forEach(src => {
         Object.keys(src || {}).forEach(k => {
           const [exName, kind, setNumStr] = k.split("|");
           if (exName === ex.name && kind === "working") {
