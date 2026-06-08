@@ -16,7 +16,7 @@ too heavy to run both days, so each owns one day.
 
 ## Workout B — Deadlift Day
 1. **Barbell Deadlift** — 3×3–5  *(3 warm-up ramp sets; reset each rep)*
-2. **Incline Dumbbell Press** — 4×8–12
+2. **Incline Barbell Press** — 4×6–8  *(1 warm-up set; bench at ~30°)*
 3. **Assisted Pull-Ups** — 4×5–8
 4. **Standing Overhead Press** — 3×6–8  *(from the rack; 2 warm-ups)*
 5. **Superset** — Face Pulls + Bulgarian Split Squat — 3 rounds  *(rear delts + quads)*

@@ -12,6 +12,17 @@ import os
 import urllib.parse
 import datetime
 
+# --- load .env.local if present for local development ---
+ENV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.local")
+if os.path.exists(ENV_FILE):
+    with open(ENV_FILE) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k, v.strip().strip('"').strip("'"))
+
 PORT = int(os.environ.get("PORT", "8000"))
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workouts.db")
 

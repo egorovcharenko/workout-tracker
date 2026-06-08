@@ -84,7 +84,7 @@ const WORKOUTS = [
     warmup: "Light hinges + band pull-aparts, then ramp the bar",
     exercises: [
       { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "3-5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", equipment: "barbell", rest: 120 },
-      { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", notes: "Bench at ~30°. Control the descent, press up and slightly back.", rest: 120 },
+      { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "6-8", notes: "Bench at ~30°. Lower the bar under control to your upper chest, press up and slightly back.", equipment: "barbell", rest: 120 },
       { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
       { name: "Standing Overhead Press", sets: 3, reps: "6-8", notes: "Un-rack from the pins at shoulder height. Brace hard, press overhead, don't lean back. Ramp the warm-ups.", equipment: "barbell", warmups: 1, rest: 120 },
       { name: "Face Pulls", sets: 3, reps: "15-20", equipment: "band", notes: "Anchor band at face height, pull toward your face, elbows high, squeeze the rear delts.", rest: 60, noWarmup: true },
@@ -199,6 +199,7 @@ const SWAP_GROUPS = [
     family: "Chest Press (Push)",
     exercises: [
       { name: "Barbell Bench Press", sets: 4, warmups: 1, reps: "6-8", notes: "Lower the bar to your mid-chest, drive up. Keep feet flat on the floor.", equipment: "barbell", rest: 120 },
+      { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "6-8", notes: "Bench at ~30°. Lower the bar under control to your upper chest, press up and slightly back.", equipment: "barbell", rest: 120 },
       { name: "Dumbbell Flat Bench Press", sets: 4, reps: "8-12", notes: "Control the descent", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 },
       { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", notes: "Bench at ~30°. Control the descent, press up and slightly back.", rest: 120 },
     ]
