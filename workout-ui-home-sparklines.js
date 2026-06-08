@@ -20,6 +20,8 @@ function sparkTip(evt, text, sticky) {
 }
 if (typeof window !== 'undefined') window.sparkTip = sparkTip;
 
+const mmdd = (d) => { const p = String(d || '').split('-'); return p.length === 3 ? `${p[1]}/${p[2]}` : (d || ''); };
+
 function microSparkline(vals, color) {
   if (!vals || vals.length < 2) return '';
   const max = Math.max(...vals), min = Math.min(...vals), range = max - min || 1;
@@ -37,12 +39,7 @@ function microSparkline(vals, color) {
 function renderSparkline(pts, color, startMs, endMs) {
   if (pts.length === 0) return '';
 
-  const w = 150;
-  const h = 50;
-  const padLeft = 28;
-  const padRight = 6;
-  const padTop = 6;
-  const padBottom = 12;
+  const w = 150, h = 50, padLeft = 28, padRight = 6, padTop = 6, padBottom = 12;
 
   const percentiles = pts.map(p => p.percentile);
   const minP = Math.min(...percentiles);
@@ -85,12 +82,7 @@ function renderSparkline(pts, color, startMs, endMs) {
   }).join('');
 
   const dayMs = 24 * 3600 * 1000;
-  const weekMarks = [
-    { day: 7, label: 'W1', ms: startMs + 6 * dayMs },
-    { day: 14, label: 'W2', ms: startMs + 13 * dayMs },
-    { day: 21, label: 'W3', ms: startMs + 20 * dayMs },
-    { day: 28, label: 'W4', ms: startMs + 27 * dayMs }
-  ];
+  const weekMarks = Array.from({length: 8}, (_, i) => ({ label: `W${i + 1}`, ms: startMs + (i * 7 + 6) * dayMs }));
 
   const weekLines = weekMarks
     .filter(mark => mark.ms <= endMs)
@@ -108,7 +100,10 @@ function renderSparkline(pts, color, startMs, endMs) {
   if (pts.length === 1) {
     const x = getX(pts[0].ms);
     const y = getY(pts[0].percentile);
-    dotsHTML = `<circle cx="${x}" cy="${y}" r="2.5" fill="${color}" />`;
+    const tip = `${mmdd(pts[0].date)} · ${Math.round(pts[0].orm)} lb · ${Math.round(pts[0].percentile)}% (${pts[0].tier})`.replace(/'/g, "\\'");
+    dotsHTML = `<circle cx="${x}" cy="${y}" r="2.5" fill="${color}" />`
+      + `<circle cx="${x}" cy="${y}" r="7" fill="transparent" style="cursor:pointer"
+         onmouseenter="sparkTip(event,'${tip}')" onmouseleave="sparkTip()" onclick="sparkTip(event,'${tip}',true)"></circle>`;
   } else {
     const pathD = pts.map((p, idx) => {
       const x = getX(p.ms);
@@ -120,12 +115,15 @@ function renderSparkline(pts, color, startMs, endMs) {
     dotsHTML = pts.map(p => {
       const x = getX(p.ms);
       const y = getY(p.percentile);
-      return `<circle cx="${x}" cy="${y}" r="2" fill="${color}" />`;
+      const tip = `${mmdd(p.date)} · ${Math.round(p.orm)} lb · ${Math.round(p.percentile)}% (${p.tier})`.replace(/'/g, "\\'");
+      return `<circle cx="${x}" cy="${y}" r="2" fill="${color}" />`
+        + `<circle cx="${x}" cy="${y}" r="7" fill="transparent" style="cursor:pointer"
+           onmouseenter="sparkTip(event,'${tip}')" onmouseleave="sparkTip()" onclick="sparkTip(event,'${tip}',true)"></circle>`;
     }).join('');
   }
 
   return `
-    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;">
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;overflow:visible">
       ${gridLines}
       ${weekLines}
       ${pathHTML}
@@ -134,51 +132,65 @@ function renderSparkline(pts, color, startMs, endMs) {
   `;
 }
 
-function renderMeasurementSparkline(vals, color, direction) {
-  if (vals.length === 0) return '';
-  const w = 150;
-  const h = 50;
-  const padLeft = 28;
-  const padRight = 6;
-  const padTop = 6;
-  const padBottom = 12;
+function renderMeasurementSparkline(pts, color, startMs, endMs, unit) {
+  if (pts.length === 0) return '';
+  const w = 150, h = 50, padLeft = 28, padRight = 6, padTop = 6, padBottom = 12;
 
+  const vals = pts.map(p => p.value);
   const max = Math.max(...vals), min = Math.min(...vals), range = max - min || 1;
-  const getX = (idx) => padLeft + (idx / Math.max(1, vals.length - 1)) * (w - padLeft - padRight);
+  const getX = (ms) => {
+    const r = endMs - startMs || 1;
+    return padLeft + ((ms - startMs) / r) * (w - padLeft - padRight);
+  };
   const getY = (v) => (h - padBottom) - ((v - min) / range) * (h - padBottom - padTop);
 
   const gridLines = `
     <line x1="${padLeft}" y1="${padTop}" x2="${w - padRight}" y2="${padTop}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="2,2" />
-    <text x="${padLeft - 4}" y="${padTop + 3.5}" font-size="8px" fill="#6b7280" text-anchor="end">${max.toFixed(0)}</text>
+    <text x="${padLeft - 4}" y="${padTop + 3.5}" font-size="8px" fill="#6b7280" text-anchor="end">${max.toFixed(1)}</text>
     <line x1="${padLeft}" y1="${h - padBottom}" x2="${w - padRight}" y2="${h - padBottom}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="2,2" />
-    <text x="${padLeft - 4}" y="${h - padBottom + 3.5}" font-size="8px" fill="#6b7280" text-anchor="end">${min.toFixed(0)}</text>
+    <text x="${padLeft - 4}" y="${h - padBottom + 3.5}" font-size="8px" fill="#6b7280" text-anchor="end">${min.toFixed(1)}</text>
   `;
+
+  const dayMs = 24 * 3600 * 1000;
+  const weekMarks = Array.from({length: 8}, (_, i) => ({ label: `W${i + 1}`, ms: startMs + (i * 7 + 6) * dayMs }));
+
+  const weekLines = weekMarks
+    .filter(mark => mark.ms <= endMs)
+    .map(mark => {
+      const x = getX(mark.ms);
+      return `
+        <line x1="${x}" y1="${padTop}" x2="${x}" y2="${h - padBottom}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="2,2" />
+        <text x="${x}" y="${h - 2}" font-size="7px" fill="#9ca3af" text-anchor="middle">${mark.label}</text>
+      `;
+    }).join('');
 
   let pathHTML = '';
   let dotsHTML = '';
 
-  if (vals.length === 1) {
-    const x = getX(0);
-    const y = getY(vals[0]);
-    dotsHTML = `<circle cx="${x}" cy="${y}" r="2.5" fill="${color}" />`;
+  if (pts.length === 1) {
+    const x = getX(pts[0].ms);
+    const y = getY(pts[0].value);
+    const tip = `${mmdd(pts[0].date)} · ${pts[0].value.toFixed(1)} ${unit}`.replace(/'/g, "\\'");
+    dotsHTML = `<circle cx="${x}" cy="${y}" r="2.5" fill="${color}" />`
+      + `<circle cx="${x}" cy="${y}" r="7" fill="transparent" style="cursor:pointer"
+         onmouseenter="sparkTip(event,'${tip}')" onmouseleave="sparkTip()" onclick="sparkTip(event,'${tip}',true)"></circle>`;
   } else {
-    const pathD = vals.map((v, idx) => {
-      const x = getX(idx);
-      const y = getY(v);
-      return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
-    }).join(' ');
-
+    const pathD = pts.map(p => `L ${getX(p.ms)} ${getY(p.value)}`).join(' ').replace(/^L/, 'M');
     pathHTML = `<path d="${pathD}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />`;
-    dotsHTML = vals.map((v, idx) => {
-      const x = getX(idx);
-      const y = getY(v);
-      return `<circle cx="${x}" cy="${y}" r="2" fill="${color}" />`;
+    dotsHTML = pts.map(p => {
+      const x = getX(p.ms);
+      const y = getY(p.value);
+      const tip = `${mmdd(p.date)} · ${p.value.toFixed(1)} ${unit}`.replace(/'/g, "\\'");
+      return `<circle cx="${x}" cy="${y}" r="2" fill="${color}" />`
+        + `<circle cx="${x}" cy="${y}" r="7" fill="transparent" style="cursor:pointer"
+           onmouseenter="sparkTip(event,'${tip}')" onmouseleave="sparkTip()" onclick="sparkTip(event,'${tip}',true)"></circle>`;
     }).join('');
   }
 
   return `
-    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;">
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;overflow:visible">
       ${gridLines}
+      ${weekLines}
       ${pathHTML}
       ${dotsHTML}
     </svg>

@@ -3,20 +3,18 @@ function renderPercentilesCard() {
   const offset = state.percentilesMonthOffset || 0;
   const measurements = state.measurements || [];
   const sortedMeasAsc = [...measurements].sort((a, b) => (a.taken_at || '').localeCompare(b.taken_at || ''));
-  const latestMeas = measurements[0];
-  const prevMeas = measurements[1];
 
   const endDate = new Date();
-  endDate.setDate(endDate.getDate() + offset * 30);
+  endDate.setDate(endDate.getDate() + offset * 60);
   const endMs = endDate.setHours(23, 59, 59, 999);
   
   const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - 30);
+  startDate.setDate(startDate.getDate() - 60);
   const startMs = startDate.setHours(0, 0, 0, 0);
   
-  let timeLabel = "Last 30 Days";
-  if (offset === -1) timeLabel = "Previous 30 Days";
-  else if (offset < -1) timeLabel = `${Math.abs(offset - 1) * 30} - ${Math.abs(offset) * 30} Days Ago`;
+  let timeLabel = "Last 60 Days";
+  if (offset === -1) timeLabel = "Previous 60 Days";
+  else if (offset < -1) timeLabel = `${Math.abs(offset - 1) * 60} - ${Math.abs(offset) * 60} Days Ago`;
   
   const exerciseDates = {};
 
@@ -111,7 +109,7 @@ function renderPercentilesCard() {
       exercises: groupExercises,
       metrics: groupMetrics
     };
-  }).filter(g => g.exercises.length > 0 || g.metrics.some(m => sortedMeasAsc.map(e => e[m.id]).filter(v => v != null).length > 0));
+  }).filter(g => g.exercises.length > 0 || g.metrics.some(m => sortedMeasAsc.some(e => e[m.id] != null && Date.parse((e.taken_at || e.date || '').replace(' ', 'T')) >= startMs && Date.parse((e.taken_at || e.date || '').replace(' ', 'T')) <= endMs)));
 
   let rowsHTML = '';
   if (groupData.length === 0) {
@@ -122,11 +120,15 @@ function renderPercentilesCard() {
   } else {
     rowsHTML = groupData.map(g => {
       const renderedMetrics = g.metrics.map(m => {
-        const vals = sortedMeasAsc.map(e => e[m.id]).filter(v => v != null);
-        if (!vals.length) return '';
-        const v = latestMeas?.[m.id];
-        const pv = prevMeas?.[m.id];
+        const pts = sortedMeasAsc.map(e => {
+          const d = e.taken_at || e.date || '';
+          return { date: d.slice(0, 10), ms: Date.parse(d.replace(' ', 'T') || 0), value: e[m.id] };
+        }).filter(p => p.value != null && p.ms >= startMs && p.ms <= endMs);
+        if (!pts.length) return '';
+        const v = pts[pts.length - 1].value;
+        const pv = pts.length > 1 ? pts[0].value : null;
         const delta = _measurementDelta(v, pv, m.direction);
+        const vals = pts.map(p => p.value);
         const range = vals.length > 1 ? `${Math.min(...vals).toFixed(1)} → ${Math.max(...vals).toFixed(1)}` : `${vals[0].toFixed(1)}`;
         const unit = m.unit || 'cm';
 
@@ -135,7 +137,7 @@ function renderPercentilesCard() {
           ? `<span style="font-size:10px;font-weight:700;color:${diffColor};width:42px;text-align:right;flex-shrink:0">${delta.sign}${Math.abs(delta.d).toFixed(1)}</span>`
           : `<span style="font-size:10px;font-weight:700;color:#9ca3af;width:42px;text-align:right;flex-shrink:0;opacity:0.25">-</span>`;
 
-        const sparklineHTML = renderMeasurementSparkline(vals, m.color, m.direction);
+        const sparklineHTML = renderMeasurementSparkline(pts, m.color, startMs, endMs, unit);
 
         return `
           <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:8px;border:1px solid #f3f4f6;background:#ffffff;border-radius:8px;gap:12px">
