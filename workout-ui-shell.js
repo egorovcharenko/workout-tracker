@@ -58,10 +58,6 @@ let state = {
   exerciseNotes: {},
   editingNote: null,
 };
-
-let timerInterval = null;
-let restInterval = null;
-
 function formatTime(s) { return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`; }
 
 function startWorkout(w) {

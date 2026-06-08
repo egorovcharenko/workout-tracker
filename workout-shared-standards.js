@@ -122,10 +122,39 @@ function getStrengthPercentile(exerciseName, weight1RM) {
   }
 }
 
+function applySwaps(workout, swapMap) {
+  if (!swapMap || !Object.keys(swapMap).length) return workout;
+  return {
+    ...workout,
+    exercises: workout.exercises.map((ex, idx) => {
+      const topWant = swapMap[`${idx}`];
+      if (topWant && topWant !== ex.name) {
+        const repl = findExerciseConfig(topWant);
+        if (repl) return { ...repl };
+      }
+      if (ex.supersetExercises) {
+        let changed = false;
+        const newSubs = ex.supersetExercises.map((sub, subIdx) => {
+          const subWant = swapMap[`${idx}-${subIdx}`];
+          if (!subWant || subWant === sub.name) return sub;
+          const repl = findExerciseConfig(subWant);
+          if (!repl) return sub;
+          changed = true;
+          const { sets: _s, rest: _r, warmups: _w, ...subFields } = repl;
+          return subFields;
+        });
+        if (changed) return { ...ex, supersetExercises: newSubs };
+      }
+      return ex;
+    }),
+  };
+}
+
 if (typeof window !== "undefined") {
   window.EXERCISE_MUSCLES = EXERCISE_MUSCLES;
   window.STRENGTH_STANDARDS = STRENGTH_STANDARDS;
   window.getMuscleImpact = getMuscleImpact;
   window.calcSet1RM = calcSet1RM;
   window.getStrengthPercentile = getStrengthPercentile;
+  window.applySwaps = applySwaps;
 }
