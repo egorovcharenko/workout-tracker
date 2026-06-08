@@ -605,6 +605,10 @@ function App() {
   // any manual focus so the center column tracks the live workout again.
   useEffect(() => { setFocusIdx(null); }, [currentIdx]);
 
+  const totalSets = exercises.reduce((n, e) => n + e.sets.length, 0);
+  const doneSets = exercises.reduce((n, e) =>
+    e.skipped ? n + e.sets.length : n + e.sets.filter(s => s.completed).length, 0);
+
   const isFinished = totalSets > 0 && doneSets === totalSets;
 
   useEffect(() => {
@@ -645,9 +649,7 @@ function App() {
     }
   };
 
-  const totalSets = exercises.reduce((n, e) => n + e.sets.length, 0);
-  const doneSets = exercises.reduce((n, e) =>
-    e.skipped ? n + e.sets.length : n + e.sets.filter(s => s.completed).length, 0);
+
 
   if (!loaded) {
     return (
