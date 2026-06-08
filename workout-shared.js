@@ -51,73 +51,6 @@ const BANDS = [
 ];
 const BAND_VALUES = BANDS.map(b => b.lb);
 
-const EXERCISE_MUSCLES = {
-  "Overhead Dumbbell Press": { primary: ["shoulders"], secondary: ["triceps"], ratios: { shoulders: 1.0, triceps: 0.4 } },
-  "Dumbbell Bicep Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.3 } },
-  "Band Bicep Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.3 } },
-  "Overhead Tricep Extension": { primary: ["triceps"], secondary: [], ratios: { triceps: 1.0 } },
-  "Band Tricep Pushdowns": { primary: ["triceps"], secondary: [], ratios: { triceps: 1.0 } },
-  "Dumbbell Hammer Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.4 } },
-  "Bench Dips": { primary: ["triceps"], secondary: ["chest", "shoulders"], ratios: { triceps: 1.0, chest: 0.4, shoulders: 0.4 } },
-  "Dumbbell Bent-Over Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"], ratios: { lats: 1.0, biceps: 0.3, rear_delts: 0.4 } },
-  "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"], ratios: { lats: 1.0, biceps: 0.3, rear_delts: 0.4 } },
-  "Assisted Pull-Ups": { primary: ["lats"], secondary: ["biceps", "upper_back", "rear_delts"], ratios: { lats: 1.0, biceps: 0.35, upper_back: 0.5, rear_delts: 0.3 } },
-  "Reverse Flyes": { primary: ["rear_delts"], secondary: ["upper_back"], ratios: { rear_delts: 1.0, upper_back: 0.4 } },
-  "Goblet Squat": { primary: ["quads", "glutes"], secondary: ["core"], ratios: { quads: 1.0, glutes: 1.0, core: 0.3 } },
-  "Bulgarian Split Squat": { primary: ["quads", "glutes"], secondary: ["hamstrings", "core"], ratios: { quads: 1.0, glutes: 1.0, hamstrings: 0.4, core: 0.2 } },
-  "Dumbbell Flat Bench Press": { primary: ["chest"], secondary: ["triceps", "shoulders"], ratios: { chest: 1.0, triceps: 0.4, shoulders: 0.4 } },
-  "Barbell Bench Press": { primary: ["chest"], secondary: ["triceps", "shoulders"], ratios: { chest: 1.0, triceps: 0.4, shoulders: 0.4 } },
-  "Dumbbell Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.5 } },
-  "Seated Overhead Press": { primary: ["shoulders"], secondary: ["triceps"], ratios: { shoulders: 1.0, triceps: 0.4 } },
-  "Band Squat": { primary: ["quads", "glutes"], secondary: ["core"], ratios: { quads: 1.0, glutes: 1.0, core: 0.3 } },
-  "Band Row": { primary: ["lats", "upper_back"], secondary: ["biceps"], ratios: { lats: 1.0, upper_back: 1.0, biceps: 0.3 } },
-  "Band Romanian Deadlift": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.4 } },
-  "Pallof Press": { primary: ["core"], secondary: [], ratios: { core: 1.0 } },
-  "Lunges": { primary: ["quads", "glutes"], secondary: ["hamstrings"], ratios: { quads: 1.0, glutes: 1.0, hamstrings: 0.3 } },
-  "Calf Raises": { primary: ["calves"], secondary: [], ratios: { calves: 1.0 } },
-  "Single-Leg DB RDL": { primary: ["hamstrings", "glutes"], secondary: ["lower_back", "core"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.4, core: 0.3 } },
-  "Barbell Back Squat": { primary: ["quads", "glutes"], secondary: ["lower_back", "core"], ratios: { quads: 1.0, glutes: 0.8, lower_back: 0.4, core: 0.4 } },
-  "Barbell Deadlift": { primary: ["hamstrings", "glutes", "lower_back"], secondary: ["upper_back", "lats", "quads", "forearms", "core"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 1.0, upper_back: 0.5, lats: 0.3, quads: 0.3, forearms: 0.4, core: 0.3 } },
-  "Incline Dumbbell Press": { primary: ["chest"], secondary: ["shoulders", "triceps"], ratios: { chest: 1.0, shoulders: 0.6, triceps: 0.4 } },
-  "Standing Overhead Press": { primary: ["shoulders"], secondary: ["triceps", "upper_back", "core"], ratios: { shoulders: 1.0, triceps: 0.5, upper_back: 0.3, core: 0.4 } },
-  "Face Pulls": { primary: ["rear_delts"], secondary: ["upper_back"], ratios: { rear_delts: 1.0, upper_back: 0.5 } },
-  "Band Torso Rotation": { primary: ["core"], secondary: [], ratios: { core: 1.0 } },
-  "Hanging Knee Raise": { primary: ["core"], secondary: ["forearms"], ratios: { core: 1.0, forearms: 0.2 } }
-};
-
-const STRENGTH_STANDARDS = {
-  "Dumbbell Flat Bench Press": { beg: 25, nov: 45, int: 70, adv: 95, elite: 120 },
-  "Barbell Bench Press": { beg: 95, nov: 135, int: 185, adv: 225, elite: 315 },
-  "Single-Arm Dumbbell Rows": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
-  "Dumbbell Bent-Over Rows": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
-  "Overhead Dumbbell Press": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
-  "Seated Overhead Press": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
-  "Goblet Squat": { beg: 35, nov: 60, int: 95, adv: 135, elite: 180 },
-  "Bulgarian Split Squat": { beg: 20, nov: 40, int: 65, adv: 95, elite: 125 },
-  "Dumbbell Romanian Deadlift": { beg: 30, nov: 55, int: 85, adv: 120, elite: 155 },
-  "Single-Leg DB RDL": { beg: 20, nov: 35, int: 55, adv: 80, elite: 110 },
-  "Dumbbell Bicep Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
-  "Dumbbell Hammer Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
-  "Bench Dips": { beg: -17, nov: 38, int: 106, adv: 183, elite: 267 },
-  "Assisted Pull-Ups": { beg: -28, nov: 18, int: 75, adv: 138, elite: 206 },
-  "Band Row": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
-  "Band Squat": { beg: 25, nov: 45, int: 75, adv: 105, elite: 135 },
-  "Band Romanian Deadlift": { beg: 25, nov: 45, int: 70, adv: 100, elite: 130 },
-  "Band Bicep Curls": { beg: 8, nov: 15, int: 25, adv: 38, elite: 52 },
-  "Band Tricep Pushdowns": { beg: 10, nov: 20, int: 35, adv: 52, elite: 70 },
-  "Pallof Press": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 },
-  "Barbell Back Squat": { beg: 95, nov: 135, int: 205, adv: 285, elite: 365 },
-  "Barbell Deadlift": { beg: 135, nov: 185, int: 275, adv: 365, elite: 465 },
-  "Incline Dumbbell Press": { beg: 25, nov: 40, int: 65, adv: 90, elite: 115 },
-  "Standing Overhead Press": { beg: 65, nov: 95, int: 135, adv: 175, elite: 225 },
-  "Face Pulls": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 },
-  "Reverse Flyes": { beg: 10, nov: 20, int: 30, adv: 45, elite: 60 },
-  "Overhead Tricep Extension": { beg: 15, nov: 25, int: 45, adv: 65, elite: 85 },
-  "Lunges": { beg: 25, nov: 45, int: 70, adv: 100, elite: 130 },
-  "Calf Raises": { beg: 20, nov: 45, int: 75, adv: 110, elite: 150 },
-  "Band Torso Rotation": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 }
-};
-
 const WORKOUTS = [
   {
     id: "squat-day",
@@ -138,7 +71,7 @@ const WORKOUTS = [
           { name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
           { name: "Dumbbell Hammer Curls", reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Hammer grip default · toggle for variants", grips: ['hammer', 'supinated', 'reverse'] },
         ]},
-      { name: "Band Torso Rotation", sets: 3, reps: "10-12", notes: "Anchor band at chest height, arms extended out front, rotate left and right under control. 10-12 per side.", equipment: "band", rest: 60, noWarmup: true },
+      { name: "Band Torso Rotation", sets: 3, reps: "10-12", notes: "Anchor band at chest height, rotate left and right under control. 10-12 per side.", equipment: "band", rest: 60, noWarmup: true },
     ],
   },
   {
@@ -150,7 +83,7 @@ const WORKOUTS = [
     rest: 90,
     warmup: "Light hinges + band pull-aparts, then ramp the bar",
     exercises: [
-      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", equipment: "barbell", rest: 120 },
+      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "3-5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", equipment: "barbell", rest: 120 },
       { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", notes: "Bench at ~30°. Control the descent, press up and slightly back.", rest: 120 },
       { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
       { name: "Standing Overhead Press", sets: 3, reps: "6-8", notes: "Un-rack from the pins at shoulder height. Brace hard, press overhead, don't lean back. Ramp the warm-ups.", equipment: "barbell", warmups: 1, rest: 120 },
@@ -176,7 +109,7 @@ const WORKOUTS = [
       { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band ASSISTS (loops over bar, foot in loop). Chin over bar, controlled descent.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
       { name: "Seated Overhead Press", sets: 4, reps: "8-10", notes: "Seated, controlled", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw", rest: 120, noWarmup: true },
       { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "10-12", notes: "Each side, brace on bench", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
-      { name: "Single-Leg DB RDL", sets: 3, reps: "8", notes: "One DB in each hand, rear leg lifts as you hinge — slow tempo, 8 per leg. Warmup 1 set @ ~20lb, work @ ~30lb.", rest: 120 },
+      { name: "Single-Leg DB RDL", sets: 3, reps: "8-10", notes: "One DB in each hand, rear leg lifts as you hinge — slow tempo, 8 per leg. Warmup 1 set @ ~20lb, work @ ~30lb.", rest: 120 },
       { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, notes: "No rest between exercises, 60s between rounds",
         supersetExercises: [
           { name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
@@ -234,63 +167,6 @@ const WORKOUTS = [
   }
 ];
 
-function getMuscleImpact(exName, muscle, isPrimary) {
-  const mapping = EXERCISE_MUSCLES[exName];
-  if (!mapping) return isPrimary ? 1.0 : 0.5;
-  if (mapping.ratios && mapping.ratios[muscle] !== undefined) {
-    return mapping.ratios[muscle];
-  }
-  return isPrimary ? 1.0 : 0.5;
-}
-
-function calcSet1RM(exerciseName, weight, reps, bandsJson) {
-  const isAssist = exerciseName === "Bench Dips" || exerciseName === "Assisted Pull-Ups";
-  
-  let bandSum = 0;
-  if (bandsJson) {
-    try {
-      const b = typeof bandsJson === 'string' ? JSON.parse(bandsJson) : bandsJson;
-      if (Array.isArray(b)) {
-        bandSum = b.reduce((a, x) => a + (+x || 0), 0);
-      }
-    } catch(e){}
-  }
-  
-  if (isAssist) {
-    return reps > 1 ? (weight * reps / 30.0) - bandSum : -bandSum;
-  } else {
-    return reps > 1 ? weight * (1 + reps / 30.0) : weight;
-  }
-}
-
-function getStrengthPercentile(exerciseName, weight1RM) {
-  const stds = STRENGTH_STANDARDS[exerciseName];
-  if (!stds) return null;
-  const w = weight1RM || 0;
-  
-  if (w < stds.beg) {
-    const minW = stds.beg < 0 ? stds.beg * 2 : 0;
-    if (w <= minW) return { percentile: 0, tier: "Untrained" };
-    const p = 0 + ((w - minW) / (stds.beg - minW)) * 5;
-    return { percentile: Math.round(p), tier: "Untrained" };
-  } else if (w < stds.nov) {
-    const p = 5 + ((w - stds.beg) / (stds.nov - stds.beg)) * 15;
-    return { percentile: Math.round(p), tier: "Beginner" };
-  } else if (w < stds.int) {
-    const p = 20 + ((w - stds.nov) / (stds.int - stds.nov)) * 30;
-    return { percentile: Math.round(p), tier: "Novice" };
-  } else if (w < stds.adv) {
-    const p = 50 + ((w - stds.int) / (stds.adv - stds.int)) * 30;
-    return { percentile: Math.round(p), tier: "Intermediate" };
-  } else if (w < stds.elite) {
-    const p = 80 + ((w - stds.adv) / (stds.elite - stds.adv)) * 15;
-    return { percentile: Math.round(p), tier: "Advanced" };
-  } else {
-    const p = 95 + Math.min(4, ((w - stds.elite) / (stds.elite || 1)) * 5);
-    return { percentile: Math.round(p), tier: "Elite" };
-  }
-}
-
 function localDate() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -298,99 +174,15 @@ function localDate() {
 
 const interleavedSetNumber = (round, subIdx, subCount) => round * subCount + subIdx + 1;
 
-const SKIPPED_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-skipped:${workoutName}:${date}`;
-function loadSkippedExercises(workoutName, date) {
-  try {
-    const raw = localStorage.getItem(SKIPPED_LS_KEY(workoutName, date));
-    return new Set(raw ? JSON.parse(raw) : []);
-  } catch { return new Set(); }
-}
-function saveSkippedExercises(workoutName, date, namesSet) {
-  try {
-    localStorage.setItem(SKIPPED_LS_KEY(workoutName, date), JSON.stringify([...namesSet]));
-  } catch (e) {
-    console.warn("[V2-SKIPPED] localStorage save failed:", e);
-  }
-}
-
-// Deferred ("do later") exercises — an ordered list of names moved to the end
-// of the workout. Scoped to (workout, date) like skips/swaps so a reload mid-
-// session keeps the order you set.
-const DEFERRED_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-deferred:${workoutName}:${date}`;
-function loadDeferred(workoutName, date) {
-  try {
-    const raw = localStorage.getItem(DEFERRED_LS_KEY(workoutName, date));
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-function saveDeferred(workoutName, date, names) {
-  try {
-    if (names && names.length) localStorage.setItem(DEFERRED_LS_KEY(workoutName, date), JSON.stringify(names));
-    else localStorage.removeItem(DEFERRED_LS_KEY(workoutName, date));
-  } catch (e) {
-    console.warn("[V2-DEFERRED] localStorage save failed:", e);
-  }
-}
-// Move deferred exercises to the end (in deferredNames order) and flag them
-// with `deferred: true`. Non-deferred exercises keep their relative order, so
-// supersets stay contiguous (only standalone exercises are ever deferrable).
-function applyDeferredOrder(exercises, deferredNames) {
-  if (!deferredNames || !deferredNames.length) return exercises;
-  const deferredSet = new Set(deferredNames);
-  const kept = exercises.filter(e => !deferredSet.has(e.name));
-  const moved = deferredNames
-    .map(name => exercises.find(e => e.name === name))
-    .filter(Boolean)
-    .map(e => ({ ...e, deferred: true }));
-  return [...kept, ...moved];
-}
-
-// Bodyweight is a property of YOU, not of a set — one value shared across every
-// bodyweight/assist exercise (Assisted Pull-Ups, Bench Dips, …) and remembered
-// across sessions. Global key (not workout/date scoped).
-const BODYWEIGHT_LS_KEY = LS_PREFIX + "v2-bodyweight";
-function loadBodyweight() {
-  try {
-    const v = parseFloat(localStorage.getItem(BODYWEIGHT_LS_KEY));
-    return isFinite(v) && v > 0 ? v : null;
-  } catch { return null; }
-}
-function saveBodyweight(w) {
-  try {
-    if (isFinite(w) && w > 0) localStorage.setItem(BODYWEIGHT_LS_KEY, String(w));
-  } catch (e) {
-    console.warn("[V2-BODYWEIGHT] localStorage save failed:", e);
-  }
-}
-
-const SETS_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-session-sets:${workoutName}:${date}`;
-function loadSessionSets(workoutName, date) {
-  try {
-    const raw = localStorage.getItem(SETS_LS_KEY(workoutName, date));
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-function saveSessionSets(workoutName, date, exercises) {
-  try {
-    const map = {};
-    exercises.forEach(ex => {
-      map[ex.name] = ex.sets;
-    });
-    localStorage.setItem(SETS_LS_KEY(workoutName, date), JSON.stringify(map));
-  } catch (e) {
-    console.warn("[V2-SESSION-SETS] localStorage save failed:", e);
-  }
-}
-
 // Expose the SWAP_GROUPS catalog to categorize exercises into families
 const SWAP_GROUPS = [
   {
     family: "Deadlifts & Hinge (Posterior)",
     exercises: [
-      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", equipment: "barbell", rest: 120 },
+      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "3-5", notes: "Ramp up across the warm-up sets. Flat back, brace, push the floor away. Reset each rep — don't bounce.", equipment: "barbell", rest: 120 },
       { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "8-12", notes: "Hinge at hips, slight knee bend", video: "https://www.youtube.com/shorts/cGMaBqaExBo", rest: 120, noWarmup: true },
       { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", notes: "Stand on band, hinge at hips, handles at sides", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
-      { name: "Single-Leg DB RDL", sets: 3, reps: "8", notes: "One DB in each hand, rear leg lifts as you hinge — slow tempo, 8 per leg. Warmup 1 set @ ~20lb, work @ ~30lb.", rest: 120 },
+      { name: "Single-Leg DB RDL", sets: 3, reps: "8-10", notes: "One DB in each hand, rear leg lifts as you hinge — slow tempo, 8 per leg. Warmup 1 set @ ~20lb, work @ ~30lb.", rest: 120 },
     ]
   },
   {
@@ -493,4 +285,3 @@ function getSwapOptions(exerciseName) {
 function isSwappable(exerciseName) {
   return SWAP_GROUPS.some(g => g.exercises.some(e => e.name === exerciseName));
 }
-

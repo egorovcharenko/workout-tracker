@@ -1,0 +1,262 @@
+function renderWorkoutSummaryCard() {
+  const history = state.history || [];
+  if (!history.length) return '';
+
+  const latest = history.find(s => (s.sets || []).some(x => x.set_type === 'working' && x.reps));
+  if (!latest) return '';
+
+  const _esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const name = _esc(latest.workout_name);
+  const dateStr = _esc(latest.date);
+  const durSec = latest.duration_sec || 0;
+  const m = Math.floor(durSec / 60);
+
+  const muscles = {};
+  const addMus = (exName, setVol) => {
+    const map = EXERCISE_MUSCLES[exName];
+    if (!map) return;
+    map.primary.forEach(m => {
+      muscles[m] = (muscles[m] || 0) + setVol * getMuscleImpact(exName, m, true);
+    });
+    map.secondary.forEach(m => {
+      muscles[m] = (muscles[m] || 0) + setVol * getMuscleImpact(exName, m, false);
+    });
+  };
+
+  const exerciseSummary = {};
+  (latest.sets || []).forEach(set => {
+    if (set.set_type !== 'working' || !set.reps) return;
+    const ex = set.exercise;
+    const r = parseInt(set.reps) || 0;
+    const w = parseFloat(set.weight_lb) || 0;
+    const vol = r * w;
+    addMus(ex, vol);
+
+    if (!exerciseSummary[ex]) {
+      exerciseSummary[ex] = { bestW: 0, bestR: 0, best1RM: 0, totalVol: 0, setsCount: 0, historyWeights: [] };
+    }
+    const sum = exerciseSummary[ex];
+    sum.totalVol += vol;
+    sum.setsCount++;
+    const est = calcSet1RM(ex, w, r, set.bands_json);
+    const isAssist = ex === "Bench Dips" || ex === "Assisted Pull-Ups";
+    if (sum.best1RM === 0 && isAssist) sum.best1RM = -Infinity;
+    if (est > sum.best1RM) {
+      sum.bestW = w;
+      sum.bestR = r;
+      sum.best1RM = est;
+    }
+  });
+
+  const muscleVolumeList = Object.entries(muscles).sort((a,b) => b[1] - a[1]);
+  const totalMusVolume = muscleVolumeList.reduce((sum, item) => sum + item[1], 0) || 1;
+
+  const sameWorkoutHistory = history
+    .filter(s => s.workout_name === latest.workout_name && (s.sets || []).some(x => x.set_type === 'working' && x.reps))
+    .slice(0, 5)
+    .reverse();
+
+  let maxSessionVol = 0;
+  const historyData = sameWorkoutHistory.map(s => {
+    let vol = 0;
+    (s.sets || []).forEach(set => {
+      if (set.set_type === 'working' && set.reps) {
+        vol += (parseInt(set.reps) || 0) * (parseFloat(set.weight_lb) || 0);
+      }
+    });
+    if (vol > maxSessionVol) maxSessionVol = vol;
+    return { date: s.date, volume: vol };
+  });
+
+  const _assist = (n) => n === "Bench Dips" || n === "Assisted Pull-Ups";
+  const exList = Object.entries(exerciseSummary).map(([exName, sum]) => {
+    const perSession = [];
+    history.forEach(s => {
+      let best = _assist(exName) ? -Infinity : 0, bw = 0, br = 0, has = false;
+      (s.sets || []).forEach(set => {
+        if (set.exercise === exName && set.set_type === 'working' && set.reps) {
+          has = true;
+          const w = parseFloat(set.weight_lb) || 0, r = parseInt(set.reps) || 0;
+          const est = calcSet1RM(exName, w, r, set.bands_json);
+          if (est > best) { best = est; bw = w; br = r; }
+        }
+      });
+      if (has) perSession.push({ date: s.date, value: best, w: bw, r: br });
+    });
+    perSession.reverse();
+    const today1RM = perSession.length ? perSession[perSession.length - 1].value : sum.best1RM;
+    const prior1RM = perSession.length > 1 ? perSession[perSession.length - 2].value : null;
+    const priors = perSession.slice(0, -1);
+    const priorMax = priors.length ? Math.max(...priors.map(p => p.value)) : (_assist(exName) ? -Infinity : 0);
+    const prevBest = priors.length ? priors.reduce((m, p) => p.value > m.value ? p : m, priors[0]) : null;
+    const isPR = today1RM > priorMax && today1RM > 0;
+    const deltaPct = (prior1RM != null && prior1RM > 0)
+      ? Math.round(((today1RM - prior1RM) / prior1RM) * 100)
+      : null;
+    return { exName, sum, isPR, deltaPct, prevBest, sparkPts: perSession.slice(-6) };
+  });
+
+  const totalSets = exList.reduce((n, e) => n + e.sum.setsCount, 0);
+  const numLifts = exList.length;
+  const upCount = exList.filter(e => e.deltaPct != null && e.deltaPct > 0).length;
+  const downCount = exList.filter(e => e.deltaPct != null && e.deltaPct < 0).length;
+  const latestVol = historyData.length ? historyData[historyData.length - 1].volume : 0;
+  const prevVol = historyData.length > 1 ? historyData[historyData.length - 2].volume : 0;
+  const netTrend = prevVol > 0 ? Math.round(((latestVol - prevVol) / prevVol) * 100) : null;
+
+  const musRows = muscleVolumeList.slice(0, 6).map(([mn, vol]) => ({
+    label: (MUSCLE_GROUPS[mn] && MUSCLE_GROUPS[mn].label) || mn,
+    pct: Math.round((vol / totalMusVolume) * 100),
+  }));
+  const maxMusPct = Math.max(1, ...musRows.map(r => r.pct));
+
+  const weekAnchorMs = Date.parse(latest.date + 'T00:00:00');
+  const weekStartMs = weekAnchorMs - 6 * 86400000;
+  const weeklySets = {};
+  history.forEach(s => {
+    const sMs = Date.parse(s.date + 'T00:00:00');
+    if (isNaN(sMs) || sMs < weekStartMs || sMs > weekAnchorMs) return;
+    (s.sets || []).forEach(set => {
+      if (set.set_type !== 'working' || !set.reps) return;
+      const map = EXERCISE_MUSCLES[set.exercise];
+      if (!map) return;
+      map.primary.forEach(mm => { weeklySets[mm] = (weeklySets[mm] || 0) + getMuscleImpact(set.exercise, mm, true); });
+      map.secondary.forEach(mm => { weeklySets[mm] = (weeklySets[mm] || 0) + getMuscleImpact(set.exercise, mm, false); });
+    });
+  });
+  const weeklySetsList = Object.entries(weeklySets).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxWeeklySets = Math.max(1, ...weeklySetsList.map(r => r[1]));
+
+  const MONO = 'ui-monospace,Menlo,monospace';
+  const fmtW = (w) => (Math.round(w * 10) / 10);
+  const mmdd = (d) => { const p = String(d || '').split('-'); return p.length === 3 ? `${p[1]}/${p[2]}` : (d || ''); };
+
+  const spark = (pts) => {
+    const data = (pts || []).filter(p => p && isFinite(p.value));
+    if (data.length < 2) return '<div style="width:52px;flex-shrink:0"></div>';
+    const vals = data.map(p => p.value);
+    const mx = Math.max(...vals), mn = Math.min(...vals), rng = mx - mn || 1;
+    const w = 52, h = 22, pad = 2;
+    const xy = data.map((p, i) => ({
+      x: pad + (i / (data.length - 1)) * (w - pad * 2),
+      y: pad + (1 - (p.value - mn) / rng) * (h - pad * 2),
+    }));
+    const poly = xy.map(c => `${c.x},${c.y}`).join(' ');
+    const dots = xy.map((c, i) => {
+      const tip = `${mmdd(data[i].date)} · ${Math.round(data[i].value)} lb est 1RM`.replace(/'/g, "\\'");
+      const isLast = i === xy.length - 1;
+      return `<circle cx="${c.x}" cy="${c.y}" r="${isLast ? 2 : 1.5}" fill="#a78bfa"/>`
+        + `<circle cx="${c.x}" cy="${c.y}" r="7" fill="transparent" style="cursor:pointer"`
+        + ` onmouseenter="sparkTip(event,'${tip}')" onmouseleave="sparkTip()" onclick="sparkTip(event,'${tip}',true)"></circle>`;
+    }).join('');
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="flex-shrink:0;overflow:visible"><polyline points="${poly}" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}</svg>`;
+  };
+
+  const bars = historyData.map(h => {
+    const pct = maxSessionVol ? (h.volume / maxSessionVol) * 100 : 0;
+    const isLatest = h.date === latest.date;
+    const dl = mmdd(h.date);
+    const tip = `${dl} · ${Math.round(h.volume).toLocaleString()} lb volume`;
+    return `<div title="${tip}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer">
+      <div style="height:54px;width:100%;display:flex;align-items:end">
+        <div style="width:100%;height:${Math.max(8, pct)}%;background:${isLatest ? '#a78bfa' : 'rgba(255,255,255,0.09)'};border-radius:4px"></div>
+      </div>
+      <span style="font-size:9px;font-family:${MONO};color:${isLatest ? '#a78bfa' : '#6B7280'};font-weight:${isLatest ? '800' : '500'}">${dl}</span>
+    </div>`;
+  }).join('');
+
+  const netColor = netTrend == null ? '#6B7280' : netTrend > 0 ? '#34D399' : netTrend < 0 ? '#F87171' : '#6B7280';
+
+  const musHTML = musRows.map(r => `
+    <div title="${_esc(r.label)}: ${r.pct}% of this session's muscle-weighted volume" style="display:flex;align-items:center;gap:12px;padding:3px 0;cursor:default">
+      <span style="width:84px;flex-shrink:0;color:#D1D5DB;font-size:13px">${_esc(r.label)}</span>
+      <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden"><div style="height:100%;width:${(r.pct / maxMusPct) * 100}%;background:rgba(255,255,255,0.22);border-radius:99px"></div></div>
+      <span style="width:34px;text-align:right;color:#9CA3AF;font-size:12px;font-family:${MONO}">${r.pct}%</span>
+    </div>`).join('');
+
+  const fmtSets = (x) => { const r = Math.round(x * 10) / 10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
+  const weeklySetsHTML = weeklySetsList.length ? weeklySetsList.map(([mn, sets]) => {
+    const label = (MUSCLE_GROUPS[mn] && MUSCLE_GROUPS[mn].label) || mn;
+    const n = fmtSets(sets);
+    const cnt = sets;
+    const numColor = cnt >= 10 && cnt <= 20 ? '#34D399' : cnt > 20 ? '#FBBF24' : '#C4B5FD';
+    return `<div title="${_esc(label)}: ${n} allocated working sets over the last 7 days (10–20 is the hypertrophy sweet spot)" style="display:flex;align-items:center;gap:12px;padding:3px 0;cursor:default">
+      <span style="width:84px;flex-shrink:0;color:#D1D5DB;font-size:13px">${_esc(label)}</span>
+      <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden"><div style="height:100%;width:${(sets / maxWeeklySets) * 100}%;background:rgba(167,139,250,0.55);border-radius:99px"></div></div>
+      <span style="width:38px;text-align:right;color:${numColor};font-size:12px;font-weight:700;font-family:${MONO}">${n}</span>
+    </div>`;
+  }).join('') : `<div style="color:#6B7280;font-size:12px;padding:6px 0">No working sets in the last 7 days.</div>`;
+
+  const exHTML = exList.map(e => {
+    const pr = e.isPR;
+    const dc = e.deltaPct == null ? '#6B7280' : e.deltaPct > 0 ? '#34D399' : e.deltaPct < 0 ? '#F87171' : '#6B7280';
+    const dt = e.deltaPct == null ? '' : `${e.deltaPct > 0 ? '+' : ''}${e.deltaPct}%`;
+    return `<div style="background:${pr ? 'rgba(251,191,36,0.05)' : 'rgba(255,255,255,0.02)'};border:1px solid ${pr ? 'rgba(251,191,36,0.22)' : 'rgba(255,255,255,0.05)'};${pr ? 'border-left:3px solid #FBBF24;' : ''}border-radius:10px;padding:11px 13px">
+      <div style="display:flex;align-items:center;gap:8px">
+        ${pr ? `<span style="color:#FBBF24;font-size:11px;flex-shrink:0">★</span>` : ''}
+        <span style="flex:1;min-width:0;color:#F3F4F6;font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(e.exName)}</span>
+        ${spark(e.sparkPts)}
+        ${dt ? `<span style="flex-shrink:0;min-width:42px;text-align:right;color:${dc};font-family:${MONO};font-size:13px;font-weight:800">${dt}</span>` : ''}
+      </div>
+      <div style="margin-top:6px;color:#6B7280;font-size:11px;font-family:${MONO}">Top <span style="color:#D1D5DB;font-weight:700">${fmtW(e.sum.bestW)}×${e.sum.bestR}</span> · 1RM ${Math.round(e.sum.best1RM)} · ${e.sum.setsCount} sets</div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div data-noinvert style="margin-bottom:16px;overflow:hidden;background:#0B0F14;border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px 18px 20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:18px">
+        <div style="min-width:140px;flex:1">
+          <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;letter-spacing:0.08em;color:#C4B5FD;background:rgba(139,92,246,0.16);border:1px solid rgba(139,92,246,0.35);padding:4px 10px;border-radius:99px;font-family:${MONO}">✓ DONE</span>
+          <h3 style="font-size:30px;font-weight:800;color:#F3F4F6;margin:10px 0 3px;letter-spacing:-0.02em;line-height:1.05">${name}</h3>
+          <span style="font-size:12px;color:#6B7280;font-family:${MONO}">${dateStr}</span>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;flex-shrink:0">
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:10px 14px;min-width:80px;text-align:center">
+            <div style="font-size:20px;font-weight:800;color:#F3F4F6;font-family:${MONO};line-height:1">${m}<span style="font-size:10px;color:#6B7280;margin-left:2px">min</span></div>
+            <div style="font-size:8px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-top:6px">DURATION</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:10px 14px;min-width:80px;text-align:center">
+            <div style="font-size:20px;font-weight:800;color:#F3F4F6;font-family:${MONO};line-height:1">${totalSets}</div>
+            <div style="font-size:8px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-top:6px">SETS</div>
+            <div style="font-size:8px;color:#6B7280;margin-top:2px;line-height:1">${numLifts} lifts</div>
+          </div>
+        </div>
+
+        ${historyData.length > 1 ? `
+          <div style="width:180px;flex-shrink:0;display:flex;flex-direction:column;gap:6px">
+            <div style="font-size:8px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};text-align:right">
+              VOL TREND: <span style="color:${netColor};font-weight:800">${netTrend == null ? '—' : `${netTrend > 0 ? '+' : ''}${netTrend}%`}</span>
+            </div>
+            <div style="display:flex;gap:6px;align-items:end">${bars}</div>
+          </div>
+        ` : ''}
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:18px">
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:15px 16px">
+          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-bottom:10px">MUSCLE FOCUS <span style="color:#4B5563;font-weight:600;letter-spacing:0.04em">· THIS SESSION</span></div>
+          ${musHTML}
+        </div>
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:15px 16px">
+          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#A78BFA;font-family:${MONO};margin-bottom:10px">HARD SETS <span style="color:#6D5B9E;font-weight:600;letter-spacing:0.04em">· LAST 7 DAYS</span></div>
+          ${weeklySetsHTML}
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 10px">
+        <span style="font-size:10px;font-weight:800;letter-spacing:0.1em;color:#6B7280;font-family:${MONO}">ALL EXERCISES</span>
+        <span style="font-size:11px;color:#6B7280">${numLifts} lifts · est. 1RM trend${upCount || downCount ? ` (${upCount} up · ${downCount} down)` : ''}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">
+        ${exHTML || '<div style="color:#6B7280;font-size:12px;padding:8px 0">No working sets logged.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+if (typeof window !== "undefined") {
+  window.renderWorkoutSummaryCard = renderWorkoutSummaryCard;
+}

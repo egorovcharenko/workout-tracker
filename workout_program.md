@@ -15,7 +15,7 @@ too heavy to run both days, so each owns one day.
 7. **Band Torso Rotation** — 3×10–12/side  *(rotational core)*
 
 ## Workout B — Deadlift Day
-1. **Barbell Deadlift** — 3×5  *(3 warm-up ramp sets; reset each rep)*
+1. **Barbell Deadlift** — 3×3–5  *(3 warm-up ramp sets; reset each rep)*
 2. **Incline Dumbbell Press** — 4×8–12
 3. **Assisted Pull-Ups** — 4×5–8
 4. **Standing Overhead Press** — 3×6–8  *(from the rack; 2 warm-ups)*

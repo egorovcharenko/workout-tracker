@@ -3,8 +3,6 @@
 // Expose React hooks globally to avoid redeclaration issues in Babel Standalone scripts
 var { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-// SWAP_GROUPS and basic helpers are now loaded globally from /workout-shared.js
-
 const fetchT = (url, ms = 6000) => Promise.race([
   fetch(url),
   new Promise((_, rej) => setTimeout(() => rej(new Error(`timeout ${url}`)), ms)),
@@ -228,8 +226,6 @@ function buildSet({ kind, idx, template, last, setNumber, saveExerciseName, isAs
     if (fallbackGrip) set.lastGrip = fallbackGrip;
   }
   if (template.assist) {
-    // Prefer the globally-remembered bodyweight, then this set's last value,
-    // then a 175 default. Keeps every assist exercise consistent on a fresh load.
     set.bodyweight = loadBodyweight() || set.lastBodyweight || 175;
     set.bands = (set.lastBands || []).slice();
     set.grip = set.lastGrip || (template.grips ? template.grips[0] : null);
@@ -248,189 +244,50 @@ function buildSet({ kind, idx, template, last, setNumber, saveExerciseName, isAs
 
 const safeJSON = (s) => { try { return JSON.parse(s); } catch (_) { return []; } };
 
-function hydrateToday(exercises, todaySets) {
-  const map = new Map();
-  exercises.forEach((ex, eIdx) => {
-    ex.sets.forEach((s, sIdx) => {
-      const key = `${s.saveExerciseName}|${s.kind === "warmup" ? "warmup" : "working"}|${s.setNumber}`;
-      map.set(key, { eIdx, sIdx });
-    });
-  });
-  const next = exercises.map(ex => ({
-    ...ex,
-    sets: ex.sets.map(s => ({ ...s, active: false }))
-  }));
-  if (todaySets && todaySets.length) {
-    todaySets.forEach(row => {
-      const key = `${row.exercise}|${row.set_type}|${row.set_number}`;
-      const ref = map.get(key);
-      if (!ref) return;
-      const ex = next[ref.eIdx];
-      const set = ex.sets[ref.sIdx];
-      set.reps = parseInt(row.reps) || null;
-      set.completed = true;
-      const bands = row.bands_json ? safeJSON(row.bands_json) : [];
-      set.bands = bands;
-      const bandSum = bands.reduce((a, b) => a + b, 0);
-      const savedLb = row.weight_lb || 0;
-      if (ex.assist) {
-        set.bodyweight = savedLb + bandSum;
-      } else if (ex.bandAddon) {
-        set.weight = Math.max(0, savedLb - bandSum);
-      } else if (ex.isBandsOnly) {
-        set.weight = 0;
-      } else {
-        set.weight = savedLb;
-      }
-      if (row.grip) set.grip = row.grip;
-    });
-  }
-  return activateNextSet(next);
-}
-
-function activateNextSet(exercises) {
-  for (const ex of exercises) {
-    for (const s of ex.sets) if (s.active) s.active = false;
-  }
-  let activated = false;
-  for (const ex of exercises) {
-    if (activated) break;
-    if (ex.skipped) continue;
-    let highestCompleted = -1;
-    for (let i = 0; i < ex.sets.length; i++) {
-      if (ex.sets[i].completed) highestCompleted = i;
-    }
-    for (let i = highestCompleted + 1; i < ex.sets.length; i++) {
-      if (!ex.sets[i].completed && !ex.sets[i].userSkipped) {
-        ex.sets[i].active = true;
-        activated = true;
-        break;
-      }
-    }
-  }
-  return exercises;
-}
-
-const SWAP_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-swaps:${workoutName}:${date}`;
-function loadSwaps(workoutName, date) {
-  try {
-    const raw = localStorage.getItem(SWAP_LS_KEY(workoutName, date));
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-function saveSwaps(workoutName, date, swapMap) {
-  try {
-    if (swapMap && Object.keys(swapMap).length) {
-      localStorage.setItem(SWAP_LS_KEY(workoutName, date), JSON.stringify(swapMap));
-    } else {
-      localStorage.removeItem(SWAP_LS_KEY(workoutName, date));
-    }
-  } catch (e) {
-    console.warn("[V2-SWAP] localStorage save failed:", e);
-  }
-}
-
-const PM_STARTED_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-pm-started:${workoutName}:${date}`;
-function loadPmStarted(workoutName, date) {
-  try { return localStorage.getItem(PM_STARTED_LS_KEY(workoutName, date)) === "1"; }
-  catch { return false; }
-}
-function savePmStarted(workoutName, date, started) {
-  try {
-    if (started) localStorage.setItem(PM_STARTED_LS_KEY(workoutName, date), "1");
-    else localStorage.removeItem(PM_STARTED_LS_KEY(workoutName, date));
-  } catch (e) {
-    console.warn("[V2-PM] localStorage save failed:", e);
-  }
-}
-
-function applySwaps(workout, swapMap) {
-  if (!swapMap || !Object.keys(swapMap).length) return workout;
-  return {
-    ...workout,
-    exercises: workout.exercises.map((ex, idx) => {
-      const topWant = swapMap[`${idx}`];
-      if (topWant && topWant !== ex.name) {
-        const repl = findExerciseConfig(topWant);
-        if (repl) return { ...repl };
-      }
-      if (ex.supersetExercises) {
-        let changed = false;
-        const newSubs = ex.supersetExercises.map((sub, subIdx) => {
-          const subWant = swapMap[`${idx}-${subIdx}`];
-          if (!subWant || subWant === sub.name) return sub;
-          const repl = findExerciseConfig(subWant);
-          if (!repl) return sub;
-          changed = true;
-          const { sets: _s, rest: _r, warmups: _w, ...subFields } = repl;
-          return subFields;
+function transitionActiveSetAfterLog(prev, eIdx, sIdx) {
+  const cur = prev[eIdx];
+  if (cur.superset) {
+    const partnerIdx = prev.findIndex((e2, j) => j !== eIdx && e2.superset === cur.superset);
+    if (partnerIdx !== -1) {
+      const partner = prev[partnerIdx];
+      const partnerNext = partner.sets.findIndex(s => !s.completed);
+      if (partnerNext !== -1) {
+        return prev.map((e, i) => {
+          if (i === eIdx) return { ...e, sets: e.sets.map((s, j) => j === sIdx ? { ...s, active: false } : s) };
+          if (i === partnerIdx) return { ...e, sets: e.sets.map((s, j) => j === partnerNext ? { ...s, active: true } : s) };
+          return e;
         });
-        if (changed) return { ...ex, supersetExercises: newSubs };
       }
-      return ex;
-    }),
-  };
-}
-
-function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed, activeDate) {
-  const sets = [];
-  exercises.forEach(ex => {
-    ex.sets.forEach(s => {
-      if (!s.completed) return;
-      const isAssist = ex.assist;
-      const bands = s.bands || [];
-      const bandSum = bands.reduce((a, b) => a + b, 0);
-      let weight_lb;
-      if (isAssist) {
-        weight_lb = Math.max(0, (s.bodyweight || 0) - bandSum);
-      } else if (ex.isBandsOnly) {
-        weight_lb = bandSum;
-      } else if (ex.bandAddon) {
-        weight_lb = (s.weight || 0) + bandSum;
-      } else {
-        weight_lb = s.weight || 0;
-      }
-      sets.push({
-        exercise: s.saveExerciseName,
-        set_type: s.kind === "warmup" ? "warmup" : "working",
-        set_number: s.setNumber,
-        reps: String(s.reps || ""),
-        weight_lb,
-        bands_json: bands.length ? JSON.stringify(bands) : null,
-        grip: s.grip || null,
-      });
-    });
-  });
-  return {
-    workout: workoutName,
-    date: activeDate || localDate(),
-    duration_sec: elapsed,
-    session_id: sessionId || null,
-    started_at: startedAt ? new Date(startedAt).toISOString() : null,
-    sets,
-  };
-}
-
-let _saveInFlight = false;
-let _savePending = null;
-async function autoSavePayload(payload, onResolved) {
-  // Sandbox: never write to the backend in test mode.
-  if (TEST_MODE) return;
-  if (_saveInFlight) {
-    _savePending = { payload, onResolved };
-    return;
-  }
-  _saveInFlight = true;
-  try {
-    const res = await api.save(payload);
-    if (res.ok) onResolved(res.id);
-  } catch (e) {
-    console.error("[V2-SAVE] error:", e);
-  } finally {
-    _saveInFlight = false;
-    if (_savePending) {
-      const next = _savePending; _savePending = null;
-      autoSavePayload(next.payload, next.onResolved);
     }
   }
+  const sameExNext = cur.sets.findIndex((s, k) => k > sIdx && !s.completed);
+  if (sameExNext !== -1) {
+    return prev.map((e, i) => i !== eIdx ? e : ({
+      ...e,
+      sets: e.sets.map((s, j) => {
+        if (j === sIdx) return { ...s, active: false };
+        if (j === sameExNext) return { ...s, active: true };
+        return s;
+      }),
+    }));
+  }
+  const nextExIdx = prev.findIndex((e, k) => k > eIdx && e.sets.some(s => !s.completed));
+  return prev.map((e, i) => {
+    if (i === eIdx) return { ...e, sets: e.sets.map((s, j) => j === sIdx ? { ...s, active: false } : s) };
+    if (i === nextExIdx) {
+      const firstUndone = e.sets.findIndex(s => !s.completed);
+      if (firstUndone === -1) return e;
+      return { ...e, sets: e.sets.map((s, j) => j === firstUndone ? { ...s, active: true } : s) };
+    }
+    return e;
+  });
 }
+
+if (typeof window !== "undefined") {
+  window.api = api;
+  window.flattenTemplate = flattenTemplate;
+  window.buildSet = buildSet;
+  window.safeJSON = safeJSON;
+  window.transitionActiveSetAfterLog = transitionActiveSetAfterLog;
+}
+
