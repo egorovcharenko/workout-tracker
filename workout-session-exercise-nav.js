@@ -30,7 +30,7 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
 
   const renderLibraryModal = () => {
     if (!showAddLibrary) return null;
-    return (
+    return ReactDOM.createPortal(
       <div style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
         background: "rgba(0,0,0,0.85)", backdropFilter: "blur(4px)", zIndex: 10000,
@@ -80,7 +80,8 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
             ))}
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   };
 
