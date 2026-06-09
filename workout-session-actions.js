@@ -200,20 +200,22 @@ function useWorkoutActions({
   };
 
   const onAddSet = (eIdx) => {
+    const targetSuperset = exercises[eIdx]?.superset;
+    const subCount = targetSuperset ? exercises.filter(ex => ex.superset === targetSuperset).length : 1;
     const next = exercises.map((e, i) => {
-      if (i !== eIdx) return e;
+      const match = targetSuperset ? (e.superset === targetSuperset) : (i === eIdx);
+      if (!match) return e;
       const lastWork = [...e.sets].reverse().find(s => s.kind === "work");
       const newIdx = (typeof lastWork?.idx === "number" ? lastWork.idx : 0) + 1;
-      const newSetNumber = (lastWork?.setNumber || 0) + 1;
+      const newSetNumber = targetSuperset 
+        ? (newIdx - 1) * subCount + (e.subIdx || 0) + 1
+        : (lastWork?.setNumber || 0) + 1;
       const newSet = {
-        kind: "work", idx: newIdx,
-        setNumber: newSetNumber,
+        kind: "work", idx: newIdx, setNumber: newSetNumber,
         saveExerciseName: lastWork?.saveExerciseName || e.name,
-        completed: false, active: false, reps: null,
-        weight: lastWork?.weight || 0,
-        bodyweight: lastWork?.bodyweight,
+        completed: false, active: false, reps: null, weight: lastWork?.weight || 0,
+        bodyweight: lastWork?.bodyweight, grip: lastWork?.grip,
         bands: lastWork?.bands ? lastWork.bands.slice() : [],
-        grip: lastWork?.grip,
         lastWeight: null, lastBands: [], lastReps: null,
       };
       return { ...e, sets: [...e.sets, newSet] };
@@ -222,16 +224,18 @@ function useWorkoutActions({
   };
 
   const onRemoveSet = (eIdx) => {
+    const targetSuperset = exercises[eIdx]?.superset;
+    const targets = exercises.filter((e, i) => targetSuperset ? (e.superset === targetSuperset) : (i === eIdx));
+    if (!targets.every(e => e.sets.filter(s => s.kind === "work").length > 1)) return;
     const next = exercises.map((e, i) => {
-      if (i !== eIdx) return e;
+      const match = targetSuperset ? (e.superset === targetSuperset) : (i === eIdx);
+      if (!match) return e;
       const workEntries = e.sets.map((s, k) => ({ s, k })).filter(x => x.s.kind === "work");
-      if (workEntries.length <= 1) return e;
       const trailing = workEntries[workEntries.length - 1];
       const wasActive = trailing.s.active;
       let sets = e.sets.filter((_, j) => j !== trailing.k);
       if (wasActive) {
-        const reactivate = [...sets].map((s, k) => ({ s, k })).reverse()
-          .find(x => x.s.kind === "work" && !x.s.completed)?.k;
+        const reactivate = [...sets].map((s, k) => ({ s, k })).reverse().find(x => x.s.kind === "work" && !x.s.completed)?.k;
         if (reactivate != null) sets = sets.map((s, k) => k === reactivate ? { ...s, active: true } : s);
       }
       return { ...e, sets };
