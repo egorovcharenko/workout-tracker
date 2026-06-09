@@ -12,6 +12,8 @@ function BarbellVisualizer({ weight, onWeightChange }) {
   };
 
   const PLATE_SIZES = [45, 35, 25, 15, 10, 5, 2.5, 1, 0.5];
+  const B_WIDTHS = { 45: 26, 35: 24, 25: 22, 15: 20, 10: 18, 5: 16, 2.5: 16, 1: 14, 0.5: 14 };
+  const B_HEIGHTS = { 45: 44, 35: 40, 25: 36, 15: 32, 10: 28, 5: 24, 2.5: 22, 1: 20, 0.5: 18 };
 
   // Decompose weight into plates on one side
   const loadedPlates = [];
@@ -25,28 +27,12 @@ function BarbellVisualizer({ weight, onWeightChange }) {
     }
   }
 
-  const handleAddPlate = (p) => {
-    onWeightChange(weight + p * 2);
-  };
+  const handleAddPlate = (p) => onWeightChange(weight + p * 2);
+  const handleRemovePlateAtIndex = (idx) => onWeightChange(Math.max(45, weight - loadedPlates[idx] * 2));
+  const handleClear = () => onWeightChange(45);
 
-  const handleRemovePlateAtIndex = (idx) => {
-    const p = loadedPlates[idx];
-    onWeightChange(Math.max(45, weight - p * 2));
-  };
-
-  const handleClear = () => {
-    onWeightChange(45);
-  };
-
-  const getPlateWidth = (p) => {
-    const widths = { 45: 14, 35: 13, 25: 12, 15: 11, 10: 10, 5: 9, 2.5: 8, 1: 7, 0.5: 6 };
-    return widths[p] || 12;
-  };
-
-  const getPlateHeight = (p) => {
-    const heights = { 45: 48, 35: 43, 25: 38, 15: 33, 10: 28, 5: 22, 2.5: 18, 1: 15, 0.5: 12 };
-    return heights[p] || 36;
-  };
+  const getPlateWidth = (p) => ({ 45: 14, 35: 13, 25: 12, 15: 11, 10: 10, 5: 9, 2.5: 8, 1: 7, 0.5: 6 }[p] || 12);
+  const getPlateHeight = (p) => ({ 45: 48, 35: 43, 25: 38, 15: 33, 10: 28, 5: 22, 2.5: 18, 1: 15, 0.5: 12 }[p] || 36);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
@@ -235,41 +221,62 @@ function BarbellVisualizer({ weight, onWeightChange }) {
             </button>
           )}
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
           {PLATE_SIZES.map(p => {
             const isSmall = p <= 5;
             const w = isSmall ? "calc(25% - 4.5px)" : "calc(20% - 4.8px)";
+            const label = p === 0.5 ? '.5' : p;
             return (
               <button
                 key={p}
                 onClick={() => handleAddPlate(p)}
                 style={{
                   width: w,
-                  background: isSmall ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.03)",
-                  border: `1px solid rgba(255,255,255,${isSmall ? '0.04' : '0.06'})`,
-                  color: PLATE_COLORS[p].bg,
-                  fontFamily: T.mono,
-                  fontSize: isSmall ? 10 : 12,
-                  fontWeight: isSmall ? 600 : 700,
-                  padding: isSmall ? "5px 0" : "8px 0",
-                  borderRadius: isSmall ? 6 : 8,
+                  height: isSmall ? 40 : 52,
+                  background: "rgba(255,255,255,0.02)",
+                  border: "1px solid rgba(255,255,255,0.04)",
+                  borderRadius: 8,
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   transition: "all 120ms ease",
                   marginTop: (p === 5) ? 4 : 0,
+                  padding: 0,
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = `rgba(255,255,255,${isSmall ? '0.05' : '0.06'})`;
-                  e.currentTarget.style.borderColor = PLATE_COLORS[p].bg;
+                  e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+                  const inner = e.currentTarget.querySelector('.inner-plate');
+                  if (inner) inner.style.transform = "scale(1.08)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = `rgba(255,255,255,${isSmall ? '0.02' : '0.03'})`;
-                  e.currentTarget.style.borderColor = `rgba(255,255,255,${isSmall ? '0.04' : '0.06'})`;
+                  e.currentTarget.style.background = "rgba(255,255,255,0.02)";
+                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.04)";
+                  const inner = e.currentTarget.querySelector('.inner-plate');
+                  if (inner) inner.style.transform = "scale(1)";
                 }}
               >
-                +{p}
+                <div
+                  className="inner-plate"
+                  style={{
+                    width: B_WIDTHS[p],
+                    height: B_HEIGHTS[p],
+                    background: PLATE_COLORS[p].bg,
+                    color: PLATE_COLORS[p].text,
+                    fontSize: p < 5 ? 6.5 : 8,
+                    fontWeight: 900,
+                    fontFamily: T.mono,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 2,
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+                    transition: "transform 100ms",
+                  }}
+                >
+                  {label}
+                </div>
               </button>
             );
           })}
