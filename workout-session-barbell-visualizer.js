@@ -6,18 +6,21 @@ function BarbellVisualizer({ weight, onWeightChange }) {
     15: { bg: "#F97316", text: "#FFFFFF" }, // orange
     10: { bg: "#F8FAFC", text: "#1E293B" }, // white
     5: { bg: "#6B7280", text: "#FFFFFF" },  // grey
+    2.5: { bg: "#EF4444", text: "#FFFFFF" }, // red
+    1: { bg: "#06B6D4", text: "#FFFFFF" },   // cyan
+    0.5: { bg: "#A855F7", text: "#FFFFFF" }, // purple
   };
 
-  const PLATE_SIZES = [45, 35, 25, 15, 10, 5];
+  const PLATE_SIZES = [45, 35, 25, 15, 10, 5, 2.5, 1, 0.5];
 
   // Decompose weight into plates on one side
   const loadedPlates = [];
   let rem = (weight - 45) / 2;
   if (rem > 0) {
     for (const p of PLATE_SIZES) {
-      while (rem >= p) {
+      while (rem >= p - 0.0001) {
         loadedPlates.push(p);
-        rem -= p;
+        rem = Math.round((rem - p) * 100) / 100;
       }
     }
   }
@@ -36,12 +39,12 @@ function BarbellVisualizer({ weight, onWeightChange }) {
   };
 
   const getPlateWidth = (p) => {
-    const widths = { 45: 14, 35: 13, 25: 12, 15: 11, 10: 10, 5: 9 };
+    const widths = { 45: 14, 35: 13, 25: 12, 15: 11, 10: 10, 5: 9, 2.5: 8, 1: 7, 0.5: 6 };
     return widths[p] || 12;
   };
 
   const getPlateHeight = (p) => {
-    const heights = { 45: 48, 35: 43, 25: 38, 15: 33, 10: 28, 5: 22 };
+    const heights = { 45: 48, 35: 43, 25: 38, 15: 33, 10: 28, 5: 22, 2.5: 18, 1: 15, 0.5: 12 };
     return heights[p] || 36;
   };
 
@@ -232,7 +235,7 @@ function BarbellVisualizer({ weight, onWeightChange }) {
             </button>
           )}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
           {PLATE_SIZES.map(p => (
             <button
               key={p}
