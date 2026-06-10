@@ -106,12 +106,6 @@ function renderWorkoutSummaryCard() {
   const prevVol = historyData.length > 1 ? historyData[historyData.length - 2].volume : 0;
   const netTrend = prevVol > 0 ? Math.round(((latestVol - prevVol) / prevVol) * 100) : null;
 
-  const musRows = muscleVolumeList.slice(0, 6).map(([mn, vol]) => ({
-    label: (MUSCLE_GROUPS[mn] && MUSCLE_GROUPS[mn].label) || mn,
-    pct: Math.round((vol / totalMusVolume) * 100),
-  }));
-  const maxMusPct = Math.max(1, ...musRows.map(r => r.pct));
-
   const weekAnchorMs = Date.parse(latest.date + 'T00:00:00');
   const weekStartMs = weekAnchorMs - 6 * 86400000;
   const weeklySets = {};
@@ -126,8 +120,17 @@ function renderWorkoutSummaryCard() {
       map.secondary.forEach(mm => { weeklySets[mm] = (weeklySets[mm] || 0) + getMuscleImpact(set.exercise, mm, false); });
     });
   });
-  const weeklySetsList = Object.entries(weeklySets).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  const maxWeeklySets = Math.max(1, ...weeklySetsList.map(r => r[1]));
+
+  const combinedList = [];
+  const allKeys = new Set([...Object.keys(weeklySets), ...Object.keys(muscles)]);
+  allKeys.forEach(mn => {
+    const weeklyVal = weeklySets[mn] || 0;
+    const sessionPct = muscles[mn] ? Math.round((muscles[mn] / totalMusVolume) * 100) : 0;
+    combinedList.push({ mn, weeklyVal, sessionPct });
+  });
+  combinedList.sort((a, b) => b.weeklyVal - a.weeklyVal || b.sessionPct - a.sessionPct);
+  const finalList = combinedList.slice(0, 8);
+  const maxWeeklySets = Math.max(1, ...finalList.map(r => r.weeklyVal));
 
   const MONO = 'ui-monospace,Menlo,monospace';
   const fmtW = (w) => (Math.round(w * 10) / 10);
@@ -169,25 +172,22 @@ function renderWorkoutSummaryCard() {
 
   const netColor = netTrend == null ? '#6B7280' : netTrend > 0 ? '#34D399' : netTrend < 0 ? '#F87171' : '#6B7280';
 
-  const musHTML = musRows.map(r => `
-    <div title="${_esc(r.label)}: ${r.pct}% of this session's muscle-weighted volume" style="display:flex;align-items:center;gap:12px;padding:3px 0;cursor:default">
-      <span style="width:84px;flex-shrink:0;color:#D1D5DB;font-size:13px">${_esc(r.label)}</span>
-      <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden"><div style="height:100%;width:${(r.pct / maxMusPct) * 100}%;background:rgba(255,255,255,0.22);border-radius:99px"></div></div>
-      <span style="width:34px;text-align:right;color:#9CA3AF;font-size:12px;font-family:${MONO}">${r.pct}%</span>
-    </div>`).join('');
-
   const fmtSets = (x) => { const r = Math.round(x * 10) / 10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
-  const weeklySetsHTML = weeklySetsList.length ? weeklySetsList.map(([mn, sets]) => {
+  const weeklySetsHTML = finalList.length ? finalList.map(({ mn, weeklyVal, sessionPct }) => {
     const label = (MUSCLE_GROUPS[mn] && MUSCLE_GROUPS[mn].label) || mn;
-    const n = fmtSets(sets);
-    const cnt = sets;
-    const numColor = cnt >= 10 && cnt <= 20 ? '#34D399' : cnt > 20 ? '#FBBF24' : '#C4B5FD';
-    return `<div title="${_esc(label)}: ${n} allocated working sets over the last 7 days (10–20 is the hypertrophy sweet spot)" style="display:flex;align-items:center;gap:12px;padding:3px 0;cursor:default">
+    const n = fmtSets(weeklyVal);
+    const numColor = weeklyVal >= 10 && weeklyVal <= 20 ? '#34D399' : weeklyVal > 20 ? '#FBBF24' : '#C4B5FD';
+    return `<div title="${_esc(label)}: ${n} weekly sets, ${sessionPct}% session focus" style="display:flex;align-items:center;gap:12px;padding:3px 0;cursor:default">
       <span style="width:84px;flex-shrink:0;color:#D1D5DB;font-size:13px">${_esc(label)}</span>
-      <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden"><div style="height:100%;width:${(sets / maxWeeklySets) * 100}%;background:rgba(167,139,250,0.55);border-radius:99px"></div></div>
-      <span style="width:38px;text-align:right;color:${numColor};font-size:12px;font-weight:700;font-family:${MONO}">${n}</span>
+      <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden">
+        <div style="height:100%;width:${(weeklyVal / maxWeeklySets) * 100}%;background:rgba(167,139,250,0.55);border-radius:99px"></div>
+      </div>
+      <div style="width:48px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.2;flex-shrink:0">
+        <span style="color:${numColor};font-size:13px;font-weight:800;font-family:${MONO}">${n}</span>
+        <span style="color:#6B7280;font-size:10px;font-weight:600;font-family:${MONO}">${sessionPct > 0 ? `${sessionPct}%` : '—'}</span>
+      </div>
     </div>`;
-  }).join('') : `<div style="color:#6B7280;font-size:12px;padding:6px 0">No working sets in the last 7 days.</div>`;
+  }).join('') : `<div style="color:#6B7280;font-size:12px;padding:6px 0">No working sets logged.</div>`;
 
   const exHTML = exList.map(e => {
     const pr = e.isPR;
@@ -235,13 +235,9 @@ function renderWorkoutSummaryCard() {
         ` : ''}
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:18px">
+      <div style="margin-bottom:18px">
         <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:15px 16px">
-          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-bottom:10px">MUSCLE FOCUS <span style="color:#4B5563;font-weight:600;letter-spacing:0.04em">· THIS SESSION</span></div>
-          ${musHTML}
-        </div>
-        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:15px 16px">
-          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#A78BFA;font-family:${MONO};margin-bottom:10px">HARD SETS <span style="color:#6D5B9E;font-weight:600;letter-spacing:0.04em">· LAST 7 DAYS</span></div>
+          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#A78BFA;font-family:${MONO};margin-bottom:10px">HARD SETS <span style="color:#6D5B9E;font-weight:600;letter-spacing:0.04em">· 7D SETS / SESSION FOCUS</span></div>
           ${weeklySetsHTML}
         </div>
       </div>
