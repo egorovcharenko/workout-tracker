@@ -125,7 +125,7 @@ function renderHome() {
   `;
 
   return `
-    <div style="max-width: 1200px; margin: 0 auto; padding: 16px 16px 40px; background:#f9fafb; min-height:100vh">
+    <div style="max-width: 600px; margin: 0 auto; padding: 16px 16px 40px; background:#f9fafb; min-height:100vh">
       <div style="display:flex;align-items:center;margin-bottom:16px">
         <div>
           <span style="font-size:11px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">${getSessionDateStr()}</span>
