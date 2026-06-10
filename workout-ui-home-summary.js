@@ -205,7 +205,7 @@ function renderWorkoutSummaryCard() {
   }).join('');
 
   return `
-    <div data-noinvert style="margin-bottom:16px;overflow:hidden;background:#0B0F14;border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px 18px 20px">
+    <div data-noinvert style="max-width:600px;margin:0 auto 16px;overflow:hidden;background:#0B0F14;border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px 18px 20px">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:18px">
         <div style="min-width:140px;flex:1">
           <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;letter-spacing:0.08em;color:#C4B5FD;background:rgba(139,92,246,0.16);border:1px solid rgba(139,92,246,0.35);padding:4px 10px;border-radius:99px;font-family:${MONO}">✓ DONE</span>
