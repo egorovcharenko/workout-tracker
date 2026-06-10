@@ -235,7 +235,7 @@ function renderWorkoutSummaryCard() {
         ` : ''}
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:18px">
+      <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:18px">
         <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:15px 16px">
           <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-bottom:10px">MUSCLE FOCUS <span style="color:#4B5563;font-weight:600;letter-spacing:0.04em">· THIS SESSION</span></div>
           ${musHTML}
@@ -250,7 +250,7 @@ function renderWorkoutSummaryCard() {
         <span style="font-size:10px;font-weight:800;letter-spacing:0.1em;color:#6B7280;font-family:${MONO}">ALL EXERCISES</span>
         <span style="font-size:11px;color:#6B7280">${numLifts} lifts · est. 1RM trend${upCount || downCount ? ` (${upCount} up · ${downCount} down)` : ''}</span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">
+      <div style="display:grid;grid-template-columns:1fr;gap:10px">
         ${exHTML || '<div style="color:#6B7280;font-size:12px;padding:8px 0">No working sets logged.</div>'}
       </div>
     </div>
