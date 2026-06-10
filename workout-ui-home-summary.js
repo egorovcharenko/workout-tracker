@@ -203,17 +203,18 @@ function renderWorkoutSummaryCard() {
     const pr = e.isPR;
     const dc = e.deltaPct == null ? '#6B7280' : e.deltaPct > 0 ? '#34D399' : e.deltaPct < 0 ? '#F87171' : '#6B7280';
     const dt = e.deltaPct == null ? '' : `${e.deltaPct > 0 ? '+' : ''}${e.deltaPct}%`;
-    const tip = `${_esc(e.exName)}: Top ${fmtW(e.sum.bestW)}×${e.sum.bestR} · ${e.sum.setsCount} sets · 1RM ${Math.round(e.sum.best1RM)}`;
-    return `<div title="${tip}" style="background:${pr ? 'rgba(251,191,36,0.04)' : 'rgba(255,255,255,0.01)'};border:1px solid ${pr ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.03)'};${pr ? 'border-left:3px solid #FBBF24;' : ''}border-radius:8px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px">
-      <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1">
-        ${pr ? `<span style="color:#FBBF24;font-size:10px;flex-shrink:0">★</span>` : ''}
-        <span style="color:#F3F4F6;font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(e.exName)}</span>
+    return `<div style="background:${pr ? 'rgba(251,191,36,0.04)' : 'rgba(255,255,255,0.01)'};border:1px solid ${pr ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.03)'};${pr ? 'border-left:3px solid #FBBF24;' : ''}border-radius:8px;padding:6px 10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1">
+          ${pr ? `<span style="color:#FBBF24;font-size:10px;flex-shrink:0">★</span>` : ''}
+          <span style="color:#F3F4F6;font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(e.exName)}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+          ${spark(e.sparkPts)}
+          ${dt ? `<span style="min-width:36px;text-align:right;color:${dc};font-family:${MONO};font-size:12px;font-weight:800">${dt}</span>` : `<span style="width:36px"></span>`}
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
-        <span style="color:#9CA3AF;font-size:11px;font-family:${MONO}">${fmtW(e.sum.bestW)}×${e.sum.bestR}</span>
-        ${spark(e.sparkPts)}
-        ${dt ? `<span style="min-width:36px;text-align:right;color:${dc};font-family:${MONO};font-size:12px;font-weight:800">${dt}</span>` : `<span style="width:36px"></span>`}
-      </div>
+      <div style="margin-top:3px;color:#6B7280;font-size:10.5px;font-family:${MONO}">Top <span style="color:#D1D5DB;font-weight:700">${fmtW(e.sum.bestW)}×${e.sum.bestR}</span> · 1RM ${Math.round(e.sum.best1RM)} · ${e.sum.setsCount} sets</div>
     </div>`;
   }).join('');
 
@@ -234,6 +235,7 @@ function renderWorkoutSummaryCard() {
           <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:6px 10px;min-width:70px;text-align:center">
             <div style="font-size:18px;font-weight:800;color:#F3F4F6;font-family:${MONO};line-height:1">${totalSets}</div>
             <div style="font-size:8px;font-weight:800;letter-spacing:0.08em;color:#6B7280;font-family:${MONO};margin-top:4px">SETS</div>
+            <div style="font-size:8px;color:#6B7280;margin-top:2px;line-height:1">${numLifts} lifts</div>
           </div>
         </div>
 
