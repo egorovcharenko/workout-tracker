@@ -100,7 +100,7 @@ function StatsPane({ exercise, history, statHistory, exercises }) {
   Object.values(muscleSets7d).forEach(arr => arr.sort((a, b) => a.date.localeCompare(b.date)));
 
   const stat = statHistory || {};
-  const lookupIsAssist = exercise.name === "Bench Dips" || exercise.name === "Assisted Pull-Ups";
+  const lookupIsAssist = exercise.name === "Bench Dips" || exercise.name === "Assisted Pull-Ups" || exercise.name === "Dips";
   const histByDate = {};
   (history || []).forEach(sess => {
     if (!sess.date) return;

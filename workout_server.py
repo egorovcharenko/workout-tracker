@@ -529,7 +529,7 @@ def get_exercise_1rm_history():
         reps_raw[(r["exercise"], r["date"])].append(reps)
         if r["weight_lb"] and float(r["weight_lb"]) > 0:
             w = float(r["weight_lb"])
-            is_assist = r["exercise"] in ("Bench Dips", "Assisted Pull-Ups")
+            is_assist = r["exercise"] in ("Bench Dips", "Assisted Pull-Ups", "Dips")
             is_band_addon = r["exercise"] in ("Goblet Squat", "Bulgarian Split Squat")
             
             band_sum = 0.0
