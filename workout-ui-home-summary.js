@@ -41,7 +41,7 @@ function renderWorkoutSummaryCard() {
     sum.totalVol += vol;
     sum.setsCount++;
     const est = calcSet1RM(ex, w, r, set.bands_json);
-    const isAssist = ex === "Bench Dips" || ex === "Assisted Pull-Ups" || ex === "Dips";
+    const isAssist = ex === "Assisted Pull-Ups" || ex === "Dips";
     if (sum.best1RM === 0 && isAssist) sum.best1RM = -Infinity;
     if (est > sum.best1RM) {
       sum.bestW = w;
@@ -70,7 +70,7 @@ function renderWorkoutSummaryCard() {
     return { date: s.date, volume: vol };
   });
 
-  const _assist = (n) => n === "Bench Dips" || n === "Assisted Pull-Ups" || n === "Dips";
+  const _assist = (n) => n === "Assisted Pull-Ups" || n === "Dips";
   const exList = Object.entries(exerciseSummary).map(([exName, sum]) => {
     const perSession = [];
     history.forEach(s => {

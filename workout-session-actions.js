@@ -227,16 +227,17 @@ function useWorkoutActions({
     const targetSuperset = exercises[eIdx]?.superset;
     const targets = exercises.filter((e, i) => targetSuperset ? (e.superset === targetSuperset) : (i === eIdx));
     if (!targets.every(e => e.sets.filter(s => s.kind === "work").length > 1)) return;
+    const minWork = Math.min(...targets.map(e => e.sets.filter(s => s.kind === "work").length));
     const next = exercises.map((e, i) => {
-      const match = targetSuperset ? (e.superset === targetSuperset) : (i === eIdx);
-      if (!match) return e;
-      const workEntries = e.sets.map((s, k) => ({ s, k })).filter(x => x.s.kind === "work");
-      const trailing = workEntries[workEntries.length - 1];
-      const wasActive = trailing.s.active;
-      let sets = e.sets.filter((_, j) => j !== trailing.k);
-      if (wasActive) {
-        const reactivate = [...sets].map((s, k) => ({ s, k })).reverse().find(x => x.s.kind === "work" && !x.s.completed)?.k;
-        if (reactivate != null) sets = sets.map((s, k) => k === reactivate ? { ...s, active: true } : s);
+      if (targetSuperset ? (e.superset !== targetSuperset) : (i !== eIdx)) return e;
+      const workSets = e.sets.filter(s => s.kind === "work");
+      if (targetSuperset && workSets.length <= minWork) return e;
+      const trailing = workSets[workSets.length - 1];
+      if (trailing?.completed) return e;
+      let sets = e.sets.filter(s => s !== trailing);
+      if (trailing?.active) {
+        const reactivate = [...sets].reverse().find(s => s.kind === "work" && !s.completed);
+        if (reactivate) sets = sets.map(s => s === reactivate ? { ...s, active: true } : s);
       }
       return { ...e, sets };
     });

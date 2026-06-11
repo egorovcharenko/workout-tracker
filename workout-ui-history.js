@@ -188,7 +188,7 @@ function renderSessionList() {
           const m = {};
           sets.forEach(st => {
             if (st.set_type !== 'working') return;
-            const isAssist = st.exercise === "Bench Dips" || st.exercise === "Assisted Pull-Ups" || st.exercise === "Dips";
+            const isAssist = st.exercise === "Assisted Pull-Ups" || st.exercise === "Dips";
             if (!m[st.exercise]) m[st.exercise] = { vol: 0, reps: 0, maxW: isAssist ? -Infinity : 0, best1RM: -Infinity };
             const r = parseInt(st.reps) || 0;
             const w = st.weight_lb || 0;

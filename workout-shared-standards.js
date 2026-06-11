@@ -5,7 +5,6 @@ const EXERCISE_MUSCLES = {
   "Overhead Tricep Extension": { primary: ["triceps"], secondary: [], ratios: { triceps: 1.0 } },
   "Band Tricep Pushdowns": { primary: ["triceps"], secondary: [], ratios: { triceps: 1.0 } },
   "Dumbbell Hammer Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.4 } },
-  "Bench Dips": { primary: ["triceps"], secondary: ["chest", "shoulders"], ratios: { triceps: 1.0, chest: 0.4, shoulders: 0.4 } },
   "Dips": { primary: ["triceps"], secondary: ["chest", "shoulders"], ratios: { triceps: 1.0, chest: 0.4, shoulders: 0.4 } },
   "Dumbbell Bent-Over Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"], ratios: { lats: 1.0, biceps: 0.3, rear_delts: 0.4 } },
   "Single-Arm Dumbbell Rows": { primary: ["lats"], secondary: ["biceps", "rear_delts"], ratios: { lats: 1.0, biceps: 0.3, rear_delts: 0.4 } },
@@ -49,7 +48,6 @@ const STRENGTH_STANDARDS = {
   "Single-Leg DB RDL": { beg: 20, nov: 35, int: 55, adv: 80, elite: 110 },
   "Dumbbell Bicep Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
   "Dumbbell Hammer Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
-  "Bench Dips": { beg: -17, nov: 38, int: 106, adv: 183, elite: 267 },
   "Dips": { beg: -17, nov: 38, int: 106, adv: 183, elite: 267 },
   "Assisted Pull-Ups": { beg: -28, nov: 18, int: 75, adv: 138, elite: 206 },
   "Band Row": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
@@ -83,7 +81,7 @@ function getMuscleImpact(exName, muscle, isPrimary) {
 }
 
 function calcSet1RM(exerciseName, weight, reps, bandsJson) {
-  const isAssist = exerciseName === "Bench Dips" || exerciseName === "Assisted Pull-Ups" || exerciseName === "Dips";
+  const isAssist = exerciseName === "Assisted Pull-Ups" || exerciseName === "Dips";
   
   let bandSum = 0;
   if (bandsJson) {

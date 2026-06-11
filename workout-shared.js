@@ -233,7 +233,6 @@ const SWAP_GROUPS = [
     exercises: [
       { name: "Band Tricep Pushdowns", sets: 3, reps: "12-15", notes: "Elbows glued to ribs, squeeze at bottom", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", rest: 60 },
       { name: "Dips", sets: 3, reps: "8-12", notes: "Use power rack dip attachment. Lower until elbows ~90° and drive up. Loop bands over handles under knees/feet for assist.", equipment: "band", assist: true, video: "https://www.youtube.com/shorts/0326dy_-CzM", rest: 60 },
-      { name: "Bench Dips", sets: 3, reps: "10-15", notes: "Hands on bench behind you, lower until elbows ~90°. Band ASSISTS — loop it under your hips to take weight off; leave bands empty for full bodyweight.", equipment: "band", assist: true, video: "https://www.youtube.com/shorts/0326dy_-CzM", rest: 60 },
       { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", notes: "Single DB, both hands", video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
     ]
   },
