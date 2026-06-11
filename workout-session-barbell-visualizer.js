@@ -12,8 +12,8 @@ function BarbellVisualizer({ weight, onWeightChange }) {
   };
 
   const PLATE_SIZES = [45, 35, 25, 15, 10, 5, 2.5, 1, 0.5];
-  const B_WIDTHS = { 45: 26, 35: 24, 25: 22, 15: 20, 10: 18, 5: 16, 2.5: 16, 1: 14, 0.5: 14 };
-  const B_HEIGHTS = { 45: 44, 35: 44, 25: 44, 15: 44, 10: 44, 5: 24, 2.5: 22, 1: 20, 0.5: 18 };
+  const B_WIDTHS = { 45: 26, 35: 20, 25: 16, 15: 12, 10: 9, 5: 9, 2.5: 8, 1: 7, 0.5: 6 };
+  const B_HEIGHTS = { 45: 66, 35: 66, 25: 66, 15: 66, 10: 66, 5: 36, 2.5: 33, 1: 30, 0.5: 27 };
 
   // Decompose weight into plates on one side
   const loadedPlates = [];
@@ -31,15 +31,15 @@ function BarbellVisualizer({ weight, onWeightChange }) {
   const handleRemovePlateAtIndex = (idx) => onWeightChange(Math.max(45, weight - loadedPlates[idx] * 2));
   const handleClear = () => onWeightChange(45);
 
-  const getPlateWidth = (p) => ({ 45: 14, 35: 13, 25: 12, 15: 11, 10: 10, 5: 9, 2.5: 8, 1: 7, 0.5: 6 }[p] || 12);
-  const getPlateHeight = (p) => ({ 45: 48, 35: 48, 25: 48, 15: 48, 10: 48, 5: 22, 2.5: 18, 1: 15, 0.5: 12 }[p] || 36);
+  const getPlateWidth = (p) => ({ 45: 16, 35: 12, 25: 9, 15: 6, 10: 5, 5: 5, 2.5: 4, 1: 3.5, 0.5: 3 }[p] || 12);
+  const getPlateHeight = (p) => ({ 45: 72, 35: 72, 25: 72, 15: 72, 10: 72, 5: 33, 2.5: 27, 1: 22, 0.5: 18 }[p] || 36);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
       {/* Barbell load graphic */}
       <div style={{
         position: "relative",
-        height: 64,
+        height: 88,
         background: "rgba(255,255,255,0.015)",
         borderRadius: 12,
         border: "1px solid rgba(255,255,255,0.06)",
@@ -231,7 +231,7 @@ function BarbellVisualizer({ weight, onWeightChange }) {
                 style={{
                   flex: 1,
                   minWidth: 0,
-                  height: 48,
+                  height: 72,
                   background: "rgba(255,255,255,0.02)",
                   border: "1px solid rgba(255,255,255,0.04)",
                   borderRadius: 8,
