@@ -13,7 +13,7 @@ function BarbellVisualizer({ weight, onWeightChange }) {
 
   const PLATE_SIZES = [45, 35, 25, 15, 10, 5, 2.5, 1, 0.5];
   const B_WIDTHS = { 45: 26, 35: 24, 25: 22, 15: 20, 10: 18, 5: 16, 2.5: 16, 1: 14, 0.5: 14 };
-  const B_HEIGHTS = { 45: 44, 35: 40, 25: 36, 15: 32, 10: 28, 5: 24, 2.5: 22, 1: 20, 0.5: 18 };
+  const B_HEIGHTS = { 45: 44, 35: 44, 25: 44, 15: 44, 10: 44, 5: 24, 2.5: 22, 1: 20, 0.5: 18 };
 
   // Decompose weight into plates on one side
   const loadedPlates = [];
@@ -32,7 +32,7 @@ function BarbellVisualizer({ weight, onWeightChange }) {
   const handleClear = () => onWeightChange(45);
 
   const getPlateWidth = (p) => ({ 45: 14, 35: 13, 25: 12, 15: 11, 10: 10, 5: 9, 2.5: 8, 1: 7, 0.5: 6 }[p] || 12);
-  const getPlateHeight = (p) => ({ 45: 48, 35: 43, 25: 38, 15: 33, 10: 28, 5: 22, 2.5: 18, 1: 15, 0.5: 12 }[p] || 36);
+  const getPlateHeight = (p) => ({ 45: 48, 35: 48, 25: 48, 15: 48, 10: 48, 5: 22, 2.5: 18, 1: 15, 0.5: 12 }[p] || 36);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
@@ -221,18 +221,17 @@ function BarbellVisualizer({ weight, onWeightChange }) {
             </button>
           )}
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
+        <div style={{ display: "flex", gap: 4, justifyContent: "space-between" }}>
           {PLATE_SIZES.map(p => {
-            const isSmall = p <= 5;
-            const w = isSmall ? "calc(25% - 4.5px)" : "calc(20% - 4.8px)";
             const label = p === 0.5 ? '.5' : p;
             return (
               <button
                 key={p}
                 onClick={() => handleAddPlate(p)}
                 style={{
-                  width: w,
-                  height: isSmall ? 40 : 52,
+                  flex: 1,
+                  minWidth: 0,
+                  height: 48,
                   background: "rgba(255,255,255,0.02)",
                   border: "1px solid rgba(255,255,255,0.04)",
                   borderRadius: 8,
@@ -241,7 +240,6 @@ function BarbellVisualizer({ weight, onWeightChange }) {
                   alignItems: "center",
                   justifyContent: "center",
                   transition: "all 120ms ease",
-                  marginTop: (p === 5) ? 4 : 0,
                   padding: 0,
                 }}
                 onMouseEnter={(e) => {
