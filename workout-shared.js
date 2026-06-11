@@ -261,8 +261,9 @@ const SWAP_GROUPS = [
 ];
 
 function findExerciseConfig(exerciseName) {
+  const name = exerciseName === "Bench Dips" ? "Dips" : exerciseName;
   for (const grp of SWAP_GROUPS) {
-    const found = grp.exercises.find(e => e.name === exerciseName);
+    const found = grp.exercises.find(e => e.name === name);
     if (found) return found;
   }
   return null;
@@ -270,20 +271,24 @@ function findExerciseConfig(exerciseName) {
 
 // Returns the array of exercises within the matching family
 function getSwapGroup(exerciseName) {
-  const grp = SWAP_GROUPS.find(g => g.exercises.some(e => e.name === exerciseName));
+  const name = exerciseName === "Bench Dips" ? "Dips" : exerciseName;
+  const grp = SWAP_GROUPS.find(g => g.exercises.some(e => e.name === name));
   return grp ? grp.exercises : null;
 }
 
 function getSwapGroupName(exerciseName) {
-  const grp = SWAP_GROUPS.find(g => g.exercises.some(e => e.name === exerciseName));
+  const name = exerciseName === "Bench Dips" ? "Dips" : exerciseName;
+  const grp = SWAP_GROUPS.find(g => g.exercises.some(e => e.name === name));
   return grp ? grp.family : null;
 }
 
 function getSwapOptions(exerciseName) {
-  const g = getSwapGroup(exerciseName);
-  return g ? g.filter(e => e.name !== exerciseName) : [];
+  const name = exerciseName === "Bench Dips" ? "Dips" : exerciseName;
+  const g = getSwapGroup(name);
+  return g ? g.filter(e => e.name !== name) : [];
 }
 
 function isSwappable(exerciseName) {
-  return SWAP_GROUPS.some(g => g.exercises.some(e => e.name === exerciseName));
+  const name = exerciseName === "Bench Dips" ? "Dips" : exerciseName;
+  return SWAP_GROUPS.some(g => g.exercises.some(e => e.name === name));
 }
