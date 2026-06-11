@@ -12,7 +12,7 @@ function BarbellVisualizer({ weight, onWeightChange }) {
   };
 
   const PLATE_SIZES = [45, 35, 25, 15, 10, 5, 2.5, 1, 0.5];
-  const B_WIDTHS = { 45: 26, 35: 20, 25: 16, 15: 12, 10: 9, 5: 9, 2.5: 8, 1: 7, 0.5: 6 };
+  const B_WIDTHS = { 45: 28, 35: 24, 25: 20, 15: 16, 10: 14, 5: 14, 2.5: 13, 1: 12, 0.5: 11 };
   const B_HEIGHTS = { 45: 66, 35: 66, 25: 66, 15: 66, 10: 66, 5: 36, 2.5: 33, 1: 30, 0.5: 27 };
 
   // Decompose weight into plates on one side
@@ -31,8 +31,61 @@ function BarbellVisualizer({ weight, onWeightChange }) {
   const handleRemovePlateAtIndex = (idx) => onWeightChange(Math.max(45, weight - loadedPlates[idx] * 2));
   const handleClear = () => onWeightChange(45);
 
-  const getPlateWidth = (p) => ({ 45: 16, 35: 12, 25: 9, 15: 6, 10: 5, 5: 5, 2.5: 4, 1: 3.5, 0.5: 3 }[p] || 12);
+  const getPlateWidth = (p) => ({ 45: 18, 35: 14, 25: 11, 15: 9, 10: 8, 5: 8, 2.5: 7, 1: 6, 0.5: 5 }[p] || 12);
   const getPlateHeight = (p) => ({ 45: 72, 35: 72, 25: 72, 15: 72, 10: 72, 5: 33, 2.5: 27, 1: 22, 0.5: 18 }[p] || 36);
+
+  const renderSleeve = (side) => {
+    const isLeft = side === "left";
+    return (
+      <div style={{
+        position: "absolute",
+        [isLeft ? "right" : "left"]: "65%",
+        [isLeft ? "marginRight" : "marginLeft"]: 2,
+        display: "flex",
+        flexDirection: isLeft ? "row-reverse" : "row",
+        alignItems: "center",
+        gap: 2,
+      }}>
+        {loadedPlates.map((p, idx) => {
+          const isDarkText = PLATE_COLORS[p].text === "#1E293B";
+          const textShadow = isDarkText
+            ? "0 0 2px #fff, 0 0 2px #fff, 0 0 2px #fff"
+            : "0 0 2px #000, 0 0 2px #000, 0 0 2px #000";
+          return (
+            <div
+              key={`${side}-${idx}`}
+              onClick={() => handleRemovePlateAtIndex(idx)}
+              title="Click to remove plate"
+              style={{
+                width: getPlateWidth(p),
+                height: getPlateHeight(p),
+                background: PLATE_COLORS[p].bg,
+                color: PLATE_COLORS[p].text,
+                fontSize: p >= 25 ? 11 : p >= 10 ? 9.5 : 8.5,
+                fontWeight: 900,
+                fontFamily: T.mono,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 2,
+                cursor: "pointer",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.4)",
+                userSelect: "none",
+                transition: "transform 100ms",
+                whiteSpace: "nowrap",
+                overflow: "visible",
+                textShadow,
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.06)"}
+              onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+            >
+              {p === 0.5 ? '.5' : p}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
@@ -99,84 +152,10 @@ function BarbellVisualizer({ weight, onWeightChange }) {
         }} />
 
         {/* Left sleeve loaded plates (inside out: right to left) */}
-        <div style={{
-          position: "absolute",
-          right: "65%",
-          marginRight: 2,
-          display: "flex",
-          flexDirection: "row-reverse",
-          alignItems: "center",
-          gap: 2,
-        }}>
-          {loadedPlates.map((p, idx) => (
-            <div
-              key={`left-${idx}`}
-              onClick={() => handleRemovePlateAtIndex(idx)}
-              title="Click to remove plate"
-              style={{
-                width: getPlateWidth(p),
-                height: getPlateHeight(p),
-                background: PLATE_COLORS[p].bg,
-                color: PLATE_COLORS[p].text,
-                fontSize: p < 5 ? 6.5 : 8,
-                fontWeight: 900,
-                fontFamily: T.mono,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 2,
-                cursor: "pointer",
-                boxShadow: "0 2px 4px rgba(0,0,0,0.4)",
-                userSelect: "none",
-                transition: "transform 100ms",
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.06)"}
-              onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-            >
-              {p === 0.5 ? '.5' : p}
-            </div>
-          ))}
-        </div>
+        {renderSleeve("left")}
 
         {/* Right sleeve loaded plates (inside out: left to right) */}
-        <div style={{
-          position: "absolute",
-          left: "65%",
-          marginLeft: 2,
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 2,
-        }}>
-          {loadedPlates.map((p, idx) => (
-            <div
-              key={`right-${idx}`}
-              onClick={() => handleRemovePlateAtIndex(idx)}
-              title="Click to remove plate"
-              style={{
-                width: getPlateWidth(p),
-                height: getPlateHeight(p),
-                background: PLATE_COLORS[p].bg,
-                color: PLATE_COLORS[p].text,
-                fontSize: p < 5 ? 6.5 : 8,
-                fontWeight: 900,
-                fontFamily: T.mono,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 2,
-                cursor: "pointer",
-                boxShadow: "0 2px 4px rgba(0,0,0,0.4)",
-                userSelect: "none",
-                transition: "transform 100ms",
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.06)"}
-              onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-            >
-              {p === 0.5 ? '.5' : p}
-            </div>
-          ))}
-        </div>
+        {renderSleeve("right")}
 
         {/* Central Display Bubble */}
         <div style={{
@@ -262,7 +241,7 @@ function BarbellVisualizer({ weight, onWeightChange }) {
                     height: B_HEIGHTS[p],
                     background: PLATE_COLORS[p].bg,
                     color: PLATE_COLORS[p].text,
-                    fontSize: p < 5 ? 6.5 : 8,
+                    fontSize: p >= 25 ? 14 : p >= 10 ? 12.5 : 11,
                     fontWeight: 900,
                     fontFamily: T.mono,
                     display: "flex",
@@ -271,6 +250,11 @@ function BarbellVisualizer({ weight, onWeightChange }) {
                     borderRadius: 2,
                     boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
                     transition: "transform 100ms",
+                    whiteSpace: "nowrap",
+                    overflow: "visible",
+                    textShadow: PLATE_COLORS[p].text === "#1E293B"
+                      ? "0 0 2px #fff, 0 0 2px #fff, 0 0 2px #fff"
+                      : "0 0 2.5px #000, 0 0 2.5px #000, 0 0 2.5px #000",
                   }}
                 >
                   {label}
