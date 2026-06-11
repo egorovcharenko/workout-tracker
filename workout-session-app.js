@@ -17,20 +17,7 @@ function App() {
   const [sessionId, setSessionId] = useState(null);
   const [focusIdx, setFocusIdx] = useState(null);
   
-  const {
-    elapsed,
-    running,
-    startedAt,
-    rest,
-    setElapsed,
-    setRunning,
-    setStartedAt,
-    setRest,
-    startTimer,
-    restAdd,
-    restSkip,
-    restToggle
-  } = useWorkoutTimers(workoutId, exercises);
+  const { elapsed, running, startedAt, rest, setElapsed, setRunning, setStartedAt, setRest, startTimer, restAdd, restSkip, restToggle } = useWorkoutTimers(workoutId, exercises);
   
   const [motivations, setMotivations] = useState({});
   const [history, setHistory] = useState([]);
@@ -40,13 +27,7 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoaded(false);
-    setExercises([]);
-    setSessionId(null);
-    setMotivations({});
-    setHistory([]);
-    setStatHistory({});
-    setSwaps({});
+    setLoaded(false); setExercises([]); setSessionId(null); setMotivations({}); setHistory([]); setStatHistory([]); setSwaps({});
     (async () => {
       try {
         const results = await Promise.allSettled([
@@ -67,6 +48,20 @@ function App() {
         const activeDate = (today && today.date) ? today.date : localDate();
         setSessionDate(activeDate);
         const swapMap = loadSwaps(workout.name, activeDate);
+        let hasNewSwap = false;
+        if (today && today.sets) {
+          today.sets.forEach(set => {
+            if (set.exercise === "Barbell Back Squat" && !swapMap["0"]) {
+              swapMap["0"] = "Barbell Back Squat";
+              hasNewSwap = true;
+            }
+            if (set.exercise === "Dips" && !swapMap["5-0"]) {
+              swapMap["5-0"] = "Dips";
+              hasNewSwap = true;
+            }
+          });
+        }
+        if (hasNewSwap) saveSwaps(workout.name, activeDate, swapMap);
         setSwaps(swapMap);
         let exs = flattenTemplate(applySwaps(workout, swapMap), last || {}, hints || {});
         const savedSetsMap = loadSessionSets(workout.name, activeDate);
