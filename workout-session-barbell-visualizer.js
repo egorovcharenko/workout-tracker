@@ -61,7 +61,7 @@ function BarbellVisualizer({ weight, onWeightChange }) {
                 height: getPlateHeight(p),
                 background: PLATE_COLORS[p].bg,
                 color: PLATE_COLORS[p].text,
-                fontSize: p >= 25 ? 11 : p >= 10 ? 9.5 : 8.5,
+                fontSize: p >= 25 ? 12.5 : p >= 10 ? 11 : 9.5,
                 fontWeight: 900,
                 fontFamily: T.mono,
                 display: "flex",
@@ -75,6 +75,7 @@ function BarbellVisualizer({ weight, onWeightChange }) {
                 whiteSpace: "nowrap",
                 overflow: "visible",
                 textShadow,
+                writingMode: "vertical-rl",
               }}
               onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.06)"}
               onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
