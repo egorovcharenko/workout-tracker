@@ -7,28 +7,24 @@ The app highlights the next workout on the home screen, but any workout can be
 started from the list.
 
 ## Main A (~40 min) — Mon/Fri slots
-1. **Barbell Back Squat** — 3×5–8  *(3 warm-up ramp sets; safety pins set low)*
+1. **Barbell Back Squat** — 4×5–8  *(3 warm-up ramp sets; safety pins set low)*
 2. **Barbell Bench Press** — 4×6–10  *(1 warm-up set)*
-3. **Assisted Pull-Ups (volume)** — 4×5–8  *(band that allows clean reps)*
-4. **Standing Overhead Press** — 3×6–10  *(from the rack; 1 warm-up)*
+3. **Assisted Pull-Ups (volume)** — 4×5–8 ⇆ **Standing Overhead Press** — 3×6–10
+   *(optional superset: do a pull-up set during the press rest)*
 
-## Micro: Arms & Core (~15 min) — Tue slot
-1. **Dumbbell Hammer Curls** — 3×8–12
-2. **Dumbbell Bicep Curls (supinated)** — 3×8–12
-3. **Band Tricep Pushdowns** — 3×10–15
-4. **Band Torso Rotation** — 2×10–12/side
+## Micro: Arms & Core (~10 min) — Tue slot
+1. **Dumbbell Hammer Curls** — 3×8–12 ⇆ **Band Tricep Pushdowns** — 3×10–15
+2. **Dumbbell Bicep Curls (supinated)** — 3×8–12 ⇆ **Band Torso Rotation** — 2×12–15/side
 
 ## Main B (~40 min) — Wed slot
-1. **Barbell Deadlift** — 3×5–8  *(3 warm-up ramp sets; reset each rep)*
+1. **Barbell Deadlift** — 4×5–8  *(3 warm-up ramp sets; reset each rep)*
 2. **Incline Barbell Press** — 4×6–10  *(1 warm-up; bench at ~30°)*
-3. **Bent-Over Barbell Rows** — 4×8–12
-4. **Pull-Ups (heavy)** — 3×3–5  *(lightest band for strict reps, or negatives)*
+3. **Pull-Ups (heavy)** — 3×3–5  *(lightest band for strict reps, or negatives)*
+4. **Bent-Over Barbell Rows** — 4×8–12
 
-## Micro: Delts & Traps (~15 min) — Thu slot
-1. **Dumbbell Shrugs** — 3×10–15
-2. **Face Pulls** — 3×12–15
-3. **Reverse Flyes** — 3×12–15
-4. **Dead Hang + Scap Pulls** — 2 sets  *(20–40s hang + 5–8 scap pulls)*
+## Micro: Delts & Traps (~10 min) — Thu slot
+1. **Face Pulls** — 3×12–15 ⇆ **Dumbbell Shrugs** — 3×10–15
+2. **Reverse Flyes** — 3×12–15 ⇆ **Dead Hang + Scap Pulls** — 3 sets  *(20–40s hang + 5–8 scap pulls)*
 
 ## Weekend
 - **Sat (optional):** anything missed, or ride/climb.
