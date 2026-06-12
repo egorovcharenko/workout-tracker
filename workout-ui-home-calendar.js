@@ -10,12 +10,17 @@ function renderCalendar() {
   const firstDay = new Date(year, month, 1).getDay();
   const monthName = targetDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
-  const WORKOUT_COLORS = {
-    "Arms & Shoulders": "#8b5cf6",
-    "Back": "#f59e0b",
-    "Full Body A": "#3b82f6",
-    "Full Body": "#3b82f6",
-    "Full Body B": "#10b981",
+  // Short badge per workout so the calendar shows WHICH session happened,
+  // not just that one did. Unknown/legacy names fall back to a gray dot.
+  const WORKOUT_BADGES = {
+    "Main A": { label: "A", color: "#3b82f6" },
+    "Main B": { label: "B", color: "#10b981" },
+    "Micro: Arms & Core": { label: "ARM", color: "#8b5cf6" },
+    "Micro: Delts & Traps": { label: "DLT", color: "#f59e0b" },
+    "Squat Day": { label: "SQ", color: "#60a5fa" },
+    "Deadlift Day": { label: "DL", color: "#34d399" },
+    "Full Body": { label: "FB", color: "#6b7280" },
+    "Full Body B": { label: "FB", color: "#6b7280" },
   };
   const dateMap = {};
   (state.history || []).forEach(s => {
@@ -27,6 +32,7 @@ function renderCalendar() {
     `<div style="font-size:10px;color:#9ca3af;text-align:center;font-weight:600">${d}</div>`
   ).join("");
 
+  const monthNames = new Set();
   let cells = "";
   for (let i = 0; i < firstDay; i++) {
     cells += `<div></div>`;
@@ -35,22 +41,28 @@ function renderCalendar() {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
     const workouts = dateMap[dateStr] || [];
-    const dots = workouts.map(w =>
-      `<span style="width:5px;height:5px;border-radius:50%;background:${WORKOUT_COLORS[w] || '#6b7280'};display:inline-block"></span>`
-    ).join("");
+    workouts.forEach(w => monthNames.add(w));
+    const badges = workouts.map(w => {
+      const b = WORKOUT_BADGES[w];
+      if (!b) return `<span style="width:5px;height:5px;border-radius:50%;background:#6b7280;display:inline-block"></span>`;
+      return `<span style="font-size:8px;font-weight:800;line-height:1;color:#fff;background:${b.color};border-radius:4px;padding:2px 3px;letter-spacing:0.02em">${b.label}</span>`;
+    }).join("");
     const bg = isToday ? "background:#eff6ff;border-radius:8px;" : "";
     const fw = isToday ? "font-weight:700;color:#2563eb;" : "color:#374151;";
     cells += `<div style="text-align:center;padding:4px 0;${bg}">
       <div style="font-size:12px;${fw}">${d}</div>
-      <div style="display:flex;justify-content:center;gap:2px;min-height:7px">${dots}</div>
+      <div style="display:flex;justify-content:center;align-items:center;gap:2px;min-height:12px;flex-wrap:wrap">${badges}</div>
     </div>`;
   }
 
-  const colorLegend = Object.entries(WORKOUT_COLORS).map(([name, color]) =>
-    `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#6b7280">
-      <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>${name}
-    </span>`
-  ).join("");
+  // Legend only lists workouts that actually appear in the displayed month.
+  const colorLegend = Object.entries(WORKOUT_BADGES)
+    .filter(([name]) => monthNames.has(name))
+    .map(([name, b]) =>
+      `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#6b7280">
+        <span style="font-size:8px;font-weight:800;line-height:1;color:#fff;background:${b.color};border-radius:4px;padding:2px 3px">${b.label}</span>${name}
+      </span>`
+    ).join("");
 
   return `
     <div class="card" style="padding:16px;margin-bottom:16px">
