@@ -74,14 +74,27 @@ function renderHome() {
   };
 
   const activeSess = state._activeSessions && state._activeSessions[0];
-  const A = WORKOUTS.find(w => w.id === 'squat-day') || WORKOUTS[0];
-  const B = WORKOUTS.find(w => w.id === 'deadlift-day') || WORKOUTS[0];
+  const program = WORKOUTS.filter(w => w.program);
+  const byId = id => WORKOUTS.find(w => w.id === id);
 
-  let nextW = A;
+  // Mains alternate (A/B/A this week, B/A/B next) — only new program names
+  // count for the rotation; seeded to Main B for the first session.
+  let nextMain = byId('main-b');
   for (const s of (state.history || [])) {
-    if (s.workout_name === A.name) { nextW = B; break; }
-    if (s.workout_name === B.name) { nextW = A; break; }
+    if (s.workout_name === 'Main A') { nextMain = byId('main-b'); break; }
+    if (s.workout_name === 'Main B') { nextMain = byId('main-a'); break; }
   }
+  // Micro due = the one done longer ago ('' sorts first, so never-done wins);
+  // on a tie fall back to the schedule (Tue arms, Thu delts).
+  const dow = new Date().getDay();
+  const lastDone = name => { const s = (state.history || []).find(x => x.workout_name === name); return s ? s.date : ''; };
+  const lastArms = lastDone('Micro: Arms & Core'), lastDelts = lastDone('Micro: Delts & Traps');
+  const microNext = lastArms === lastDelts
+    ? byId(dow === 4 ? 'micro-delts' : 'micro-arms')
+    : (lastArms < lastDelts ? byId('micro-arms') : byId('micro-delts'));
+  // Tue/Thu are micro days; everything else points at the next main.
+  const nextW = (dow === 2 || dow === 4) ? microNext : nextMain;
+
   let activeWorkout = nextW;
   let isOngoing = false;
   let logged = 0;
@@ -101,9 +114,19 @@ function renderHome() {
     }
   }
 
-  const otherW = activeWorkout.id === A.id ? B : A;
-  const abLabel = activeWorkout.abSplit ? `${activeWorkout.abSplit} · ` : '';
+  const kindLabel = w => w.kind === 'micro' ? 'Micro' : w.kind === 'optional' ? 'Optional' : `Main ${w.abSplit || ''}`.trim();
   const workoutUrl = `/workout?w=${activeWorkout.id}`;
+  const otherRows = program.filter(w => w.id !== activeWorkout.id).map(w => `
+    <a href="/workout?w=${w.id}" style="text-decoration:none;display:block;">
+      <div class="card clickable" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;margin:0;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#111827;">${w.name}</div>
+          <div style="font-size:11px;color:#9ca3af;font-weight:600;">${kindLabel(w)} · ${w.duration}</div>
+        </div>
+        <span style="font-size:12px;color:#2563eb;font-weight:700;white-space:nowrap;">Start →</span>
+      </div>
+    </a>
+  `).join('');
   const workoutButtonHTML = `
     <a href="${workoutUrl}" style="text-decoration:none;display:block;margin-bottom:8px;">
       <div style="background:linear-gradient(135deg, #eff6ff, #dbeafe); border:1px solid #bfdbfe; border-radius:14px; padding:18px; text-align:center; box-shadow:0 4px 12px rgba(59,130,246,0.08); transition:all 0.2s;" class="clickable">
@@ -111,15 +134,14 @@ function renderHome() {
           <span>${isOngoing ? '⚡️ Continue' : '🏋️‍♂️ Start'} · ${activeWorkout.name}</span>
         </div>
         <div style="font-size:12px; color:#60a5fa; font-weight:600;">
-          ${isOngoing ? `${logged} of ${expected} sets logged (${pct}%)` : `${abLabel}${activeWorkout.duration} · auto-selected`}
+          ${isOngoing ? `${logged} of ${expected} sets logged (${pct}%)` : `${kindLabel(activeWorkout)} · ${activeWorkout.duration} · up next`}
         </div>
       </div>
     </a>
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
-      ${isOngoing ? '<span></span>' : `<a href="/workout?w=${otherW.id}" style="font-size:12px; color:#2563eb; font-weight:700; text-decoration:none;">↔︎ Switch to ${otherW.name}</a>`}
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">${otherRows}</div>
+    <div style="text-align:right;margin-bottom:16px;">
       <span style="font-size:11px; color:#9ca3af;">🧪 Test (nothing saved):
-        <a href="/workout?w=${A.id}&test=1" style="color:#6b7280; text-decoration:underline;">${A.name}</a> ·
-        <a href="/workout?w=${B.id}&test=1" style="color:#6b7280; text-decoration:underline;">${B.name}</a>
+        ${program.filter(w => w.kind !== 'optional').map(w => `<a href="/workout?w=${w.id}&test=1" style="color:#6b7280; text-decoration:underline;">${w.name.replace('Micro: ', '')}</a>`).join(' · ')}
       </span>
     </div>
   `;

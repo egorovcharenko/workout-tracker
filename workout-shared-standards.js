@@ -32,7 +32,9 @@ const EXERCISE_MUSCLES = {
   "Standing Overhead Press": { primary: ["shoulders"], secondary: ["triceps", "upper_back", "core"], ratios: { shoulders: 1.0, triceps: 0.5, upper_back: 0.3, core: 0.4 } },
   "Face Pulls": { primary: ["rear_delts"], secondary: ["upper_back"], ratios: { rear_delts: 1.0, upper_back: 0.5 } },
   "Band Torso Rotation": { primary: ["core"], secondary: [], ratios: { core: 1.0 } },
-  "Hanging Knee Raise": { primary: ["core"], secondary: ["forearms"], ratios: { core: 1.0, forearms: 0.2 } }
+  "Hanging Knee Raise": { primary: ["core"], secondary: ["forearms"], ratios: { core: 1.0, forearms: 0.2 } },
+  "Dumbbell Shrugs": { primary: ["upper_back"], secondary: ["forearms"], ratios: { upper_back: 1.0, forearms: 0.3 } },
+  "Dead Hang + Scap Pulls": { primary: ["upper_back"], secondary: ["lats", "forearms"], ratios: { upper_back: 1.0, lats: 0.3, forearms: 0.5 } }
 };
 
 const STRENGTH_STANDARDS = {
