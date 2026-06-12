@@ -1,5 +1,9 @@
-function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onDeferExercise, onSwapExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup }) {
+function ExerciseCard({ exercise, supersetTag, embedded, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onDeferExercise, onSwapExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup }) {
   const [showAllFamilies, setShowAllFamilies] = useState(false);
+  // Embedded mode (inside a combined superset card): the parent owns the card
+  // chrome and section title; the variant picker collapses behind a footer
+  // toggle to keep the shared card compact.
+  const [showVariants, setShowVariants] = useState(false);
   const currentFamilyName = getSwapGroupName(exercise.name) || "Other";
 
   useEffect(() => {
@@ -81,29 +85,31 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
   );
 
   return (
-    <div style={{
+    <div style={embedded ? {} : {
       margin: "0 16px 12px", padding: "14px 14px 14px",
       background: T.cardBg,
       border: `1px solid ${T.cardBorder}`,
       borderRadius: 14,
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <h2 style={{ margin: 0, color: T.strong, fontSize: 20, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.4 }}>
-          {supersetTag && (
-            <span style={{
-              color: T.bands, fontFamily: T.mono, fontSize: 11, fontWeight: 800, letterSpacing: 1,
-              marginRight: 8, padding: "2px 6px", borderRadius: 5,
-              background: "rgba(192,132,252,0.12)", verticalAlign: "middle",
-            }}>{supersetTag}</span>
-          )}
-          {exercise.name}
-        </h2>
-      </div>
-      {exercise.note && (
+      {!embedded && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <h2 style={{ margin: 0, color: T.strong, fontSize: 20, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.4 }}>
+            {supersetTag && (
+              <span style={{
+                color: T.bands, fontFamily: T.mono, fontSize: 11, fontWeight: 800, letterSpacing: 1,
+                marginRight: 8, padding: "2px 6px", borderRadius: 5,
+                background: "rgba(192,132,252,0.12)", verticalAlign: "middle",
+              }}>{supersetTag}</span>
+            )}
+            {exercise.name}
+          </h2>
+        </div>
+      )}
+      {!embedded && exercise.note && (
         <p style={{ margin: "6px 0 0", color: T.muted, fontSize: 12, lineHeight: 1.4 }}>{exercise.note}</p>
       )}
 
-      {hasVariants && (
+      {hasVariants && (!embedded || showVariants) && (
         <div style={{ marginTop: 12 }}>
           <div style={{
             display: "flex", alignItems: "center", gap: 6, marginBottom: 7,
@@ -260,6 +266,7 @@ function ExerciseCard({ exercise, supersetTag, rest, onRestAdd, onRestSkip, onRe
       )}
 
       <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.cardBorder}`, flexWrap: "wrap" }}>
+        {embedded && hasVariants && footerBtn(showVariants ? "▾ hide variants" : "⇄ variant", () => setShowVariants(!showVariants))}
         {footerBtn("+ set", onAddSet)}
         {footerBtn("− set", onRemoveSet, !canRemove)}
         {/* Defer: do this exercise later (moves it to the end). Standalone

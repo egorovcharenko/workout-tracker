@@ -237,40 +237,172 @@ function App() {
           ) : shownExercise && (() => {
             const i = shownIdx;
             const ex = shownExercise;
-            const supersetTag = ex.superset ? `${ex.superset}${ex.supersetPos || ''}` : null;
+            // Combined superset view: partners render as one unit — collapsed
+            // summary rows around the full card for the exercise you're on,
+            // with shared round framing on top and a next-step hint below.
+            const group = ex.superset
+              ? exercises.map((e2, idx) => ({ e: e2, idx })).filter(g => !g.e.skipped && g.e.superset === ex.superset)
+              : [];
+            const combined = group.length > 1;
+            const posInGroup = combined ? group.findIndex(g => g.idx === i) + 1 : null;
+            const supersetTag = ex.superset ? `${ex.superset}${ex.supersetPos || posInGroup || ''}` : null;
+            const card = (
+              <ExerciseCard
+                exercise={ex}
+                supersetTag={supersetTag}
+                embedded={combined}
+                rest={rest}
+                onRestAdd={restAdd}
+                onRestSkip={restSkip}
+                onRestToggle={restToggle}
+                onPickWeight={(sIdx, w) => actions.onPickWeight(i, sIdx, w)}
+                onPickBodyweight={(sIdx, w) => actions.onPickBodyweight(i, sIdx, w)}
+                onPickGrip={(sIdx, g) => actions.onPickGrip(i, sIdx, g)}
+                onToggleBand={(sIdx, b) => actions.onToggleBand(i, sIdx, b)}
+                onClearBands={(sIdx) => actions.onClearBands(i, sIdx)}
+                onLogReps={(sIdx, r) => actions.onLogReps(i, sIdx, r)}
+                onSkipWarmup={() => actions.onSkipWarmup(i)}
+                onSkipExercise={() => actions.onSkipExercise(i)}
+                onDeferExercise={() => actions.onDeferExercise(i)}
+                onSwapExercise={(newName) => actions.onSwapExercise(i, newName)}
+                onReopenSet={(sIdx) => actions.onReopenSet(i, sIdx)}
+                onAddSet={() => actions.onAddSet(i)}
+                onRemoveSet={() => actions.onRemoveSet(i)}
+                onRemoveWarmup={() => actions.onRemoveWarmup(i)}
+              />
+            );
+            if (!combined) {
+              return (
+                <React.Fragment key={ex.id}>
+                  {ex.superset && (
+                    <div style={{ margin: "4px 16px 6px", display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ flex: 1, height: 1, background: "rgba(192,132,252,0.18)" }} />
+                      <span style={{ color: T.bands, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1.2 }}>
+                        SUPERSET {ex.superset}
+                      </span>
+                      <div style={{ flex: 1, height: 1, background: "rgba(192,132,252,0.18)" }} />
+                    </div>
+                  )}
+                  {card}
+                </React.Fragment>
+              );
+            }
+            const working = m => m.e.sets.filter(s => s.kind !== "warmup");
+            const roundsTotal = Math.min(...group.map(m => working(m).length));
+            const completedRounds = Math.min(...group.map(m => working(m).filter(s => s.completed).length));
+            const currentRound = Math.min(completedRounds + 1, roundsTotal);
+            const doneGroupSets = group.reduce((n, m) => n + m.e.sets.filter(s => s.completed).length, 0);
+            const totalGroupSets = group.reduce((n, m) => n + m.e.sets.length, 0);
+            const extras = group.map(m => ({ m, extra: working(m).length - roundsTotal })).filter(x => x.extra > 0);
+            const activeSet = ex.sets.find(s => s.active);
+            const isWarmupStep = activeSet && activeSet.kind === "warmup";
+            const nextPartner = group.find(g => g.idx !== i && g.idx > i && g.e.sets.some(s => !s.completed));
+            const firstWithWork = group.find(g => g.e.sets.some(s => !s.completed));
+            const fmtLast = (m) => {
+              const done = m.e.sets.filter(s => s.completed && s.reps);
+              const s = done[done.length - 1];
+              if (!s) return null;
+              const bandSum = (s.bands || []).reduce((a, b) => a + b, 0);
+              let w;
+              if (m.e.assist) w = bandSum ? `BW −${bandSum}` : "BW";
+              else if (m.e.isBandsOnly) w = bandSum ? `${bandSum} lb band` : "band";
+              else w = `${s.weight || 0} lb`;
+              return `${w} × ${s.reps}`;
+            };
+            const dots = Array.from({ length: roundsTotal }, (_, r) => {
+              const c = r < completedRounds ? T.green
+                : (r === completedRounds && completedRounds < roundsTotal) ? T.accentLight
+                : "rgba(255,255,255,0.12)";
+              return <span key={r} style={{ width: 8, height: 8, borderRadius: "50%", background: c, display: "inline-block" }} />;
+            });
+            const divider = "1px solid rgba(255,255,255,0.05)";
             return (
               <React.Fragment key={ex.id}>
-                {ex.superset && (
-                  <div style={{ margin: "4px 16px 6px", display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ flex: 1, height: 1, background: "rgba(192,132,252,0.18)" }} />
+                <div style={{
+                  margin: "0 16px 12px",
+                  background: T.cardBg,
+                  border: "1px solid rgba(192,132,252,0.25)",
+                  borderRadius: 14,
+                  overflow: "hidden",
+                }}>
+                  <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, background: "rgba(192,132,252,0.06)" }}>
                     <span style={{ color: T.bands, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1.2 }}>
-                      SUPERSET {ex.superset}
+                      ⇄ SUPERSET {ex.superset}
                     </span>
-                    <div style={{ flex: 1, height: 1, background: "rgba(192,132,252,0.18)" }} />
+                    <span style={{ color: T.text, fontSize: 12, fontWeight: 700 }}>
+                      · {isWarmupStep ? "Warm-up" : `Round ${currentRound} of ${roundsTotal}`}
+                    </span>
+                    <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      {dots}
+                      <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 10, marginLeft: 4 }}>{doneGroupSets}/{totalGroupSets}</span>
+                    </span>
                   </div>
-                )}
-                <ExerciseCard
-                  exercise={ex}
-                  supersetTag={supersetTag}
-                  rest={rest}
-                  onRestAdd={restAdd}
-                  onRestSkip={restSkip}
-                  onRestToggle={restToggle}
-                  onPickWeight={(sIdx, w) => actions.onPickWeight(i, sIdx, w)}
-                  onPickBodyweight={(sIdx, w) => actions.onPickBodyweight(i, sIdx, w)}
-                  onPickGrip={(sIdx, g) => actions.onPickGrip(i, sIdx, g)}
-                  onToggleBand={(sIdx, b) => actions.onToggleBand(i, sIdx, b)}
-                  onClearBands={(sIdx) => actions.onClearBands(i, sIdx)}
-                  onLogReps={(sIdx, r) => actions.onLogReps(i, sIdx, r)}
-                  onSkipWarmup={() => actions.onSkipWarmup(i)}
-                  onSkipExercise={() => actions.onSkipExercise(i)}
-                  onDeferExercise={() => actions.onDeferExercise(i)}
-                  onSwapExercise={(newName) => actions.onSwapExercise(i, newName)}
-                  onReopenSet={(sIdx) => actions.onReopenSet(i, sIdx)}
-                  onAddSet={() => actions.onAddSet(i)}
-                  onRemoveSet={() => actions.onRemoveSet(i)}
-                  onRemoveWarmup={() => actions.onRemoveWarmup(i)}
-                />
+                  {extras.length > 0 && (
+                    <div style={{ padding: "6px 14px 0", color: T.faint, fontFamily: T.mono, fontSize: 10 }}>
+                      {extras.map(x => `+${x.extra} solo ${x.m.e.name} set${x.extra > 1 ? "s" : ""} at the end`).join(" · ")}
+                    </div>
+                  )}
+                  {group.map((m, k) => {
+                    const tag = `${ex.superset}${k + 1}`;
+                    if (m.idx === i) {
+                      return (
+                        <div key={m.idx} style={{ padding: "12px 14px 14px", borderTop: k > 0 ? divider : "none" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{
+                              color: T.bands, fontFamily: T.mono, fontSize: 11, fontWeight: 800, letterSpacing: 1,
+                              padding: "2px 6px", borderRadius: 5, background: "rgba(192,132,252,0.12)", flexShrink: 0,
+                            }}>{tag}</span>
+                            <h2 style={{ margin: 0, color: T.strong, fontSize: 18, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.3 }}>{m.e.name}</h2>
+                          </div>
+                          {m.e.note && (
+                            <p style={{ margin: "5px 0 0", color: T.muted, fontSize: 12, lineHeight: 1.4 }}>{m.e.note}</p>
+                          )}
+                          {card}
+                        </div>
+                      );
+                    }
+                    const total = m.e.sets.length;
+                    const done = m.e.sets.filter(s => s.completed).length;
+                    const allDone = done === total;
+                    const last = fmtLast(m);
+                    return (
+                      <div key={m.idx} onClick={() => onSelectExercise(m.idx)} style={{
+                        padding: "10px 14px",
+                        borderTop: k > 0 ? divider : "none",
+                        display: "flex", alignItems: "center", gap: 10,
+                        cursor: "pointer",
+                        opacity: allDone ? 0.55 : 1,
+                      }}>
+                        <span style={{
+                          width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          fontFamily: T.mono, fontSize: 10, fontWeight: 800,
+                          background: allDone ? "rgba(52,211,153,0.15)" : "rgba(192,132,252,0.15)",
+                          color: allDone ? T.green : T.bands,
+                        }}>{allDone ? "✓" : tag}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ color: T.text, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.e.name}</div>
+                          <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 11 }}>
+                            {done}/{total} sets{last ? ` · last ${last}` : ""}
+                          </div>
+                        </div>
+                        <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 10, flexShrink: 0 }}>{allDone ? "edit" : "open →"}</span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ padding: "9px 14px", borderTop: divider, background: "rgba(255,255,255,0.02)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    {nextPartner ? (
+                      <React.Fragment>
+                        <span style={{ color: T.amber, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1 }}>NO REST</span>
+                        <span style={{ color: T.faint, fontSize: 11 }}>— log this set, then go straight to {nextPartner.e.name}</span>
+                      </React.Fragment>
+                    ) : (
+                      <span style={{ color: T.faint, fontSize: 11 }}>
+                        after this set: {ex.rest || 60}s round rest{firstWithWork && firstWithWork.idx !== i ? ` → back to ${firstWithWork.e.name}` : ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </React.Fragment>
             );
           })()}
