@@ -118,19 +118,6 @@ const WORKOUTS = [
     ],
   },
   {
-    id: "weekend-extras",
-    name: "Weekend Extras",
-    program: true,
-    kind: "optional",
-    duration: "~10 min",
-    rest: 60,
-    warmup: "None needed",
-    exercises: [
-      { name: "Hanging Knee Raise", sets: 3, reps: "10-15", notes: "Hang from the bar, raise knees toward chest, control the lower. No swinging.", rest: 60, noWarmup: true },
-      { name: "Calf Raises", sets: 3, reps: "15-20", notes: "Elevate toes on a block, full stretch at bottom, squeeze at top.", rest: 60, noWarmup: true },
-    ],
-  },
-  {
     id: "squat-day",
     name: "Squat Day",
     hidden: true,

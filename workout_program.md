@@ -31,8 +31,7 @@ started from the list.
 4. **Dead Hang + Scap Pulls** — 2 sets  *(20–40s hang + 5–8 scap pulls)*
 
 ## Weekend
-- **Sat (optional):** Weekend Extras — hanging knee raises + calf raises, or
-  anything missed, or ride/climb.
+- **Sat (optional):** anything missed, or ride/climb.
 - **Sun:** off.
 
 ## Progression
@@ -44,7 +43,7 @@ started from the list.
 
 ## In the app
 - Workouts live in `workout-shared.js` (`WORKOUTS` ids: `main-a`, `micro-arms`,
-  `main-b`, `micro-delts`, `weekend-extras`; flagged `program: true`), with
+  `main-b`, `micro-delts`; flagged `program: true`), with
   muscle maps in `workout-shared-standards.js` (`EXERCISE_MUSCLES`).
 - **Next-up highlight** (`workout-ui-home.js`): mains alternate based on the
   last Main A/B in history; Tue/Thu highlight the micro done longer ago
