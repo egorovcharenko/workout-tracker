@@ -41,8 +41,15 @@ function Sparkline({ exerciseName, data, valueKey, color, label, fmt, showTip, h
   const first = historicalVals[0], last = historicalVals[historicalVals.length - 1];
 
   const presentVals = days.filter(d => d.value != null && d.value > 0).map(d => d.value);
-  const min = Math.min(...presentVals);
-  const max = Math.max(...presentVals);
+  let min = Math.min(...presentVals);
+  let max = Math.max(...presentVals);
+
+  const hasGoal = (exerciseName === "Barbell Bench Press" || exerciseName === "Dumbbell Flat Bench Press") && valueKey === "orm";
+  const goalVal = 220;
+  if (hasGoal) {
+    max = Math.max(max, goalVal);
+    min = Math.min(min, goalVal * 0.6);
+  }
   const range = max - min || max || 1;
   const w = 280, h = 38, padX = 8, padY = 4;
   const totalSlots = days.length - 1;
@@ -93,6 +100,15 @@ function Sparkline({ exerciseName, data, valueKey, color, label, fmt, showTip, h
         </defs>
         {areaPath && <path d={areaPath} fill={`url(#${gradId})`} />}
         {linePath && <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
+        {hasGoal && (
+          <g>
+            <line x1={padX} y1={yFor(goalVal)} x2={w - padX} y2={yFor(goalVal)}
+              stroke="rgba(239, 68, 68, 0.45)" strokeWidth="1" strokeDasharray="3 3" />
+            <text x={w - padX - 4} y={yFor(goalVal) - 2.5} font-size="7.5px" fill="rgba(239, 68, 68, 0.8)" font-weight="800" text-anchor="end">
+              Goal: {goalVal} lb
+            </text>
+          </g>
+        )}
         {[0, 7, 14, 21, 28].map(d => {
           const slotIdx = 29 - d;
           if (slotIdx < 0) return null;

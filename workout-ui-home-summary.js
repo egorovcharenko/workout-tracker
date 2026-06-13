@@ -145,11 +145,18 @@ function renderWorkoutSummaryCard() {
   const fmtW = (w) => (Math.round(w * 10) / 10);
   const mmdd = (d) => { const p = String(d || '').split('-'); return p.length === 3 ? `${p[1]}/${p[2]}` : (d || ''); };
 
-  const spark = (pts) => {
+  const spark = (pts, exName) => {
     const data = (pts || []).filter(p => p && isFinite(p.value));
     if (data.length < 2) return '<div style="width:52px;flex-shrink:0"></div>';
     const vals = data.map(p => p.value);
-    const mx = Math.max(...vals), mn = Math.min(...vals), rng = mx - mn || 1;
+    let mx = Math.max(...vals), mn = Math.min(...vals);
+    const hasGoal = exName === "Barbell Bench Press" || exName === "Dumbbell Flat Bench Press";
+    const goalVal = 220;
+    if (hasGoal) {
+      mx = Math.max(mx, goalVal);
+      mn = Math.min(mn, goalVal * 0.6);
+    }
+    const rng = mx - mn || 1;
     const w = 52, h = 22, pad = 2;
     const xy = data.map((p, i) => ({
       x: pad + (i / (data.length - 1)) * (w - pad * 2),
@@ -163,7 +170,12 @@ function renderWorkoutSummaryCard() {
         + `<circle cx="${c.x}" cy="${c.y}" r="7" fill="transparent" style="cursor:pointer"`
         + ` onmouseenter="sparkTip(event,'${tip}')" onmouseleave="sparkTip()" onclick="sparkTip(event,'${tip}',true)"></circle>`;
     }).join('');
-    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="flex-shrink:0;overflow:visible"><polyline points="${poly}" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}</svg>`;
+    let goalLine = '';
+    if (hasGoal) {
+      const goalY = pad + (1 - (goalVal - mn) / rng) * (h - pad * 2);
+      goalLine = `<line x1="${pad}" y1="${goalY}" x2="${w - pad}" y2="${goalY}" stroke="rgba(239, 68, 68, 0.45)" stroke-width="0.8" stroke-dasharray="1.5,1.5" />`;
+    }
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="flex-shrink:0;overflow:visible">${goalLine}<polyline points="${poly}" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}</svg>`;
   };
 
   const bars = historyData.map(h => {
@@ -210,7 +222,7 @@ function renderWorkoutSummaryCard() {
           <span style="color:#F3F4F6;font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(e.exName)}</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
-          ${spark(e.sparkPts)}
+          ${spark(e.sparkPts, e.exName)}
           ${dt ? `<span style="min-width:36px;text-align:right;color:${dc};font-family:${MONO};font-size:12px;font-weight:800">${dt}</span>` : `<span style="width:36px"></span>`}
         </div>
       </div>
