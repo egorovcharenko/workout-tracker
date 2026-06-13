@@ -93,7 +93,17 @@ function renderHome() {
     ? byId(dow === 4 ? 'micro-delts' : 'micro-arms')
     : (lastArms < lastDelts ? byId('micro-arms') : byId('micro-delts'));
   // Tue/Thu are micro days; everything else points at the next main.
-  const nextW = (dow === 2 || dow === 4) ? microNext : nextMain;
+  let nextW = (dow === 2 || dow === 4) ? microNext : nextMain;
+
+  const programWorkouts = WORKOUTS.filter(w => w.program);
+  let lastProgramWorkout = null;
+  for (const s of (state.history || [])) {
+    const found = programWorkouts.find(w => w.name === s.workout_name);
+    if (found) { lastProgramWorkout = found; break; }
+  }
+  if (lastProgramWorkout) {
+    nextW = lastProgramWorkout.kind === 'main' ? microNext : nextMain;
+  }
 
   let activeWorkout = nextW;
   let isOngoing = false;
