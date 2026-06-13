@@ -84,9 +84,10 @@ function renderPercentilesCard() {
       latestTier: latest.tier,
       latestOrm: latest.orm,
       diffPct: diffPct,
-      pts: pts
+      pts: pts,
+      latestMs: latest.ms
     };
-  }).sort((a, b) => b.latestPct - a.latestPct);
+  }).sort((a, b) => b.latestMs - a.latestMs || b.latestPct - a.latestPct);
 
   exercisesList.forEach((ex, idx) => {
     exColors[ex.name] = COLORS[idx % COLORS.length];

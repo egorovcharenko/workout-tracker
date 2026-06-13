@@ -85,7 +85,7 @@ function renderSparkline(pts, color, startMs, endMs, exerciseName) {
     yMax = 100;
   }
 
-  const hasGoal = exerciseName === "Barbell Bench Press" || exerciseName === "Dumbbell Flat Bench Press";
+  const hasGoal = exerciseName === "Barbell Bench Press";
   const goalVal = 220;
   let goalPct = null;
   if (hasGoal && typeof getStrengthPercentile === 'function') {

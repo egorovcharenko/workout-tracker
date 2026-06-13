@@ -44,7 +44,7 @@ function Sparkline({ exerciseName, data, valueKey, color, label, fmt, showTip, h
   let min = Math.min(...presentVals);
   let max = Math.max(...presentVals);
 
-  const hasGoal = (exerciseName === "Barbell Bench Press" || exerciseName === "Dumbbell Flat Bench Press") && valueKey === "orm";
+  const hasGoal = exerciseName === "Barbell Bench Press" && valueKey === "orm";
   const goalVal = 220;
   if (hasGoal) {
     max = Math.max(max, goalVal);

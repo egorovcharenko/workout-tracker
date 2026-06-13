@@ -150,7 +150,7 @@ function renderWorkoutSummaryCard() {
     if (data.length < 2) return '<div style="width:52px;flex-shrink:0"></div>';
     const vals = data.map(p => p.value);
     let mx = Math.max(...vals), mn = Math.min(...vals);
-    const hasGoal = exName === "Barbell Bench Press" || exName === "Dumbbell Flat Bench Press";
+    const hasGoal = exName === "Barbell Bench Press";
     const goalVal = 220;
     if (hasGoal) {
       mx = Math.max(mx, goalVal);
