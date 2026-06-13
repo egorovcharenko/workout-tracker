@@ -32,7 +32,6 @@ function renderCalendar() {
     `<div style="font-size:10px;color:#9ca3af;text-align:center;font-weight:600">${d}</div>`
   ).join("");
 
-  const monthNames = new Set();
   let cells = "";
   for (let i = 0; i < firstDay; i++) {
     cells += `<div></div>`;
@@ -41,28 +40,18 @@ function renderCalendar() {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
     const workouts = dateMap[dateStr] || [];
-    workouts.forEach(w => monthNames.add(w));
     const badges = workouts.map(w => {
       const b = WORKOUT_BADGES[w];
-      if (!b) return `<span style="width:5px;height:5px;border-radius:50%;background:#6b7280;display:inline-block"></span>`;
-      return `<span style="font-size:8px;font-weight:800;line-height:1;color:#fff;background:${b.color};border-radius:4px;padding:2px 3px;letter-spacing:0.02em">${b.label}</span>`;
+      const color = b ? b.color : "#6b7280";
+      return `<span style="font-size:7px;font-weight:700;line-height:1.1;color:#fff;background:${color};border-radius:3px;padding:2px 3px;display:block;text-align:center;word-break:break-word">${w}</span>`;
     }).join("");
     const bg = isToday ? "background:#eff6ff;border-radius:8px;" : "";
     const fw = isToday ? "font-weight:700;color:#2563eb;" : "color:#374151;";
-    cells += `<div style="text-align:center;padding:4px 0;${bg}">
-      <div style="font-size:12px;${fw}">${d}</div>
-      <div style="display:flex;justify-content:center;align-items:center;gap:2px;min-height:12px;flex-wrap:wrap">${badges}</div>
+    cells += `<div style="text-align:center;padding:4px 2px;${bg};min-height:48px;display:flex;flex-direction:column;justify-content:flex-start">
+      <div style="font-size:11px;${fw};margin-bottom:2px">${d}</div>
+      <div style="display:flex;flex-direction:column;gap:2px;align-items:stretch">${badges}</div>
     </div>`;
   }
-
-  // Legend only lists workouts that actually appear in the displayed month.
-  const colorLegend = Object.entries(WORKOUT_BADGES)
-    .filter(([name]) => monthNames.has(name))
-    .map(([name, b]) =>
-      `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#6b7280">
-        <span style="font-size:8px;font-weight:800;line-height:1;color:#fff;background:${b.color};border-radius:4px;padding:2px 3px">${b.label}</span>${name}
-      </span>`
-    ).join("");
 
   return `
     <div class="card" style="padding:16px;margin-bottom:16px">
@@ -73,11 +62,10 @@ function renderCalendar() {
           <button onclick="changeCalendarMonth(1)" ${offset === 0 ? 'disabled style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.2);cursor:default;border-radius:6px;display:flex;align-items:center;justify-content:center"' : 'style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center"'} onclick="changeCalendarMonth(1)">&gt;</button>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:8px">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">
         ${dayHeaders}
         ${cells}
       </div>
-      <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap">${colorLegend}</div>
     </div>
   `;
 }
