@@ -132,7 +132,7 @@ const WORKOUTS = [
           { name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs, squeeze at bottom" },
           { name: "Dumbbell Bicep Curls", reps: "8-12", video: "https://www.youtube.com/shorts/MKWBV29S6c0", notes: "Supinated (palms up) default · toggle for variants", grips: ['supinated', 'hammer', 'reverse'] },
         ]},
-      { name: "Hanging Knee Raise", sets: 3, reps: "10-15", notes: "Hang from the bar, raise knees toward chest, control the lower. No swinging.", rest: 60, noWarmup: true },
+      { name: "Hanging Knee Raise", sets: 3, reps: "10-15", notes: "Hang from the bar, raise knees toward chest, control the lower. No swinging.", rest: 60, noWarmup: true, assist: true },
     ],
   },
   {

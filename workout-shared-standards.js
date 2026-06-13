@@ -70,7 +70,10 @@ const STRENGTH_STANDARDS = {
   "Overhead Tricep Extension": { beg: 15, nov: 25, int: 45, adv: 65, elite: 85 },
   "Lunges": { beg: 25, nov: 45, int: 70, adv: 100, elite: 130 },
   "Calf Raises": { beg: 20, nov: 45, int: 75, adv: 110, elite: 150 },
-  "Band Torso Rotation": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 }
+  "Band Torso Rotation": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 },
+  "Hanging Knee Raise": { beg: 15, nov: 35, int: 60, adv: 85, elite: 110 },
+  "Dumbbell Shrugs": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
+  "Dead Hang + Scap Pulls": { beg: -20, nov: 15, int: 50, adv: 85, elite: 120 }
 };
 
 function getMuscleImpact(exName, muscle, isPrimary) {
@@ -83,7 +86,7 @@ function getMuscleImpact(exName, muscle, isPrimary) {
 }
 
 function calcSet1RM(exerciseName, weight, reps, bandsJson) {
-  const isAssist = exerciseName === "Assisted Pull-Ups" || exerciseName === "Dips" || exerciseName === "Dead Hang + Scap Pulls";
+  const isAssist = exerciseName === "Assisted Pull-Ups" || exerciseName === "Dips" || exerciseName === "Dead Hang + Scap Pulls" || exerciseName === "Hanging Knee Raise";
   
   let bandSum = 0;
   if (bandsJson) {

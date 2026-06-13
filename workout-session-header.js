@@ -58,34 +58,39 @@ function Header({ workout, workouts, onPickWorkout, done, total, elapsedSec, run
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 12, fontWeight: 600 }}>{done}/{total}</span>
-          {(() => {
-            const started = elapsedSec > 0;
-            const accent = running ? T.green : started ? T.amber : T.faint;
-            const bg = running ? "rgba(52,211,153,0.12)" : started ? "rgba(251,191,36,0.12)" : "rgba(255,255,255,0.03)";
-            const border = running ? "rgba(52,211,153,0.45)" : started ? "rgba(251,191,36,0.5)" : T.cardBorder;
-            const label = running ? "Pause" : started ? "Resume" : "Start";
-            return (
-              <button
-                onClick={onToggleTimer}
-                title={running ? "Pause workout — stops the clock so a break (or evening session) isn't counted" : "Resume workout"}
-                style={{
-                  background: bg,
-                  border: `1px solid ${border}`,
-                  color: accent,
-                  fontFamily: T.mono, fontWeight: 700, fontSize: 13,
-                  cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "6px 11px", borderRadius: 8,
-                  transition: "all 150ms",
-                }}
-              >
-                <span style={{ fontSize: 11 }}>{running ? "⏸" : "▶"}</span>
-                <span>{label}</span>
-                <span style={{ opacity: 0.45 }}>·</span>
-                <span style={{ letterSpacing: -0.3 }}>{m}:{s}</span>
-              </button>
-            );
-          })()}
+          {elapsedSec > 0 ? (
+            <div
+              style={{
+                background: "rgba(52,211,153,0.12)",
+                border: `1px solid rgba(52,211,153,0.45)`,
+                color: T.green,
+                fontFamily: T.mono, fontWeight: 700, fontSize: 13,
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "6px 11px", borderRadius: 8,
+              }}
+            >
+              <span style={{ fontSize: 11 }}>⏱</span>
+              <span>Active</span>
+              <span style={{ opacity: 0.45 }}>·</span>
+              <span style={{ letterSpacing: -0.3 }}>{m}:{s}</span>
+            </div>
+          ) : (
+            <div
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                border: `1px solid ${T.cardBorder}`,
+                color: T.faint,
+                fontFamily: T.mono, fontWeight: 700, fontSize: 13,
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "6px 11px", borderRadius: 8,
+              }}
+            >
+              <span style={{ fontSize: 11 }}>▶</span>
+              <span>Not Started</span>
+              <span style={{ opacity: 0.45 }}>·</span>
+              <span style={{ letterSpacing: -0.3 }}>0:00</span>
+            </div>
+          )}
         </div>
       </div>
       <div style={{ height: 3, background: "rgba(255,255,255,0.05)", borderRadius: 99, overflow: "hidden" }}>

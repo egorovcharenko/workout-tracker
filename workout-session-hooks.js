@@ -43,20 +43,14 @@ function useWorkoutTimers(workoutId, exercises) {
     }
   }, [rest, workoutId]);
 
-  // Elapsed timer. Monotonic — increments by 1s each tick, never derived
-  // from wall-clock. Auto-pauses if no interaction in IDLE_THRESHOLD_MS.
+  // Elapsed timer based on wall time. Ticks every 1s when startedAt is set.
   useEffect(() => {
-    if (!running) return;
+    if (!startedAt) return;
     const id = setInterval(() => {
-      const idleFor = Date.now() - lastInteractionRef.current;
-      if (idleFor > IDLE_THRESHOLD_MS) {
-        setRunning(false);
-        return;
-      }
-      setElapsed(e => e + 1);
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
     }, 1000);
     return () => clearInterval(id);
-  }, [running]);
+  }, [startedAt]);
 
   // Rest timer ticks every 1s while not paused and not finished.
   useEffect(() => {
@@ -128,11 +122,11 @@ function useWorkoutTimers(workoutId, exercises) {
 
   return {
     elapsed,
-    running,
+    running: startedAt !== null,
     startedAt,
     rest,
     setElapsed,
-    setRunning,
+    setRunning: () => {},
     setStartedAt,
     setRest,
     startTimer,
