@@ -261,13 +261,6 @@ function renderWorkoutSummaryCard() {
         ` : ''}
       </div>
 
-      <div style="margin-bottom:12px">
-        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:10px 12px">
-          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#A78BFA;font-family:${MONO};margin-bottom:10px">HARD SETS <span style="color:#6D5B9E;font-weight:600;letter-spacing:0.04em">· 7D TOTAL / TODAY</span></div>
-          ${weeklySetsHTML}
-        </div>
-      </div>
-
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 6px">
         <span style="font-size:10px;font-weight:800;letter-spacing:0.1em;color:#6B7280;font-family:${MONO}">ALL EXERCISES</span>
         <span style="font-size:11px;color:#6B7280">${numLifts} lifts · est. 1RM trend${upCount || downCount ? ` (${upCount} up · ${downCount} down)` : ''}</span>
