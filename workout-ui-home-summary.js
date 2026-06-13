@@ -41,7 +41,7 @@ function renderWorkoutSummaryCard() {
     sum.totalVol += vol;
     sum.setsCount++;
     const est = calcSet1RM(ex, w, r, set.bands_json);
-    const isAssist = ex === "Assisted Pull-Ups" || ex === "Dips";
+    const isAssist = ex === "Assisted Pull-Ups" || ex === "Dips" || ex === "Dead Hang + Scap Pulls";
     if (sum.best1RM === 0 && isAssist) sum.best1RM = -Infinity;
     if (est > sum.best1RM) {
       sum.bestW = w;

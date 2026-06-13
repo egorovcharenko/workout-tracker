@@ -83,7 +83,7 @@ function getMuscleImpact(exName, muscle, isPrimary) {
 }
 
 function calcSet1RM(exerciseName, weight, reps, bandsJson) {
-  const isAssist = exerciseName === "Assisted Pull-Ups" || exerciseName === "Dips";
+  const isAssist = exerciseName === "Assisted Pull-Ups" || exerciseName === "Dips" || exerciseName === "Dead Hang + Scap Pulls";
   
   let bandSum = 0;
   if (bandsJson) {

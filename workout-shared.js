@@ -88,7 +88,7 @@ const WORKOUTS = [
       { name: "Face Pulls", sets: 3, reps: "12-15", equipment: "band", notes: "Anchor band at face height, pull toward your face, elbows high, squeeze the rear delts. Superset with shrugs — no rest between, 60s between rounds.", superset: "A", rest: 60, noWarmup: true },
       { name: "Dumbbell Shrugs", sets: 3, reps: "10-15", notes: "Heavy DBs at your sides, shrug straight up, pause at the top, lower slow.", superset: "A", rest: 60, noWarmup: true },
       { name: "Reverse Flyes", sets: 3, reps: "12-15", notes: "Rear delts & upper back, light weight, squeeze at the top. Superset with dead hangs.", video: "https://www.youtube.com/shorts/LsT-bR_zxLo", superset: "B", rest: 60, noWarmup: true },
-      { name: "Dead Hang + Scap Pulls", sets: 3, reps: "5-8", notes: "Dead hang 20-40s, then 5-8 scap pulls: shrug shoulder blades down and back without bending the elbows.", superset: "B", rest: 60, noWarmup: true },
+      { name: "Dead Hang + Scap Pulls", sets: 3, reps: "5-8", notes: "Dead hang 20-40s, then 5-8 scap pulls: shrug shoulder blades down and back without bending the elbows.", superset: "B", rest: 60, noWarmup: true, assist: true },
     ],
   },
   {
