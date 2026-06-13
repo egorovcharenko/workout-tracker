@@ -167,7 +167,7 @@ function renderPercentilesCard() {
           ? `<span style="font-size:10px;font-weight:700;color:${diffColor};width:42px;text-align:right;flex-shrink:0">${sign}${ex.diffPct}%</span>` 
           : `<span style="font-size:10px;font-weight:700;color:#9ca3af;width:42px;text-align:right;flex-shrink:0;opacity:0.25">-</span>`;
         const tierStyle = getTierStyle(ex.latestTier);
-        const sparklineHTML = renderSparkline(ex.pts, color, startMs, endMs);
+        const sparklineHTML = renderSparkline(ex.pts, color, startMs, endMs, ex.name);
         
         return `
           <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:8px;border:1px solid #f3f4f6;background:#ffffff;border-radius:8px;gap:12px">

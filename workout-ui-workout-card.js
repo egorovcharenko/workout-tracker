@@ -1,6 +1,7 @@
 function renderExerciseCardInWorkout(ex, exIdx, nextSet) {
   const isSuperset = !!ex.supersetExercises;
   const warmupDone = !!state.completed[`${exIdx}-warmup`];
+  const sparklineHTML = typeof renderSparkline === 'function' ? renderSparkline(ex.name) : '';
   const warmupOff = !!state.warmupOff?.[exIdx];
   const setCount = getSetCount(exIdx);
   const exDone = (isSuperset || warmupDone || warmupOff) && Array.from({length:setCount}).every((_,i) => state.completed[`${exIdx}-${i}`]);
@@ -221,7 +222,7 @@ function renderExerciseCardInWorkout(ex, exIdx, nextSet) {
         </div>
         ${ex.notes ? `<p style="font-size:12px;color:#9ca3af;margin:0">${ex.notes}</p>` : ''}
         ${renderExerciseNote(ex.name)}
-        ${typeof renderSparkline === 'function' && renderSparkline(ex.name) ? `<div style="margin-top:6px">${renderSparkline(ex.name)}</div>` : ''}
+        ${sparklineHTML ? `<div style="margin-top:6px">${sparklineHTML}</div>` : ''}
       </div>
       <div style="padding:0 16px 12px">${setsHTML}</div>
     </div>

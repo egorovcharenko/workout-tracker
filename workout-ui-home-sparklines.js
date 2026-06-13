@@ -36,8 +36,34 @@ function microSparkline(vals, color) {
   </svg>`;
 }
 
-function renderSparkline(pts, color, startMs, endMs) {
-  if (pts.length === 0) return '';
+function renderSparkline(pts, color, startMs, endMs, exerciseName) {
+  if (typeof pts === 'string') {
+    const exName = pts, history = (typeof state !== 'undefined' && state.history) || [];
+    const eMs = new Date().setHours(23, 59, 59, 999), sMs = eMs - 60 * 86400000;
+    const datesObj = {};
+    history.forEach(sess => {
+      if (!sess.date) return;
+      const ms = Date.parse(sess.date + 'T00:00:00');
+      if (ms >= sMs && ms <= eMs) {
+        (sess.sets || []).forEach(st => {
+          if (st.exercise === exName && st.set_type === 'working' && st.reps) {
+            const w = parseFloat(st.weight_lb) || 0, r = parseInt(st.reps) || 0;
+            if (w > 0 && r > 0) {
+              const orm = typeof calcSet1RM === 'function' ? calcSet1RM(exName, w, r, st.bands_json) : w;
+              datesObj[sess.date] = Math.max(datesObj[sess.date] || 0, orm);
+            }
+          }
+        });
+      }
+    });
+    const computedPts = Object.keys(datesObj).sort().map(d => {
+      const orm = datesObj[d], pct = typeof getStrengthPercentile === 'function' ? getStrengthPercentile(exName, orm) : null;
+      return pct ? { date: d, ms: Date.parse(d + 'T00:00:00'), orm, percentile: pct.percentile, tier: pct.tier } : null;
+    }).filter(Boolean);
+    return renderSparkline(computedPts, color || '#8b5cf6', sMs, eMs, exName);
+  }
+
+  if (!pts || pts.length === 0) return '';
 
   const w = 150, h = 50, padLeft = 28, padRight = 6, padTop = 6, padBottom = 12;
 
@@ -57,6 +83,25 @@ function renderSparkline(pts, color, startMs, endMs) {
   if (yMax > 100) {
     yMin = Math.max(0, yMin - (yMax - 100));
     yMax = 100;
+  }
+
+  const hasGoal = exerciseName === "Barbell Bench Press" || exerciseName === "Dumbbell Flat Bench Press";
+  const goalVal = 220;
+  let goalPct = null;
+  if (hasGoal && typeof getStrengthPercentile === 'function') {
+    const pctInfo = getStrengthPercentile(exerciseName, goalVal);
+    if (pctInfo) {
+      goalPct = pctInfo.percentile;
+      yMax = Math.max(yMax, goalPct);
+      yMin = Math.min(yMin, goalPct);
+      if (yMax - yMin < 10) {
+        const diff = 10 - (yMax - yMin);
+        yMin = Math.max(0, yMin - diff / 2);
+        yMax = Math.min(100, yMax + diff / 2);
+      }
+      yMin = Math.max(0, yMin);
+      yMax = Math.min(100, yMax);
+    }
   }
 
   const getX = (ms) => {
@@ -122,10 +167,20 @@ function renderSparkline(pts, color, startMs, endMs) {
     }).join('');
   }
 
+  let goalLineHTML = '';
+  if (goalPct !== null) {
+    const goalY = getY(goalPct);
+    goalLineHTML = `<g>
+      <line x1="${padLeft}" y1="${goalY}" x2="${w - padRight}" y2="${goalY}" stroke="rgba(239, 68, 68, 0.45)" stroke-width="0.8" stroke-dasharray="2,2" />
+      <text x="${w - padRight - 4}" y="${goalY - 2.5}" font-size="7px" fill="rgba(239, 68, 68, 0.8)" font-weight="800" text-anchor="end">Goal: 220 lb</text>
+    </g>`;
+  }
+
   return `
     <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;overflow:visible">
       ${gridLines}
       ${weekLines}
+      ${goalLineHTML}
       ${pathHTML}
       ${dotsHTML}
     </svg>
@@ -198,64 +253,23 @@ function renderMeasurementSparkline(pts, color, startMs, endMs, unit) {
 }
 
 function getTierStyle(tier) {
-  switch (tier) {
-    case 'Elite':
-      return 'background:#fee2e2;color:#b91c1c;';
-    case 'Advanced':
-      return 'background:#ffedd5;color:#c2410c;';
-    case 'Intermediate':
-      return 'background:#dcfce7;color:#15803d;';
-    case 'Novice':
-      return 'background:#e0f2fe;color:#0369a1;';
-    case 'Beginner':
-      return 'background:#f3f4f6;color:#4b5563;';
-    default:
-      return 'background:#f9fafb;color:#9ca3af;';
-  }
+  const s = { Elite: 'background:#fee2e2;color:#b91c1c;', Advanced: 'background:#ffedd5;color:#c2410c;', Intermediate: 'background:#dcfce7;color:#15803d;', Novice: 'background:#e0f2fe;color:#0369a1;', Beginner: 'background:#f3f4f6;color:#4b5563;' };
+  return s[tier] || 'background:#f9fafb;color:#9ca3af;';
 }
 
 const MUSCLE_TO_UNIFIED_GROUP = {
-  chest: 'chest',
-  shoulders: 'shoulders',
-  rear_delts: 'shoulders',
-  biceps: 'arms',
-  triceps: 'arms',
-  forearms: 'arms',
-  upper_back: 'back',
-  lats: 'back',
-  lower_back: 'back',
-  core: 'core',
-  quads: 'legs',
-  hamstrings: 'legs',
-  glutes: 'legs',
-  calves: 'calves'
+  chest: 'chest', shoulders: 'shoulders', rear_delts: 'shoulders', biceps: 'arms', triceps: 'arms', forearms: 'arms',
+  upper_back: 'back', lats: 'back', lower_back: 'back', core: 'core', quads: 'legs', hamstrings: 'legs', glutes: 'legs', calves: 'calves'
 };
 
 const METRIC_TO_UNIFIED_GROUP = {
-  chest_cm: 'chest',
-  shoulder_cm: 'shoulders',
-  l_arm_cm: 'arms',
-  r_arm_cm: 'arms',
-  neck_cm: 'back',
-  waist_cm: 'core',
-  hip_cm: 'legs',
-  l_thigh_cm: 'legs',
-  r_thigh_cm: 'legs',
-  l_calf_cm: 'calves',
-  r_calf_cm: 'calves',
-  head_cm: 'other',
-  weight_kg: 'other'
+  chest_cm: 'chest', shoulder_cm: 'shoulders', l_arm_cm: 'arms', r_arm_cm: 'arms', neck_cm: 'back', waist_cm: 'core',
+  hip_cm: 'legs', l_thigh_cm: 'legs', r_thigh_cm: 'legs', l_calf_cm: 'calves', r_calf_cm: 'calves', head_cm: 'other', weight_kg: 'other'
 };
 
 const UNIFIED_GROUPS = [
-  { id: 'chest', label: 'Chest' },
-  { id: 'shoulders', label: 'Shoulders' },
-  { id: 'arms', label: 'Arms' },
-  { id: 'back', label: 'Back' },
-  { id: 'core', label: 'Core' },
-  { id: 'legs', label: 'Legs & Glutes' },
-  { id: 'calves', label: 'Calves' },
-  { id: 'other', label: 'Other / Weight' }
+  { id: 'chest', label: 'Chest' }, { id: 'shoulders', label: 'Shoulders' }, { id: 'arms', label: 'Arms' }, { id: 'back', label: 'Back' },
+  { id: 'core', label: 'Core' }, { id: 'legs', label: 'Legs & Glutes' }, { id: 'calves', label: 'Calves' }, { id: 'other', label: 'Other / Weight' }
 ];
 
 if (typeof window !== "undefined") {
