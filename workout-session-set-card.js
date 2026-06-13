@@ -30,8 +30,15 @@ function SetCard({ s, idx, exercise, onReopenSet }) {
   const isCurrent = s.active;
   const tappable = !isCurrent;
 
+  const btnRef = React.useRef(null);
+  React.useEffect(() => {
+    if (isCurrent && btnRef.current) {
+      btnRef.current.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    }
+  }, [isCurrent]);
+
   return (
-    <button onClick={tappable ? () => onReopenSet(idx) : undefined} disabled={!tappable} style={{
+    <button ref={btnRef} onClick={tappable ? () => onReopenSet(idx) : undefined} disabled={!tappable} style={{
       padding: "8px 4px 7px", borderRadius: 9,
       cursor: tappable ? "pointer" : "default",
       background: isCurrent
@@ -44,7 +51,7 @@ function SetCard({ s, idx, exercise, onReopenSet }) {
       border: isCurrent ? "0" : `1px ${s.completed ? "solid" : "dashed"} rgba(255,255,255,0.05)`,
       opacity: isCurrent ? 1 : s.completed ? 1 : 0.45,
       display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-      minWidth: 0, transition: "all 200ms ease",
+      flex: "1 0 60px", flexShrink: 0, transition: "all 200ms ease",
     }}>
       <span style={{ color: isWarm ? T.amber : isCurrent ? T.accentLight : T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 0.7 }}>
         {setStripLabel(s, exercise.sets)}

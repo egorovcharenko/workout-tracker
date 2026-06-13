@@ -226,10 +226,12 @@ function ExerciseCard({ exercise, supersetTag, embedded, rest, onRestAdd, onRest
         </div>
       )}
 
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: `repeat(${exercise.sets.length}, minmax(0, 1fr))`,
+      <div className="scroll-row" style={{
+        display: "flex",
+        overflowX: "auto",
         gap: 6, marginTop: 12,
+        paddingBottom: 4,
+        WebkitOverflowScrolling: "touch",
       }}>
         {exercise.sets.map((s, i) => (
           <SetCard key={i} s={s} idx={i} exercise={exercise} onReopenSet={onReopenSet} />
