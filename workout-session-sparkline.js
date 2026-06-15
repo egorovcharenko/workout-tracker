@@ -45,7 +45,7 @@ function Sparkline({ exerciseName, data, valueKey, color, label, fmt, showTip, h
   let max = Math.max(...presentVals);
 
   const hasGoal = exerciseName === "Barbell Bench Press" && valueKey === "orm";
-  const goalVal = 220;
+  const goalVal = 180;
   if (hasGoal) {
     max = Math.max(max, goalVal);
     min = Math.min(min, goalVal * 0.6);
@@ -104,7 +104,7 @@ function Sparkline({ exerciseName, data, valueKey, color, label, fmt, showTip, h
           <g>
             <line x1={padX} y1={yFor(goalVal)} x2={w - padX} y2={yFor(goalVal)}
               stroke="rgba(239, 68, 68, 0.45)" strokeWidth="1" strokeDasharray="3 3" />
-            <text x={w - padX - 4} y={yFor(goalVal) - 2.5} font-size="7.5px" fill="rgba(239, 68, 68, 0.8)" font-weight="800" text-anchor="end">
+            <text x={w - padX - 4} y={yFor(goalVal) + 9} font-size="7.5px" fill="rgba(239, 68, 68, 0.8)" font-weight="800" text-anchor="end">
               Goal: {goalVal} lb
             </text>
           </g>

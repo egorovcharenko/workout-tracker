@@ -151,7 +151,7 @@ function renderWorkoutSummaryCard() {
     const vals = data.map(p => p.value);
     let mx = Math.max(...vals), mn = Math.min(...vals);
     const hasGoal = exName === "Barbell Bench Press";
-    const goalVal = 220;
+    const goalVal = 180;
     if (hasGoal) {
       mx = Math.max(mx, goalVal);
       mn = Math.min(mn, goalVal * 0.6);

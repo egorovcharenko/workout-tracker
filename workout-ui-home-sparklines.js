@@ -86,7 +86,7 @@ function renderSparkline(pts, color, startMs, endMs, exerciseName) {
   }
 
   const hasGoal = exerciseName === "Barbell Bench Press";
-  const goalVal = 220;
+  const goalVal = 180;
   let goalPct = null;
   if (hasGoal && typeof getStrengthPercentile === 'function') {
     const pctInfo = getStrengthPercentile(exerciseName, goalVal);
@@ -172,7 +172,7 @@ function renderSparkline(pts, color, startMs, endMs, exerciseName) {
     const goalY = getY(goalPct);
     goalLineHTML = `<g>
       <line x1="${padLeft}" y1="${goalY}" x2="${w - padRight}" y2="${goalY}" stroke="rgba(239, 68, 68, 0.45)" stroke-width="0.8" stroke-dasharray="2,2" />
-      <text x="${w - padRight - 4}" y="${goalY - 2.5}" font-size="7px" fill="rgba(239, 68, 68, 0.8)" font-weight="800" text-anchor="end">Goal: 220 lb</text>
+      <text x="${w - padRight - 4}" y="${goalY + 8.5}" font-size="7px" fill="rgba(239, 68, 68, 0.8)" font-weight="800" text-anchor="end">Goal: 180 lb</text>
     </g>`;
   }
 
