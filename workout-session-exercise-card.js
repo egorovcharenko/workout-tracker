@@ -75,7 +75,7 @@ function ExerciseCard({ exercise, supersetTag, embedded, rest, onRestAdd, onRest
         <div style={{ marginTop: 12, padding: "12px", background: "rgba(255,255,255,0.02)", border: `1px solid ${T.cardBorder}`, borderRadius: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0 }}>BENCH PROGRAM STEP</span>
-            <span style={{ color: T.accentLight, fontSize: 11, fontWeight: 700 }}>{(window.BENCH_STEPS || [])[detectBenchStep(exercise)]?.label}</span>
+            <span style={{ color: T.accentLight, fontSize: 11, fontWeight: 700 }}>{exercise.benchStepLabel || (window.BENCH_STEPS || [])[detectBenchStep(exercise)]?.label}</span>
           </div>
           <div style={{ display: "flex", gap: 4 }}>
             {(window.BENCH_STEPS || []).map((step, idx) => {

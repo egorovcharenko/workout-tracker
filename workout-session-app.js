@@ -68,7 +68,7 @@ function App() {
         const benchIdx = exs.findIndex(e => e.name === "Barbell Bench Press");
         if (benchIdx !== -1 && (!savedSetsMap || !savedSetsMap["Barbell Bench Press"])) {
           const hist = results[3].status === "fulfilled" ? results[3].value || [] : [];
-          exs[benchIdx] = applyBenchStep(exs[benchIdx], getSuggestedBenchStep(hist));
+          exs[benchIdx] = applyBenchStep(exs[benchIdx], getSuggestedBenchStep(hist), hist);
         }
         if (savedSetsMap && Object.keys(savedSetsMap).length) {
           exs = exs.map(ex => {
@@ -136,7 +136,7 @@ function App() {
   });
 
   const onSelectBenchStep = (eIdx, stepIdx) => {
-    const next = exercises.map((e, idx) => idx === eIdx ? applyBenchStep(e, stepIdx) : e);
+    const next = exercises.map((e, idx) => idx === eIdx ? applyBenchStep(e, stepIdx, history) : e);
     setExercises(next);
     queueSave(next, sessionId, startedAt, elapsed);
   };

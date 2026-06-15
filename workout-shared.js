@@ -58,7 +58,7 @@ const WORKOUTS = [
     id: "main-b", name: "Main B", program: true, kind: "main", abSplit: "B", duration: "~40 min", rest: 120, warmup: "Light hinges + band pull-aparts",
     exercises: [
       { name: "Barbell Deadlift", sets: 4, warmups: 3, reps: "5-8", notes: "Flat back, brace. Reset each rep.", equipment: "barbell", rest: 180 },
-      { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "5-8", notes: "Bench at ~30°. Stop ~1 rep short of failure (~1 RIR) to protect flat bench progression.", equipment: "barbell", rest: 120 },
+      { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "8-12", notes: "Bench at ~30°. Take to 1-2 RIR. Add 5 lb when 12 reps completed on all sets.", equipment: "barbell", rest: 120 },
       { name: "Assisted Pull-Ups", sets: 3, reps: "3-5", notes: "Heavy day: lightest band for 3-5 reps.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 150, noWarmup: true },
       { name: "Bent-Over Barbell Rows", sets: 4, warmups: 1, reps: "8-12", notes: "Keep back flat, pull to lower chest.", equipment: "barbell", rest: 120 },
     ],
@@ -88,7 +88,7 @@ const WORKOUTS = [
     id: "deadlift-day", name: "Deadlift Day", hidden: true, abSplit: "B", duration: "~50 min", rest: 90, warmup: "Hinges + pull-aparts",
     exercises: [
       { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "3-5", notes: "Flat back, brace.", equipment: "barbell", rest: 120 },
-      { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "5-8", notes: "Bench at ~30°.", equipment: "barbell", rest: 120 },
+      { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "8-12", notes: "Bench at ~30°. Take to 1-2 RIR.", equipment: "barbell", rest: 120 },
       { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Band assists", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
       { name: "Standing Overhead Press", sets: 3, reps: "6-8", notes: "Press overhead", equipment: "barbell", warmups: 1, rest: 120 },
       { name: "Face Pulls", sets: 3, reps: "15-20", equipment: "band", notes: "Anchor band face height", rest: 60, noWarmup: true },
@@ -203,94 +203,73 @@ const SWAP_GROUPS = [
 
 function findExerciseConfig(n) {
   const name = n === "Bench Dips" ? "Dips" : n;
-  for (const grp of SWAP_GROUPS) {
-    const f = grp.exercises.find(e => e.name === name);
-    if (f) return f;
-  }
+  for (const g of SWAP_GROUPS) { const f = g.exercises.find(e => e.name === name); if (f) return f; }
   return null;
 }
-function getSwapGroup(n) {
-  const name = n === "Bench Dips" ? "Dips" : n;
-  const g = SWAP_GROUPS.find(grp => grp.exercises.some(e => e.name === name));
-  return g ? g.exercises : null;
-}
-function getSwapGroupName(n) {
-  const name = n === "Bench Dips" ? "Dips" : n;
-  const g = SWAP_GROUPS.find(grp => grp.exercises.some(e => e.name === name));
-  return g ? g.family : null;
-}
-function getSwapOptions(n) {
-  const name = n === "Bench Dips" ? "Dips" : n;
-  const g = getSwapGroup(name);
-  return g ? g.filter(e => e.name !== name) : [];
-}
-function isSwappable(n) {
-  const name = n === "Bench Dips" ? "Dips" : n;
-  return SWAP_GROUPS.some(g => g.exercises.some(e => e.name === name));
-}
+function getSwapGroup(n) { const name = n === "Bench Dips" ? "Dips" : n, g = SWAP_GROUPS.find(grp => grp.exercises.some(e => e.name === name)); return g ? g.exercises : null; }
+function getSwapGroupName(n) { const name = n === "Bench Dips" ? "Dips" : n, g = SWAP_GROUPS.find(grp => grp.exercises.some(e => e.name === name)); return g ? g.family : null; }
+function getSwapOptions(n) { const name = n === "Bench Dips" ? "Dips" : n, g = getSwapGroup(name); return g ? g.filter(e => e.name !== name) : []; }
+function isSwappable(n) { const name = n === "Bench Dips" ? "Dips" : n; return SWAP_GROUPS.some(g => g.exercises.some(e => e.name === name)); }
 
 const BENCH_STEPS = [
-  { id: "A1", sets: 4, reps: 6, weight: 140, label: "A1: 4x6 @ 140 lb" },
-  { id: "A2", sets: 4, reps: 6, weight: 145, label: "A2: 4x6 @ 145 lb" },
-  { id: "A3", sets: 4, reps: 4, weight: 150, label: "A3: 4x4 @ 150 lb" },
-  { id: "A4", sets: 5, reps: 4, weight: 155, label: "A4: 5x4 @ 155 lb" },
-  { id: "A5", sets: 5, reps: 3, weight: 160, label: "A5: 5x3 @ 160 lb" },
-  { id: "A6", sets: 5, reps: 3, weight: 165, label: "A6: 5x3 @ 165 lb" },
-  { id: "A7", sets: 5, reps: 2, weight: 170, label: "A7: 5x2 @ 170 lb" },
-  { id: "A8", sets: 4, reps: 1, weight: 180, label: "A8: 180 lb Peak Attempt" }
+  { id: "A1", label: "A1: Top + Volume" },
+  { id: "A2", label: "A2: Top + Volume" },
+  { id: "A3", label: "A3: Top + Volume" },
+  { id: "A4", label: "A4: Top + Volume" },
+  { id: "A5", label: "A5: Top + Volume" },
+  { id: "A6", label: "A6: Top + Volume" },
+  { id: "A7", label: "A7: Top + Volume" },
+  { id: "A8", label: "A8: 180 lb Peak Attempt" }
 ];
 
 function getSuggestedBenchStep(history) {
+  const count = (history || []).filter(h => h.sets && h.sets.some(s => s.exercise === "Barbell Bench Press" && s.set_type === "working" && s.completed)).length;
+  return Math.min(7, count);
+}
+
+function getBenchWeights(history) {
   const workouts = (history || [])
     .filter(h => h.sets && h.sets.some(s => s.exercise === "Barbell Bench Press" && s.set_type === "working" && s.completed))
     .sort((a, b) => new Date(a.date) - new Date(b.date));
-  let currentIdx = 0;
+  let topWeight = 150, backoffWeight = 120;
   for (const w of workouts) {
-    const step = BENCH_STEPS[currentIdx];
-    if (!step) break;
     const working = w.sets.filter(s => s.exercise === "Barbell Bench Press" && s.set_type === "working" && s.completed);
-    let succeeded = false;
-    if (step.id === "A8") {
-      succeeded = working.some(s => s.weight_lb >= 180 && parseInt(s.reps) >= 1);
-    } else {
-      succeeded = working.filter(s => s.weight_lb >= step.weight && parseInt(s.reps) >= step.reps).length >= step.sets;
-    }
-    if (succeeded) currentIdx = Math.min(BENCH_STEPS.length - 1, currentIdx + 1);
+    if (!working.length || working.some(s => s.weight_lb >= 180)) continue;
+    const topSet = working[0];
+    if (topSet && topSet.weight_lb >= topWeight && parseInt(topSet.reps) >= 5) topWeight += 5;
+    const backoffs = working.slice(1);
+    const successfulBackoffs = backoffs.filter(s => s.weight_lb >= backoffWeight && parseInt(s.reps) >= 8);
+    if (successfulBackoffs.length >= 3) backoffWeight += 5;
   }
-  return currentIdx;
+  return { topWeight, backoffWeight };
 }
 
-function applyBenchStep(ex, stepIdx) {
-  const step = BENCH_STEPS[stepIdx];
+function applyBenchStep(ex, stepIdx, history) {
+  const { topWeight, backoffWeight } = getBenchWeights(history);
+  const stepId = stepIdx === 7 ? "A8" : `A${stepIdx + 1}`;
   const sets = [
     { kind: "warmup", idx: "W1", setNumber: 0, saveExerciseName: "Barbell Bench Press", completed: false, active: true, reps: null, weight: 45, lastReps: 10, lastWeight: 45, bands: [], lastBands: [] },
     { kind: "warmup", idx: "W2", setNumber: 1, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: 95, lastReps: 5, lastWeight: 95, bands: [], lastBands: [] },
     { kind: "warmup", idx: "W3", setNumber: 2, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: 115, lastReps: 3, lastWeight: 115, bands: [], lastBands: [] }
   ];
-  if (step.id === "A8") {
+  if (stepId === "A8") {
     [{ w: 135, r: 3 }, { w: 155, r: 1 }, { w: 170, r: 1 }, { w: 180, r: 1 }].forEach((spec, i) => {
       sets.push({ kind: "work", idx: i + 1, setNumber: i + 1, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: spec.w, lastReps: spec.r, lastWeight: spec.w, bands: [], lastBands: [] });
     });
+    for (let i = 0; i < 3; i++) {
+      sets.push({ kind: "work", idx: i + 5, setNumber: i + 5, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: backoffWeight, lastReps: 8, lastWeight: backoffWeight, bands: [], lastBands: [] });
+    }
   } else {
-    for (let i = 0; i < step.sets; i++) {
-      sets.push({ kind: "work", idx: i + 1, setNumber: i + 1, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: step.weight, lastReps: step.reps, lastWeight: step.weight, bands: [], lastBands: [] });
+    sets.push({ kind: "work", idx: 1, setNumber: 1, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: topWeight, lastReps: 5, lastWeight: topWeight, bands: [], lastBands: [] });
+    for (let i = 0; i < 3; i++) {
+      sets.push({ kind: "work", idx: i + 2, setNumber: i + 2, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: backoffWeight, lastReps: 8, lastWeight: backoffWeight, bands: [], lastBands: [] });
     }
   }
-  return { ...ex, repRange: step.id === "A8" ? "1-3" : `${step.reps}`, sets };
+  const label = stepId === "A8" ? "A8: 180 lb Peak Attempt" : `${stepId}: Top ${topWeight} lb / Vol ${backoffWeight} lb`;
+  return { ...ex, benchStepLabel: label, repRange: stepId === "A8" ? "1-3" : "4-8", sets, note: `**Safety**: Set safeties just below chest height. Verify height with empty bar. Keep collars on; if a rep stalls, lower onto safeties.` };
 }
 
 if (typeof window !== "undefined") {
-  window.WORKOUTS = WORKOUTS;
-  window.localDate = localDate;
-  window.interleavedSetNumber = interleavedSetNumber;
-  window.SWAP_GROUPS = SWAP_GROUPS;
-  window.findExerciseConfig = findExerciseConfig;
-  window.getSwapGroup = getSwapGroup;
-  window.getSwapGroupName = getSwapGroupName;
-  window.getSwapOptions = getSwapOptions;
-  window.isSwappable = isSwappable;
-  window.BENCH_STEPS = BENCH_STEPS;
-  window.getSuggestedBenchStep = getSuggestedBenchStep;
-  window.applyBenchStep = applyBenchStep;
+  Object.assign(window, { WORKOUTS, localDate, interleavedSetNumber, SWAP_GROUPS, findExerciseConfig, getSwapGroup, getSwapGroupName, getSwapOptions, isSwappable, BENCH_STEPS, getSuggestedBenchStep, applyBenchStep, getBenchWeights });
 }
 
