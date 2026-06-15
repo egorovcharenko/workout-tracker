@@ -16,54 +16,32 @@ function renderWorkoutMuscleMap(w) {
     }
   });
 
-  const maxSets = Math.max(1, ...Object.values(muscles));
-  const getColor = (id) => {
-    const v = muscles[id] || 0;
-    if (v === 0) return { bg: "rgba(255,255,255,0.02)", fg: "rgba(255,255,255,0.08)" };
-    const pct = v / maxSets;
-    if (pct < 0.35) return { bg: "rgba(96,165,250,0.22)", fg: "#60a5fa" };
-    if (pct < 0.70) return { bg: "rgba(52,211,153,0.25)", fg: "#34d399" };
-    return { bg: "rgba(248,113,113,0.25)", fg: "#f87171" };
-  };
+  const sorted = Object.entries(muscles)
+    .filter(([_, sets]) => sets > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
 
-  const drawRect = (id, x, y, width, height, rx) => {
-    const c = getColor(id);
-    return `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${rx || 3}" fill="${c.bg}" stroke="${c.fg}" stroke-width="0.8" />`;
-  };
+  const badgeHTML = sorted.map(([id, sets]) => {
+    const label = (window.MUSCLE_GROUPS && window.MUSCLE_GROUPS[id]) ? window.MUSCLE_GROUPS[id].label : id;
+    let color = "#60a5fa", bg = "rgba(96,165,250,0.06)", border = "rgba(96,165,250,0.15)";
+    if (["chest", "triceps"].includes(id)) {
+      color = "#60a5fa"; bg = "rgba(96,165,250,0.06)"; border = "rgba(96,165,250,0.15)";
+    } else if (["quads", "calves"].includes(id)) {
+      color = "#34d399"; bg = "rgba(52,211,153,0.06)"; border = "rgba(52,211,153,0.15)";
+    } else if (["shoulders", "rear_delts"].includes(id)) {
+      color = "#f472b6"; bg = "rgba(244,114,182,0.06)"; border = "rgba(244,114,182,0.15)";
+    } else if (["biceps", "forearms"].includes(id)) {
+      color = "#a78bfa"; bg = "rgba(167,139,250,0.06)"; border = "rgba(167,139,250,0.15)";
+    } else if (["upper_back", "lats", "lower_back", "glutes", "hamstrings"].includes(id)) {
+      color = "#fbbf24"; bg = "rgba(251,191,36,0.06)"; border = "rgba(251,191,36,0.15)";
+    } else if (id === "core") {
+      color = "#22d3ee"; bg = "rgba(34,211,238,0.06)"; border = "rgba(34,211,238,0.15)";
+    }
+    return `<div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:${color};background:${bg};border:1px solid ${border};padding:2.5px 6px;border-radius:5px;text-align:center;white-space:nowrap;font-family:ui-monospace,Menlo,monospace">${label}</div>`;
+  }).join("");
 
-  const frontRects = [
-    ["shoulders", 28, 28, 17, 14, 3], ["shoulders", 55, 28, 17, 14, 3],
-    ["chest", 36, 38, 28, 16, 4],
-    ["biceps", 22, 44, 13, 18, 3], ["biceps", 65, 44, 13, 18, 3],
-    ["forearms", 20, 55, 11, 14, 3], ["forearms", 69, 55, 11, 14, 3],
-    ["core", 38, 56, 24, 20, 4],
-    ["quads", 32, 90, 15, 30, 4], ["quads", 53, 90, 15, 30, 4]
-  ].map(r => drawRect(...r)).join("");
-
-  const backRects = [
-    ["rear_delts", 28, 28, 17, 12, 3], ["rear_delts", 55, 28, 17, 12, 3],
-    ["upper_back", 36, 33, 28, 13, 4],
-    ["triceps", 22, 44, 13, 18, 3], ["triceps", 65, 44, 13, 18, 3],
-    ["lats", 34, 48, 32, 16, 4],
-    ["lower_back", 38, 66, 24, 14, 4],
-    ["glutes", 34, 82, 32, 16, 4],
-    ["hamstrings", 32, 100, 15, 24, 4], ["hamstrings", 53, 100, 15, 24, 4],
-    ["calves", 32, 130, 13, 22, 4], ["calves", 55, 130, 13, 22, 4]
-  ].map(r => drawRect(...r)).join("");
-
-  const bodyOutline = `
-    <ellipse cx="50" cy="14" rx="12" ry="13" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-    <path d="M35,28 Q30,30 26,40 L20,65 Q18,70 22,70 L32,60 L32,75 L30,120 Q29,125 34,125 L42,125 L44,90 L50,80 L56,90 L58,125 L66,125 Q71,125 70,120 L68,75 L68,60 L78,70 Q82,70 80,65 L74,40 Q70,30 65,28 Z" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-    <path d="M30,125 L28,155 Q27,160 33,160 L40,160 L41,125" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-    <path d="M59,125 L60,160 L67,160 Q73,160 72,155 L70,125" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-  `;
-
-  return `
-    <div data-noinvert style="display:flex;gap:4px;background:rgba(255,255,255,0.03);border-radius:8px;padding:4px;border:1px solid rgba(255,255,255,0.04)">
-      <svg viewBox="0 0 100 170" width="44" height="75" style="display:block">${bodyOutline}${frontRects}</svg>
-      <svg viewBox="0 0 100 170" width="44" height="75" style="display:block">${bodyOutline}${backRects}</svg>
-    </div>
-  `;
+  return `<div data-noinvert style="display:flex;flex-direction:column;gap:3px;flex-shrink:0;width:72px">${badgeHTML}</div>`;
+}
 }
 
 function renderWorkoutCard(w, isSuggested, isOngoing, logged, expected, pct) {
