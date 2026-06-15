@@ -1,8 +1,5 @@
-function ExerciseCard({ exercise, supersetTag, embedded, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onDeferExercise, onSwapExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup }) {
+function ExerciseCard({ exercise, supersetTag, embedded, rest, onRestAdd, onRestSkip, onRestToggle, onPickWeight, onPickBodyweight, onPickGrip, onToggleBand, onClearBands, onLogReps, onSkipWarmup, onSkipExercise, onDeferExercise, onSwapExercise, onReopenSet, onAddSet, onRemoveSet, onRemoveWarmup, onSelectBenchStep }) {
   const [showAllFamilies, setShowAllFamilies] = useState(false);
-  // Embedded mode (inside a combined superset card): the parent owns the card
-  // chrome and section title; the variant picker collapses behind a footer
-  // toggle to keep the shared card compact.
   const [showVariants, setShowVariants] = useState(false);
   const currentFamilyName = getSwapGroupName(exercise.name) || "Other";
 
@@ -10,51 +7,19 @@ function ExerciseCard({ exercise, supersetTag, embedded, rest, onRestAdd, onRest
     setShowAllFamilies(false);
   }, [exercise.name]);
 
-  // Full swap group (includes the current exercise) — drives the first-class
-  // variant selector rendered under the title. null / single-member groups
-  // render no selector.
   const swapGroup = getSwapGroup(exercise.name);
   const hasVariants = swapGroup && swapGroup.length > 1;
-  // Lock the variant switch once a WORKING set is logged — switching after
-  // real work would orphan those sets under the old exercise name. Warmups
-  // don't lock it (a warmup shouldn't commit you to the variant).
   const anyLogged = exercise.sets.some(s => s.completed && s.kind === "work");
 
   if (exercise.skipped) {
     return (
-      <div style={{
-        margin: "0 16px 12px", padding: "10px 14px",
-        background: "rgba(255,255,255,0.015)",
-        border: `1px dashed ${T.cardBorder}`,
-        borderRadius: 14,
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-      }}>
+      <div style={{ margin: "0 16px 12px", padding: "10px 14px", background: "rgba(255,255,255,0.015)", border: `1px dashed ${T.cardBorder}`, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{
-            color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0,
-            padding: "2px 6px", borderRadius: 4,
-            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-            flexShrink: 0,
-          }}>× SKIPPED</span>
-          {supersetTag && (
-            <span style={{
-              color: T.bands, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1,
-              padding: "1px 5px", borderRadius: 4,
-              background: "rgba(192,132,252,0.10)", opacity: 0.6, flexShrink: 0,
-            }}>{supersetTag}</span>
-          )}
-          <span style={{
-            color: T.muted, fontSize: 15, fontWeight: 600,
-            textDecoration: "line-through", textDecorationColor: "rgba(156,163,175,0.4)",
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>{exercise.name}</span>
+          <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0, padding: "2px 6px", borderRadius: 4, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", flexShrink: 0 }}>× SKIPPED</span>
+          {supersetTag && <span style={{ color: T.bands, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1, padding: "1px 5px", borderRadius: 4, background: "rgba(192,132,252,0.10)", opacity: 0.6, flexShrink: 0 }}>{supersetTag}</span>}
+          <span style={{ color: T.muted, fontSize: 15, fontWeight: 600, textDecoration: "line-through", textDecorationColor: "rgba(156,163,175,0.4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{exercise.name}</span>
         </div>
-        <button onClick={onSkipExercise} style={{
-          background: "transparent", border: "1px solid rgba(255,255,255,0.1)",
-          color: T.muted, padding: "5px 10px", borderRadius: 7,
-          fontFamily: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer",
-          flexShrink: 0,
-        }}>↻ restore</button>
+        <button onClick={onSkipExercise} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: T.muted, padding: "5px 10px", borderRadius: 7, fontFamily: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>↻ restore</button>
       </div>
     );
   }
@@ -68,20 +33,17 @@ function ExerciseCard({ exercise, supersetTag, embedded, rest, onRestAdd, onRest
   const warmupActive = warmups.some(s => s.active);
   const activeWarmupPos = activeSet && activeSet.kind === "warmup" ? warmups.indexOf(activeSet) + 1 : null;
   const lastWork = [...exercise.sets].reverse().find(s => s.kind === "work");
-  // −set now works from any state (active or completed), only gated by needing
-  // more than one working set to remove.
   const canRemove = totalWork > 1;
 
+  const detectBenchStep = (ex) => {
+    const w = ex.sets.filter(s => s.kind === "work");
+    if (w.some(s => s.weight === 180)) return 7;
+    const idx = (window.BENCH_STEPS || []).findIndex(s => s.weight === (w[0] && w[0].weight));
+    return idx !== -1 ? idx : 0;
+  };
+
   const footerBtn = (label, onClick, disabled) => (
-    <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{
-      background: "transparent",
-      border: "1px solid rgba(255,255,255,0.06)",
-      color: disabled ? T.disabled : T.muted,
-      padding: "5px 10px", borderRadius: 7,
-      cursor: disabled ? "default" : "pointer",
-      fontSize: 12, fontWeight: 500,
-      opacity: disabled ? 0.5 : 1,
-    }}>{label}</button>
+    <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.06)", color: disabled ? T.disabled : T.muted, padding: "5px 10px", borderRadius: 7, cursor: disabled ? "default" : "pointer", fontSize: 12, fontWeight: 500, opacity: disabled ? 0.5 : 1 }}>{label}</button>
   );
 
   return (
@@ -107,6 +69,27 @@ function ExerciseCard({ exercise, supersetTag, embedded, rest, onRestAdd, onRest
       )}
       {!embedded && exercise.note && (
         <p style={{ margin: "6px 0 0", color: T.muted, fontSize: 12, lineHeight: 1.4 }}>{exercise.note}</p>
+      )}
+
+      {exercise.name === "Barbell Bench Press" && onSelectBenchStep && (
+        <div style={{ marginTop: 12, padding: "12px", background: "rgba(255,255,255,0.02)", border: `1px solid ${T.cardBorder}`, borderRadius: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 9, fontWeight: 800, letterSpacing: 1.0 }}>BENCH PROGRAM STEP</span>
+            <span style={{ color: T.accentLight, fontSize: 11, fontWeight: 700 }}>{(window.BENCH_STEPS || [])[detectBenchStep(exercise)]?.label}</span>
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {(window.BENCH_STEPS || []).map((step, idx) => {
+              const active = idx === detectBenchStep(exercise);
+              return (
+                <button key={step.id} onClick={() => onSelectBenchStep(idx)} style={{
+                  flex: 1, padding: "6px 0", borderRadius: 8, border: active ? "1px solid #60A5FA" : "1px solid rgba(255,255,255,0.05)",
+                  background: active ? "linear-gradient(180deg, rgba(96,165,250,0.2), rgba(59,130,246,0.1))" : "rgba(255,255,255,0.02)",
+                  color: active ? "#DBEAFE" : T.muted, fontSize: 11, fontWeight: 800, fontFamily: T.mono, cursor: "pointer", transition: "all 160ms ease"
+                }}>{step.id}</button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {hasVariants && (!embedded || showVariants) && (

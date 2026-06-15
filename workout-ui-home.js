@@ -79,12 +79,12 @@ function renderWorkoutCard(w, isSuggested, isOngoing, logged, expected, pct) {
 
   const rowsHTML = exerciseEntries.map(ex => {
     const s = state.lastSession[`${ex.name}|working|1`] || state.lastSession[`${ex.name}|working|2`] || state.lastSession[`${ex.name}|working|3`];
-    const weightVal = s ? (s.weight_lb || '—') : '—';
-    const repsVal = s ? (s.reps || '—') : '—';
+    const weightVal = s ? (s.weight_lb || '—') : '—', repsVal = s ? (s.reps || '—') : '—';
     const valLabel = s ? `${weightVal}lb × ${repsVal}` : '—';
+    const name = ex.name === "Barbell Bench Press" ? `Barbell Bench Press (A${(window.getSuggestedBenchStep ? window.getSuggestedBenchStep(state.history) : 0) + 1})` : ex.name;
     return `
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;gap:6px">
-        <span style="color:${isSuggested ? '#4b5563' : '#374151'};font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.name}</span>
+        <span style="color:${isSuggested ? '#4b5563' : '#374151'};font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</span>
         <span style="color:${isSuggested ? '#4b5563' : '#6b7280'};font-family:ui-monospace,Menlo,monospace;flex-shrink:0">${valLabel}</span>
       </div>
     `;

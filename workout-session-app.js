@@ -34,7 +34,7 @@ function App() {
           api.lastSession(workout.name),
           api.todaySession(workout.name),
           api.hints(),
-          api.history(20),
+          api.history(100),
           api.history1RM(),
         ]);
         if (cancelled) return;
@@ -65,6 +65,11 @@ function App() {
         setSwaps(swapMap);
         let exs = flattenTemplate(applySwaps(workout, swapMap), last || {}, hints || {});
         const savedSetsMap = loadSessionSets(workout.name, activeDate);
+        const benchIdx = exs.findIndex(e => e.name === "Barbell Bench Press");
+        if (benchIdx !== -1 && (!savedSetsMap || !savedSetsMap["Barbell Bench Press"])) {
+          const hist = results[3].status === "fulfilled" ? results[3].value || [] : [];
+          exs[benchIdx] = applyBenchStep(exs[benchIdx], getSuggestedBenchStep(hist));
+        }
         if (savedSetsMap && Object.keys(savedSetsMap).length) {
           exs = exs.map(ex => {
             const saved = savedSetsMap[ex.name];
@@ -129,6 +134,12 @@ function App() {
     setRest,
     queueSave
   });
+
+  const onSelectBenchStep = (eIdx, stepIdx) => {
+    const next = exercises.map((e, idx) => idx === eIdx ? applyBenchStep(e, stepIdx) : e);
+    setExercises(next);
+    queueSave(next, sessionId, startedAt, elapsed);
+  };
 
   const currentIdx = (() => {
     let i = exercises.findIndex(e => !e.skipped && e.sets.some(s => s.active));
@@ -269,6 +280,7 @@ function App() {
                 onAddSet={() => actions.onAddSet(i)}
                 onRemoveSet={() => actions.onRemoveSet(i)}
                 onRemoveWarmup={() => actions.onRemoveWarmup(i)}
+                onSelectBenchStep={(stepIdx) => onSelectBenchStep(i, stepIdx)}
               />
             );
             if (!combined) {

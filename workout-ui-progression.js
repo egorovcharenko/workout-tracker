@@ -7,12 +7,20 @@ function _exerciseAt(exIdx, setKey) {
 }
 
 function _nextWeightStep(currentLb, effectiveEx) {
+  if (effectiveEx.equipment === "barbell" || effectiveEx.name.includes("Barbell") || effectiveEx.name === "Standing Overhead Press") {
+    const step = (effectiveEx.name === "Barbell Deadlift") ? 10 : 5;
+    return currentLb + step;
+  }
   const ladder = [...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b);
   const next = ladder.find(w => w > currentLb);
   return next ?? null;
 }
 
 function _prevWeightStep(currentLb, effectiveEx) {
+  if (effectiveEx.equipment === "barbell" || effectiveEx.name.includes("Barbell") || effectiveEx.name === "Standing Overhead Press") {
+    const step = (effectiveEx.name === "Barbell Deadlift") ? 10 : 5;
+    return Math.max(45, currentLb - step);
+  }
   const ladder = [...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b);
   let prev = null;
   for (const w of ladder) { if (w < currentLb) prev = w; else break; }
@@ -37,6 +45,26 @@ function getProgressionSuggestion(exIdx, setKey) {
   const refs = _exerciseAt(exIdx, setKey);
   if (!refs) return null;
   const { effective, name } = refs;
+  if (name === "Barbell Bench Press") {
+    const suggestedStepIdx = getSuggestedBenchStep(state.history || []);
+    const step = BENCH_STEPS[suggestedStepIdx];
+    if (step) {
+      if (step.id === "A8") {
+        const specs = [
+          { w: 135, r: 3, label: "Warmup: 135 × 3" },
+          { w: 155, r: 1, label: "Warmup: 155 × 1" },
+          { w: 170, r: 1, label: "Warmup: 170 × 1" },
+          { w: 180, r: 1, label: "Peak Attempt: 180 × 1" }
+        ];
+        if (typeof setKey === 'number') {
+          const spec = specs[setKey] || specs[specs.length - 1];
+          return { weight: spec.w, bands: null, reps: spec.r, reason: `🎯 Peak program A8: ${spec.label}`, mode: 'match', source: 'program' };
+        }
+      } else {
+        return { weight: step.weight, bands: null, reps: step.reps, reason: `🎯 Peak program ${step.id} target: ${step.sets}x${step.reps} @ ${step.weight}lb`, mode: 'match', source: 'program' };
+      }
+    }
+  }
   const isBW = !!effective.bodyweight;
   const isAssist = effective.assist === true;
   const isBand = effective.equipment === 'band' && !isAssist;
