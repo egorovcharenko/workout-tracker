@@ -42,7 +42,6 @@ function renderWorkoutMuscleMap(w) {
 
   return `<div data-noinvert style="display:flex;flex-direction:column;gap:3px;flex-shrink:0;width:72px">${badgeHTML}</div>`;
 }
-}
 
 function renderWorkoutCard(w, isSuggested, isOngoing, logged, expected, pct) {
   const kindLabel = w => w.kind === 'micro' ? 'Micro' : w.kind === 'optional' ? 'Optional' : `Main ${w.abSplit || ''}`.trim();
