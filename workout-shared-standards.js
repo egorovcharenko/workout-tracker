@@ -1,5 +1,4 @@
 const EXERCISE_MUSCLES = {
-  "Pull-Ups": { primary: ["lats"], secondary: ["biceps", "upper_back", "rear_delts"], ratios: { lats: 1.0, biceps: 0.35, upper_back: 0.5, rear_delts: 0.3 } },
   "Barbell RDL": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.5 } },
   "Dumbbell Lateral Raises": { primary: ["shoulders"], secondary: [], ratios: { shoulders: 1.0 } },
   "Incline DB Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.3 } },
@@ -42,7 +41,6 @@ const EXERCISE_MUSCLES = {
 };
 
 const STRENGTH_STANDARDS = {
-  "Pull-Ups": { beg: -28, nov: 18, int: 75, adv: 138, elite: 206 },
   "Barbell RDL": { beg: 95, nov: 135, int: 205, adv: 275, elite: 365 },
   "Dumbbell Lateral Raises": { beg: 10, nov: 15, int: 25, adv: 35, elite: 45 },
   "Incline DB Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
@@ -94,7 +92,7 @@ function getMuscleImpact(exName, muscle, isPrimary) {
 }
 
 function calcSet1RM(exerciseName, weight, reps, bandsJson) {
-  const isAssist = exerciseName === "Assisted Pull-Ups" || exerciseName === "Dips" || exerciseName === "Dead Hang + Scap Pulls" || exerciseName === "Hanging Knee Raise" || exerciseName === "Pull-Ups";
+  const isAssist = exerciseName === "Assisted Pull-Ups" || exerciseName === "Dips" || exerciseName === "Dead Hang + Scap Pulls" || exerciseName === "Hanging Knee Raise";
   
   let bandSum = 0;
   if (bandsJson) {

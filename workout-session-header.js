@@ -48,7 +48,7 @@ function Header({ workout, workouts, onPickWorkout, done, total, elapsedSec, run
                       padding: "9px 12px", borderRadius: 7, cursor: "pointer",
                     }}>
                       {w.name}
-                      <span style={{ marginLeft: 8, color: T.faint, fontSize: 11, fontWeight: 500 }}>{w.duration}</span>
+                      <span style={{ marginLeft: 8, color: T.faint, fontSize: 11, fontWeight: 500 }}>~{Math.round(estimateTemplateWorkoutDuration(w) / 60)} min</span>
                     </button>
                   );
                 })}

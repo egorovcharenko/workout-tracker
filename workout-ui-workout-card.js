@@ -166,7 +166,7 @@ function renderExerciseCardInWorkout(ex, exIdx, nextSet) {
       <div class="card" style="border-left:3px solid #7c3aed">
         <div style="padding:16px 16px 8px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <h3 style="font-weight:600;color:#111827;margin:0">${ex.name}</h3>
+            <h3 style="font-weight:600;color:#111827;margin:0">${ex.name} <span style="font-size:11px;color:#9ca3af;font-weight:500;font-family:ui-monospace,Menlo,monospace">(~${Math.round(estimateExerciseDuration(ex) / 60)} min)</span></h3>
             <span style="font-size:11px;background:#f3e8ff;color:#7c3aed;padding:2px 8px;border-radius:9999px;font-weight:500">${ex.sets} rounds</span>
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:4px">
@@ -193,7 +193,7 @@ function renderExerciseCardInWorkout(ex, exIdx, nextSet) {
       <div style="padding:16px 16px 8px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
           <div style="flex:1">
-            <h3 style="font-weight:600;color:#111827;margin:0">${ex.name}</h3>
+            <h3 style="font-weight:600;color:#111827;margin:0">${ex.name} <span style="font-size:11px;color:#9ca3af;font-weight:500;font-family:ui-monospace,Menlo,monospace">(~${Math.round(estimateExerciseDuration(ex) / 60)} min)</span></h3>
             <p style="font-size:12px;color:#6b7280;margin:2px 0 0">${ex.sets} × ${ex.reps} reps</p>
           </div>
           <div style="display:flex;gap:6px;align-items:center">

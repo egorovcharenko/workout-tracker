@@ -73,7 +73,7 @@ function renderWorkoutCard(w, isSuggested, isOngoing, logged, expected, pct) {
 
   const infoLabel = isSuggested && isOngoing
     ? `${logged} of ${expected} sets logged (${pct}%)`
-    : `${kindLabel(w)} · ${w.duration}${isSuggested ? ' · up next' : ''}`;
+    : `${kindLabel(w)} · ~${Math.round(estimateTemplateWorkoutDuration(w) / 60)} min${isSuggested ? ' · up next' : ''}`;
 
   return `
     <a href="/workout?w=${w.id}" style="text-decoration:none;display:block;">

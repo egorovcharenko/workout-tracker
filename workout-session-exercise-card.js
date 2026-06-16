@@ -59,6 +59,9 @@ function ExerciseCard({ exercise, supersetTag, embedded, rest, onRestAdd, onRest
               }}>{supersetTag}</span>
             )}
             {exercise.name}
+            <span style={{ fontSize: 11, color: T.faint, fontWeight: 500, marginLeft: 8, fontFamily: T.mono, verticalAlign: "middle" }}>
+              (~{Math.round(estimateExerciseDuration(exercise) / 60)} min)
+            </span>
           </h2>
         </div>
       )}
