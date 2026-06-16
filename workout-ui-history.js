@@ -1,5 +1,17 @@
 // UI rendering logic for the History tab of Workout Tracker
 
+function getExDurs(s) {
+  const sorted = (s.sets || []).filter(st => st.logged_at).sort((a, b) => a.logged_at.localeCompare(b.logged_at));
+  const durs = {};
+  const start = s.started_at ? Date.parse(s.started_at) : null;
+  sorted.forEach((st, idx) => {
+    const t = Date.parse(st.logged_at);
+    let prev = idx === 0 ? (start && start < t && (t - start) < 7200000 ? start : t - 120000) : Date.parse(sorted[idx - 1].logged_at);
+    durs[st.exercise] = (durs[st.exercise] || 0) + Math.max(0, Math.round((t - (isNaN(prev) ? t - 120000 : prev)) / 1000));
+  });
+  return durs;
+}
+
 function renderSessionList() {
   const WORKOUT_COLORS = {
     "Arms & Shoulders": "#8b5cf6",
@@ -59,6 +71,7 @@ function renderSessionList() {
     const sessions = byDate[date];
     const dateLabel = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
     const sessionCards = sessions.map(s => {
+      const durs = getExDurs(s);
       const dur = s.duration_sec ? formatTime(s.duration_sec) : "?";
       const color = WORKOUT_COLORS[s.workout_name] || "#6b7280";
       const byEx = {};
@@ -106,16 +119,20 @@ function renderSessionList() {
           subNames.forEach(n => seen.add(n));
           const allSets = subNames.flatMap(n => (byEx[n] || []).filter(st => st.set_type === "working"));
           if (allSets.length > 0) {
+            const totalSupersetDur = subNames.reduce((acc, n) => acc + (durs[n] || 0), 0);
+            const supersetDurTag = totalSupersetDur > 0 ? `<span style="font-size:9px;background:#f3e8ff;color:#7c3aed;padding:1px 5px;border-radius:9999px;font-weight:500;margin-left:auto">${Math.round(totalSupersetDur/60)} min</span>` : '';
             const subSummaries = subNames.map(n => {
               const ws = (byEx[n] || []).filter(st => st.set_type === "working");
               const reps = ws.map(st => parseInt(st.reps) || 0).filter(r => r > 0).join('·');
               const maxW = Math.max(0, ...ws.map(st => st.weight_lb || 0));
-              return `<span style="font-size:10px;color:#6b7280;font-family:monospace">${n.split(' ').pop()}: ${reps}${maxW > 0 ? ` @ ${maxW}lb` : ''}</span>`;
+              const subDur = durs[n] ? ` (${Math.round(durs[n]/60)}m)` : '';
+              return `<span style="font-size:10px;color:#6b7280;font-family:monospace">${n.split(' ').pop()}${subDur}: ${reps}${maxW > 0 ? ` @ ${maxW}lb` : ''}</span>`;
             }).join('<br>');
             exEntries.push(`<div style="padding:3px 0">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
                 <span style="font-size:12px;color:#7c3aed;font-weight:500">${groupName}</span>
                 <span style="font-size:9px;background:#f3e8ff;color:#7c3aed;padding:1px 5px;border-radius:9999px;font-weight:500">Superset</span>
+                ${supersetDurTag}
               </div>
               <div style="padding-left:8px">${subSummaries}</div>
             </div>`);
@@ -143,8 +160,9 @@ function renderSessionList() {
               assistTag = ` <span style="color:#0891b2">· ${range}lb assist</span>`;
             }
           }
+          const durTag = durs[ex] ? ` <span style="color:#9ca3af;font-size:10px;font-family:monospace">(${Math.round(durs[ex]/60)}m)</span>` : '';
           exEntries.push(`<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0">
-            <span style="font-size:12px;color:#374151">${ex}</span>
+            <span style="font-size:12px;color:#374151">${ex}${durTag}</span>
             <span style="font-size:11px;color:#6b7280;font-family:monospace">${repsDisplay} ${weightStr}${assistTag}</span>
           </div>`);
         }

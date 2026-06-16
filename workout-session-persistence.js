@@ -132,6 +132,7 @@ function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed,
         weight_lb,
         bands_json: bands.length ? JSON.stringify(bands) : null,
         grip: s.grip || null,
+        logged_at: s.logged_at || null,
       });
     });
   });

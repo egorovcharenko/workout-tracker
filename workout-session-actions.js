@@ -76,7 +76,7 @@ function useWorkoutActions({
 
   const onLogReps = (eIdx, sIdx, r) => {
     startTimer();
-    let next = patchSet(eIdx, sIdx, { reps: r, completed: true });
+    let next = patchSet(eIdx, sIdx, { reps: r, completed: true, logged_at: new Date().toISOString() });
 
     const ex = next[eIdx];
     const inSuperset = !!ex.superset;

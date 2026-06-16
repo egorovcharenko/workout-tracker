@@ -101,10 +101,12 @@ def get_db():
                     reps TEXT,
                     weight_lb REAL,
                     bands_json TEXT,
-                    completed INTEGER DEFAULT 1
+                    completed INTEGER DEFAULT 1,
+                    logged_at TEXT
                 )''')
                 conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS bands_json TEXT")
                 conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS grip TEXT")
+                conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS logged_at TEXT")
                 conn.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMP")
                 conn.execute('''CREATE TABLE IF NOT EXISTS motivations (
                     id SERIAL PRIMARY KEY,
@@ -143,6 +145,8 @@ def get_db():
                 conn.commit()
             else:
                 conn.commit()
+            conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS logged_at TEXT")
+            conn.commit()
             DB_INITIALIZED = True
         return conn
 
@@ -168,6 +172,7 @@ def get_db():
             weight_lb REAL,
             bands_json TEXT,
             completed INTEGER DEFAULT 1,
+            logged_at TEXT,
             FOREIGN KEY (session_id) REFERENCES sessions(id)
         )''')
         try:
@@ -177,6 +182,11 @@ def get_db():
             pass
         try:
             conn.execute("ALTER TABLE sets ADD COLUMN grip TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE sets ADD COLUMN logged_at TEXT")
             conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -373,8 +383,8 @@ def save_session(data):
 
     for s in data.get("sets", []):
         c.execute(
-            "INSERT INTO sets (session_id, exercise, set_type, set_number, reps, weight_lb, bands_json, grip, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (session_id, s["exercise"], s["set_type"], s.get("set_number", 0), s.get("reps", ""), s.get("weight_lb"), s.get("bands_json"), s.get("grip"), 1),
+            "INSERT INTO sets (session_id, exercise, set_type, set_number, reps, weight_lb, bands_json, grip, completed, logged_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (session_id, s["exercise"], s["set_type"], s.get("set_number", 0), s.get("reps", ""), s.get("weight_lb"), s.get("bands_json"), s.get("grip"), 1, s.get("logged_at")),
         )
     conn.commit()
     conn.close()
