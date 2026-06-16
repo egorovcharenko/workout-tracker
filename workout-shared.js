@@ -39,8 +39,8 @@ const WORKOUTS = [
     id: "micro-arms", name: "Micro: Arms & Core", program: true, kind: "micro", rest: 60, warmup: "One light feel set",
     exercises: [
       { name: "Dips", sets: 3, reps: "8-12", equipment: "band", assist: true, video: "https://www.youtube.com/shorts/0326dy_-CzM", notes: "Real triceps load.", superset: "A", rest: 60, noWarmup: true },
-      { name: "Dumbbell Bicep Curls", sets: 2, reps: "10-15", video: "https://www.youtube.com/shorts/MKWBV29S6c0", grips: ['supinated', 'hammer', 'reverse'], notes: "Push/pull pair with dips.", superset: "A", rest: 60, noWarmup: true },
-      { name: "Dumbbell Hammer Curls", sets: 2, reps: "10-15", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", grips: ['hammer', 'supinated', 'reverse'], notes: "Superset with lateral raises.", superset: "B", rest: 60, noWarmup: true },
+      { name: "Dumbbell Bicep Curls", sets: 3, reps: "10-15", video: "https://www.youtube.com/shorts/MKWBV29S6c0", grips: ['supinated', 'hammer', 'reverse'], notes: "Push/pull pair with dips.", superset: "A", rest: 60, noWarmup: true },
+      { name: "Dumbbell Hammer Curls", sets: 3, reps: "10-15", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", grips: ['hammer', 'supinated', 'reverse'], notes: "Superset with lateral raises.", superset: "B", rest: 60, noWarmup: true },
       { name: "Dumbbell Lateral Raises", sets: 3, reps: "12-20", notes: "Side delts. Chase reps.", superset: "B", rest: 60, noWarmup: true },
       { name: "Band Torso Rotation", sets: 2, reps: "12-15", equipment: "band", rest: 45, notes: "Rotate left/right.", noWarmup: true },
     ],
