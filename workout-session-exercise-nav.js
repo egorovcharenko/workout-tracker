@@ -103,7 +103,9 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
                 <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
                   <span style={{ color: STATUS_COLOR[m.status], fontSize: 10, flexShrink: 0 }}>{STATUS_GLYPH[m.status]}</span>
                   {m.tag && <span style={{ color: T.bands, fontFamily: T.mono, fontSize: 9, fontWeight: 800 }}>{m.tag}</span>}
-                  <span style={{ marginLeft: "auto", fontFamily: T.mono, fontSize: 9, color: m.status === "done" ? T.green : T.faint }}>{m.doneWork}/{m.totalWork}</span>
+                  <span style={{ marginLeft: "auto", fontFamily: T.mono, fontSize: 9, color: m.status === "done" ? T.green : T.faint }}>
+                    (~{Math.round(estimateExerciseDuration(e) / 60)}m) {m.doneWork}/{m.totalWork}
+                  </span>
                 </div>
                 <div style={{
                   color: m.status === "skipped" ? T.muted : T.strong,

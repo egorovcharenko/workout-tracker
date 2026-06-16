@@ -63,7 +63,12 @@ function ExerciseNavRow({ i, exercises, shownIdx, currentIdx, onSelect, onSwapEx
           <span style={{
             color: nameColor, fontSize: 14, fontWeight: 700, letterSpacing: -0.2, lineHeight: 1.3,
             textDecoration: status === "skipped" ? "line-through" : "none",
-          }}>{e.name}</span>
+          }}>
+            {e.name}
+            <span style={{ fontSize: 11, color: T.faint, fontWeight: 500, marginLeft: 6, fontFamily: T.mono }}>
+              (~{Math.round(estimateExerciseDuration(e) / 60)} min)
+            </span>
+          </span>
         </div>
         {hasVariants && iconBox({
           glyph: "⇄", active: swapOpen, title: "Swap variant",
