@@ -58,8 +58,8 @@ const WORKOUTS = [
     id: "main-b", name: "Main B", program: true, kind: "main", abSplit: "B", duration: "~45 min", rest: 120, warmup: "Light hinges + band pull-aparts",
     exercises: [
       { name: "Barbell RDL", sets: 3, warmups: 3, reps: "8-12", equipment: "barbell", rest: 150, notes: "Hamstring gap + fatigue fix in one move. Flat back, hinge at hips. Swap conventional deadlift back in on weeks you want it." },
-      { name: "Incline Barbell Press", sets: 3, warmups: 1, reps: "6-10", equipment: "barbell", rest: 120, notes: "Superset with rows (push). Bench at ~30°.", superset: "A" },
-      { name: "Bent-Over Barbell Rows", sets: 3, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120, notes: "Superset with incline (pull); rest after the pair. Keep back flat, pull to lower chest.", superset: "A" },
+      { name: "Incline Barbell Press", sets: 3, warmups: 1, reps: "6-10", equipment: "barbell", rest: 120, notes: "Bench at ~30°." },
+      { name: "Bent-Over Barbell Rows", sets: 3, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120, notes: "Keep back flat, pull to lower chest." },
       { name: "Pull-Ups", sets: 3, reps: "1-8", notes: "Solo — see pull-up protocol. 1. Fresh attempt (1 unassisted). 2. Set 1–2: assisted pull-ups (stop 1 rep shy of failure). 3. Set 3: weighted negatives (lower 3–5s, 3–5 reps).", equipment: "band", assist: true, grips: ['pullup', 'neutral', 'chinup'], rest: 150, noWarmup: true },
     ],
   },
