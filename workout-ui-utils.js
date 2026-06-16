@@ -30,7 +30,7 @@ function scrollToSelected() {
 function getExerciseStatsFromHistory(exName) {
   const history = state.history || [];
   const perSession = [];
-  const isAssist = exName === "Assisted Pull-Ups" || exName === "Dips" || exName === "Dead Hang + Scap Pulls" || exName === "Hanging Knee Raise";
+  const isAssist = exName === "Assisted Pull-Ups" || exName === "Dips" || exName === "Dead Hang + Scap Pulls" || exName === "Hanging Knee Raise" || exName === "Pull-Ups";
   for (const s of history) {
     let bestOrm = isAssist ? -Infinity : 0, maxReps = 0, didLog = false;
     for (const st of (s.sets || [])) {

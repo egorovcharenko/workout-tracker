@@ -26,8 +26,6 @@ const BANDS = [{ color: "yellow", lb: 5 }, { color: "green", lb: 15 }, { color: 
 const BAND_VALUES = BANDS.map(b => b.lb);
 
 const WORKOUTS = [
-  // ── Weekly program (Jun 2026): Main A/B alternate Mon/Wed/Fri (A/B/A, then
-  //    B/A/B next week); micro days slot into Tue/Thu and can shuffle freely.
   {
     id: "main-a",
     name: "Main A",
@@ -35,41 +33,46 @@ const WORKOUTS = [
     program: true,
     kind: "main",
     abSplit: "A",
-    duration: "~40 min",
+    duration: "~45 min",
     rest: 120,
     warmup: "Empty-bar squats + arm circles, then ramp the bar",
     exercises: [
-      { name: "Barbell Back Squat", sets: 4, warmups: 3, reps: "5-8", notes: "Bar on upper back. Set safety pins low.", equipment: "barbell", rest: 180 },
-      { name: "Barbell Bench Press", sets: 4, warmups: 3, reps: "6", notes: "Lower bar to mid-chest. **Safety**: Set rack safeties just below chest height. Collars on; if you stall, lower to safeties.", equipment: "barbell", rest: 120 },
-      { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", notes: "Volume day: band for 5-8 reps.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
-      { name: "Standing Overhead Press", sets: 3, warmups: 1, reps: "6-10", notes: "Brace hard, press overhead.", equipment: "barbell", rest: 120 },
+      { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-10", notes: "Primary quad driver. Bar on upper back. Set safety pins low.", equipment: "barbell", rest: 150 },
+      { name: "Barbell Bench Press", sets: 3, warmups: 3, reps: "6-10", notes: "Lower bar to mid-chest. Set rack safeties just below chest height.", equipment: "barbell", rest: 150 },
+      { name: "Pull-Ups", sets: 3, reps: "1-8", notes: "Solo — see pull-up protocol. 1. Fresh attempt (1 unassisted). 2. Set 1–2: assisted pull-ups (stop 1 rep shy of failure). 3. Set 3: weighted negatives (lower 3–5s, 3–5 reps).", equipment: "band", assist: true, grips: ['pullup', 'neutral', 'chinup'], rest: 150, noWarmup: true },
+      { name: "Standing Overhead Press", sets: 3, warmups: 1, reps: "6-10", notes: "Front delt. Brace hard, press overhead.", equipment: "barbell", rest: 120 },
+      { name: "Bulgarian Split Squat", sets: 2, reps: "10-15", notes: "Only if you want more quad/glute volume.", equipment: "dumbbell", bandAddon: true, rest: 90, optional: true },
     ],
   },
   {
-    id: "micro-arms", name: "Micro: Arms & Core", program: true, kind: "micro", duration: "~10 min", rest: 60, warmup: "One light feel set",
+    id: "micro-arms", name: "Micro: Arms & Core", program: true, kind: "micro", duration: "~12 min", rest: 60, warmup: "One light feel set",
     exercises: [
-      { name: "Dumbbell Hammer Curls", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", notes: "Superset with pushdowns.", superset: "A", grips: ['hammer', 'supinated', 'reverse'], rest: 60, noWarmup: true },
-      { name: "Band Tricep Pushdowns", sets: 3, reps: "10-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", notes: "Elbows glued to ribs", superset: "A", rest: 60, noWarmup: true },
-      { name: "Dumbbell Bicep Curls", sets: 3, reps: "8-12", notes: "Superset with torso rotation.", video: "https://www.youtube.com/shorts/MKWBV29S6c0", superset: "B", grips: ['supinated', 'hammer', 'reverse'], rest: 60, noWarmup: true },
-      { name: "Band Torso Rotation", sets: 2, reps: "12-15", notes: "Rotate left and right.", equipment: "band", superset: "B", rest: 60, noWarmup: true },
+      { name: "Dips", sets: 3, reps: "8-12", equipment: "band", assist: true, video: "https://www.youtube.com/shorts/0326dy_-CzM", notes: "Real triceps load. Add weight once >12. Dip attachment.", superset: "A", rest: 60, noWarmup: true },
+      { name: "Dumbbell Bicep Curls", sets: 2, reps: "10-15", video: "https://www.youtube.com/shorts/MKWBV29S6c0", grips: ['supinated', 'hammer', 'reverse'], notes: "Push/pull antagonist pair with dips.", superset: "A", rest: 60, noWarmup: true },
+      { name: "Dumbbell Hammer Curls", sets: 2, reps: "10-15", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", grips: ['hammer', 'supinated', 'reverse'], notes: "Superset with lateral raises.", superset: "B", rest: 60, noWarmup: true },
+      { name: "Dumbbell Lateral Raises", sets: 3, reps: "12-20", notes: "Side delts. Chase reps and clean stretch, then add lengthened partials past failure.", superset: "B", rest: 60, noWarmup: true },
+      { name: "Band Torso Rotation", sets: 2, reps: "12-15", equipment: "band", rest: 45, notes: "Rotate left and right. Alternate with hanging knee raises.", noWarmup: true },
     ],
   },
   {
-    id: "main-b", name: "Main B", program: true, kind: "main", abSplit: "B", duration: "~40 min", rest: 120, warmup: "Light hinges + band pull-aparts",
+    id: "main-b", name: "Main B", program: true, kind: "main", abSplit: "B", duration: "~45 min", rest: 120, warmup: "Light hinges + band pull-aparts",
     exercises: [
-      { name: "Barbell Deadlift", sets: 4, warmups: 3, reps: "5-8", notes: "Flat back, brace. Reset each rep.", equipment: "barbell", rest: 180 },
-      { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "8-12", notes: "Bench at ~30°. Take to 1-2 RIR. Add 5 lb when 12 reps completed on all sets.", equipment: "barbell", rest: 120 },
-      { name: "Assisted Pull-Ups", sets: 3, reps: "3-5", notes: "Heavy day: lightest band for 3-5 reps.", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 150, noWarmup: true },
-      { name: "Bent-Over Barbell Rows", sets: 4, warmups: 1, reps: "8-12", notes: "Keep back flat, pull to lower chest.", equipment: "barbell", rest: 120 },
+      { name: "Barbell RDL", sets: 3, warmups: 3, reps: "8-12", equipment: "barbell", rest: 150, notes: "Hamstring gap + fatigue fix in one move. Flat back, hinge at hips. Swap conventional deadlift back in on weeks you want it." },
+      { name: "Incline Barbell Press", sets: 3, warmups: 1, reps: "6-10", equipment: "barbell", rest: 120, notes: "Superset with rows (push). Bench at ~30°.", superset: "A" },
+      { name: "Bent-Over Barbell Rows", sets: 3, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120, notes: "Superset with incline (pull); rest after the pair. Keep back flat, pull to lower chest.", superset: "A" },
+      { name: "Pull-Ups", sets: 3, reps: "1-8", notes: "Solo — see pull-up protocol. 1. Fresh attempt (1 unassisted). 2. Set 1–2: assisted pull-ups (stop 1 rep shy of failure). 3. Set 3: weighted negatives (lower 3–5s, 3–5 reps).", equipment: "band", assist: true, grips: ['pullup', 'neutral', 'chinup'], rest: 150, noWarmup: true },
     ],
   },
   {
-    id: "micro-delts", name: "Micro: Delts & Traps", program: true, kind: "micro", duration: "~10 min", rest: 60, warmup: "Band pull-aparts",
+    id: "micro-delts", name: "Micro: Delts & Traps", program: true, kind: "micro", duration: "~14 min", rest: 60, warmup: "Band pull-aparts",
     exercises: [
-      { name: "Face Pulls", sets: 3, reps: "12-15", equipment: "band", notes: "Squeeze rear delts. Superset with shrugs.", superset: "A", rest: 60, noWarmup: true },
-      { name: "Dumbbell Shrugs", sets: 3, reps: "10-15", notes: "Pause at top.", superset: "A", rest: 60, noWarmup: true },
-      { name: "Reverse Flyes", sets: 3, reps: "12-15", notes: "Superset with dead hangs.", video: "https://www.youtube.com/shorts/LsT-bR_zxLo", superset: "B", rest: 60, noWarmup: true },
-      { name: "Dead Hang + Scap Pulls", sets: 3, reps: "5-8", notes: "Hang 20-40s, then 5-8 scap pulls.", superset: "B", rest: 60, noWarmup: true, assist: true },
+      { name: "Dumbbell Lateral Raises", sets: 3, reps: "12-20", rest: 45, notes: "Second weekly delt hit. Chase reps and clean stretch, then add lengthened partials past failure.", superset: "A", noWarmup: true },
+      { name: "Face Pulls", sets: 2, reps: "15-20", equipment: "band", rest: 45, notes: "Rear delt + upper trap; anchor band to rack.", superset: "A", noWarmup: true },
+      { name: "Dumbbell Shrugs", sets: 3, reps: "12-20", rest: 45, notes: "Pause + squeeze at top; trap priority.", superset: "B", noWarmup: true },
+      { name: "Reverse Flyes", sets: 2, reps: "12-20", video: "https://www.youtube.com/shorts/LsT-bR_zxLo", rest: 45, notes: "Rear delt.", superset: "B", noWarmup: true },
+      { name: "Overhead Tricep Extension", sets: 2, reps: "10-15", video: "https://www.youtube.com/shorts/b_r_LW4HEcM", rest: 60, notes: "Long-head stretch — complements dips on Arms day.", superset: "C", noWarmup: true },
+      { name: "Incline DB Curls", sets: 2, reps: "10-15", rest: 60, notes: "Stretch-biased biceps — different angle than Arms day.", superset: "C", noWarmup: true },
+      { name: "Dead Hang + Scap Pulls", sets: 2, reps: "5-8", rest: 45, notes: "Grip + scap control for the pull-up goal. Hang 20-40s, then 5-8 scap pulls.", noWarmup: true, assist: true },
     ],
   },
   {
@@ -150,6 +153,7 @@ const SWAP_GROUPS = [
   { family: "Deadlifts & Hinge (Posterior)", exercises: [
     { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "3-5", equipment: "barbell", rest: 120 },
     { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", equipment: "barbell", rest: 120 },
+    { name: "Barbell RDL", sets: 3, warmups: 3, reps: "8-12", equipment: "barbell", rest: 150 },
     { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/cGMaBqaExBo", rest: 120, noWarmup: true },
     { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true },
     { name: "Single-Leg DB RDL", sets: 3, reps: "8-10", rest: 120 },
@@ -174,6 +178,7 @@ const SWAP_GROUPS = [
   ]},
   { family: "Back Rows & Pulls (Pull)", exercises: [
     { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
+    { name: "Pull-Ups", sets: 3, reps: "1-8", notes: "Solo — see pull-up protocol. 1. Fresh attempt (1 unassisted). 2. Set 1–2: assisted pull-ups (stop 1 rep shy of failure). 3. Set 3: weighted negatives (lower 3–5s, 3–5 reps).", equipment: "band", assist: true, grips: ['pullup', 'neutral', 'chinup'], rest: 150, noWarmup: true },
     { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 120 },
     { name: "Bent-Over Barbell Rows", sets: 3, reps: "8-12", equipment: "barbell", rest: 120 },
     { name: "Dumbbell Bent-Over Rows", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/dpYI8K6e-jE", rest: 120 },
@@ -190,6 +195,7 @@ const SWAP_GROUPS = [
   ]},
   { family: "Biceps (Arm Flexion)", exercises: [
     { name: "Dumbbell Bicep Curls", sets: 2, reps: "8-12", video: "https://www.youtube.com/shorts/MKWBV29S6c0", grips: ['supinated', 'hammer', 'reverse'] },
+    { name: "Incline DB Curls", sets: 2, reps: "10-15", rest: 60 },
     { name: "Dumbbell Hammer Curls", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", grips: ['hammer', 'supinated', 'reverse'] },
     { name: "Band Bicep Curls", sets: 2, reps: "12-15", video: "https://www.youtube.com/shorts/5ACsDBt_sMQ", equipment: "band", grips: ['supinated', 'hammer', 'reverse'] },
   ]},
@@ -211,65 +217,7 @@ function getSwapGroupName(n) { const name = n === "Bench Dips" ? "Dips" : n, g =
 function getSwapOptions(n) { const name = n === "Bench Dips" ? "Dips" : n, g = getSwapGroup(name); return g ? g.filter(e => e.name !== name) : []; }
 function isSwappable(n) { const name = n === "Bench Dips" ? "Dips" : n; return SWAP_GROUPS.some(g => g.exercises.some(e => e.name === name)); }
 
-const BENCH_STEPS = [
-  { id: "A1", label: "A1: Top + Volume" },
-  { id: "A2", label: "A2: Top + Volume" },
-  { id: "A3", label: "A3: Top + Volume" },
-  { id: "A4", label: "A4: Top + Volume" },
-  { id: "A5", label: "A5: Top + Volume" },
-  { id: "A6", label: "A6: Top + Volume" },
-  { id: "A7", label: "A7: Top + Volume" },
-  { id: "A8", label: "A8: 180 lb Peak Attempt" }
-];
-
-function getSuggestedBenchStep(history) {
-  const count = (history || []).filter(h => h.sets && h.sets.some(s => s.exercise === "Barbell Bench Press" && s.set_type === "working" && s.completed)).length;
-  return Math.min(7, count);
-}
-
-function getBenchWeights(history) {
-  const workouts = (history || [])
-    .filter(h => h.sets && h.sets.some(s => s.exercise === "Barbell Bench Press" && s.set_type === "working" && s.completed))
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
-  let topWeight = 150, backoffWeight = 120;
-  for (const w of workouts) {
-    const working = w.sets.filter(s => s.exercise === "Barbell Bench Press" && s.set_type === "working" && s.completed);
-    if (!working.length || working.some(s => s.weight_lb >= 180)) continue;
-    const topSet = working[0];
-    if (topSet && topSet.weight_lb >= topWeight && parseInt(topSet.reps) >= 5) topWeight += 5;
-    const backoffs = working.slice(1);
-    const successfulBackoffs = backoffs.filter(s => s.weight_lb >= backoffWeight && parseInt(s.reps) >= 8);
-    if (successfulBackoffs.length >= 3) backoffWeight += 5;
-  }
-  return { topWeight, backoffWeight };
-}
-
-function applyBenchStep(ex, stepIdx, history) {
-  const { topWeight, backoffWeight } = getBenchWeights(history);
-  const stepId = stepIdx === 7 ? "A8" : `A${stepIdx + 1}`;
-  const sets = [
-    { kind: "warmup", idx: "W1", setNumber: 0, saveExerciseName: "Barbell Bench Press", completed: false, active: true, reps: null, weight: 45, lastReps: 10, lastWeight: 45, bands: [], lastBands: [] },
-    { kind: "warmup", idx: "W2", setNumber: 1, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: 95, lastReps: 5, lastWeight: 95, bands: [], lastBands: [] },
-    { kind: "warmup", idx: "W3", setNumber: 2, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: 115, lastReps: 3, lastWeight: 115, bands: [], lastBands: [] }
-  ];
-  if (stepId === "A8") {
-    [{ w: 135, r: 3 }, { w: 155, r: 1 }, { w: 170, r: 1 }, { w: 180, r: 1 }].forEach((spec, i) => {
-      sets.push({ kind: "work", idx: i + 1, setNumber: i + 1, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: spec.w, lastReps: spec.r, lastWeight: spec.w, bands: [], lastBands: [] });
-    });
-    for (let i = 0; i < 3; i++) {
-      sets.push({ kind: "work", idx: i + 5, setNumber: i + 5, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: backoffWeight, lastReps: 8, lastWeight: backoffWeight, bands: [], lastBands: [] });
-    }
-  } else {
-    sets.push({ kind: "work", idx: 1, setNumber: 1, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: topWeight, lastReps: 5, lastWeight: topWeight, bands: [], lastBands: [] });
-    for (let i = 0; i < 3; i++) {
-      sets.push({ kind: "work", idx: i + 2, setNumber: i + 2, saveExerciseName: "Barbell Bench Press", completed: false, active: false, reps: null, weight: backoffWeight, lastReps: 8, lastWeight: backoffWeight, bands: [], lastBands: [] });
-    }
-  }
-  const label = stepId === "A8" ? "A8: 180 lb Peak Attempt" : `${stepId}: Top ${topWeight} lb / Vol ${backoffWeight} lb`;
-  return { ...ex, benchStepLabel: label, repRange: stepId === "A8" ? "1-3" : "4-8", sets, note: `**Safety**: Set safeties just below chest height. Verify height with empty bar. Keep collars on; if a rep stalls, lower onto safeties.` };
-}
-
 if (typeof window !== "undefined") {
-  Object.assign(window, { WORKOUTS, localDate, interleavedSetNumber, SWAP_GROUPS, findExerciseConfig, getSwapGroup, getSwapGroupName, getSwapOptions, isSwappable, BENCH_STEPS, getSuggestedBenchStep, applyBenchStep, getBenchWeights });
+  Object.assign(window, { WORKOUTS, localDate, interleavedSetNumber, SWAP_GROUPS, findExerciseConfig, getSwapGroup, getSwapGroupName, getSwapOptions, isSwappable });
 }
 

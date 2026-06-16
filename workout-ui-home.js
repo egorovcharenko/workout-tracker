@@ -58,7 +58,7 @@ function renderWorkoutCard(w, isSuggested, isOngoing, logged, expected, pct) {
     const s = state.lastSession[`${ex.name}|working|1`] || state.lastSession[`${ex.name}|working|2`] || state.lastSession[`${ex.name}|working|3`];
     const weightVal = s ? (s.weight_lb || '—') : '—', repsVal = s ? (s.reps || '—') : '—';
     const valLabel = s ? `${weightVal}lb × ${repsVal}` : '—';
-    const name = ex.name === "Barbell Bench Press" ? `Barbell Bench Press (A${(window.getSuggestedBenchStep ? window.getSuggestedBenchStep(state.history) : 0) + 1})` : ex.name;
+    const name = ex.name;
     return `
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;gap:6px">
         <span style="color:${isSuggested ? '#4b5563' : '#374151'};font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</span>
@@ -136,27 +136,20 @@ function renderHome() {
   const program = WORKOUTS.filter(w => w.program);
   const byId = id => WORKOUTS.find(w => w.id === id);
 
-  let nextMain = byId('main-b');
+  const ORDER = ['Main A', 'Micro: Arms & Core', 'Main B', 'Micro: Delts & Traps'];
+  let lastCompletedName = null;
   for (const s of (state.history || [])) {
-    if (s.workout_name === 'Main A') { nextMain = byId('main-b'); break; }
-    if (s.workout_name === 'Main B') { nextMain = byId('main-a'); break; }
+    if (ORDER.includes(s.workout_name)) {
+      lastCompletedName = s.workout_name;
+      break;
+    }
   }
-  const dow = new Date().getDay();
-  const lastDone = name => { const s = (state.history || []).find(x => x.workout_name === name); return s ? s.date : ''; };
-  const lastArms = lastDone('Micro: Arms & Core'), lastDelts = lastDone('Micro: Delts & Traps');
-  const microNext = lastArms === lastDelts
-    ? byId(dow === 4 ? 'micro-delts' : 'micro-arms')
-    : (lastArms < lastDelts ? byId('micro-arms') : byId('micro-delts'));
-  let nextW = (dow === 2 || dow === 4) ? microNext : nextMain;
-
-  const programWorkouts = WORKOUTS.filter(w => w.program);
-  let lastProgramWorkout = null;
-  for (const s of (state.history || [])) {
-    const found = programWorkouts.find(w => w.name === s.workout_name);
-    if (found) { lastProgramWorkout = found; break; }
-  }
-  if (lastProgramWorkout) {
-    nextW = lastProgramWorkout.kind === 'main' ? microNext : nextMain;
+  let nextW = byId('main-a');
+  if (lastCompletedName) {
+    const idx = ORDER.indexOf(lastCompletedName);
+    const nextName = ORDER[(idx + 1) % ORDER.length];
+    const map = { 'Main A': 'main-a', 'Micro: Arms & Core': 'micro-arms', 'Main B': 'main-b', 'Micro: Delts & Traps': 'micro-delts' };
+    nextW = byId(map[nextName]) || byId('main-a');
   }
 
   let activeWorkout = nextW;

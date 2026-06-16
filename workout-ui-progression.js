@@ -45,28 +45,7 @@ function getProgressionSuggestion(exIdx, setKey) {
   const refs = _exerciseAt(exIdx, setKey);
   if (!refs) return null;
   const { effective, name } = refs;
-  if (name === "Barbell Bench Press") {
-    const suggestedStepIdx = getSuggestedBenchStep(state.history || []);
-    const { topWeight, backoffWeight } = getBenchWeights(state.history || []);
-    const isA8 = suggestedStepIdx === 7;
-    if (isA8) {
-      const specs = [
-        { w: 45, r: 10, label: "Warmup" }, { w: 95, r: 5, label: "Warmup" }, { w: 115, r: 3, label: "Warmup" },
-        { w: 135, r: 3, label: "Peak Workup" }, { w: 155, r: 1, label: "Peak Workup" }, { w: 170, r: 1, label: "Peak Workup" },
-        { w: 180, r: 1, label: "Peak Single Attempt" }, { w: backoffWeight, r: 8, label: "Back-off" },
-        { w: backoffWeight, r: 8, label: "Back-off" }, { w: backoffWeight, r: 8, label: "Back-off" }
-      ];
-      if (typeof setKey === 'number') {
-        const spec = specs[setKey] || specs[specs.length - 1];
-        return { weight: spec.w, bands: null, reps: spec.r, reason: `🎯 Peak program A8: ${spec.label} ${spec.w}x${spec.r}`, mode: 'match', source: 'program' };
-      }
-    } else {
-      if (typeof setKey === 'number') {
-        if (setKey === 3) return { weight: topWeight, bands: null, reps: 5, reason: `🎯 Top set: 1x4-5 @ ${topWeight} lb`, mode: 'match', source: 'program' };
-        if (setKey >= 4) return { weight: backoffWeight, bands: null, reps: 8, reason: `🎯 Back-off set: 3x8 @ ${backoffWeight} lb`, mode: 'match', source: 'program' };
-      }
-    }
-  }
+
   const isBW = !!effective.bodyweight;
   const isAssist = effective.assist === true;
   const isBand = effective.equipment === 'band' && !isAssist;

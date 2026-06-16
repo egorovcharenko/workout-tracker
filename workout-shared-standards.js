@@ -1,4 +1,8 @@
 const EXERCISE_MUSCLES = {
+  "Pull-Ups": { primary: ["lats"], secondary: ["biceps", "upper_back", "rear_delts"], ratios: { lats: 1.0, biceps: 0.35, upper_back: 0.5, rear_delts: 0.3 } },
+  "Barbell RDL": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.5 } },
+  "Dumbbell Lateral Raises": { primary: ["shoulders"], secondary: [], ratios: { shoulders: 1.0 } },
+  "Incline DB Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.3 } },
   "Overhead Dumbbell Press": { primary: ["shoulders"], secondary: ["triceps"], ratios: { shoulders: 1.0, triceps: 0.4 } },
   "Dumbbell Bicep Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.3 } },
   "Band Bicep Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.3 } },
@@ -38,6 +42,10 @@ const EXERCISE_MUSCLES = {
 };
 
 const STRENGTH_STANDARDS = {
+  "Pull-Ups": { beg: -28, nov: 18, int: 75, adv: 138, elite: 206 },
+  "Barbell RDL": { beg: 95, nov: 135, int: 205, adv: 275, elite: 365 },
+  "Dumbbell Lateral Raises": { beg: 10, nov: 15, int: 25, adv: 35, elite: 45 },
+  "Incline DB Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
   "Dumbbell Flat Bench Press": { beg: 25, nov: 45, int: 70, adv: 95, elite: 120 },
   "Barbell Bench Press": { beg: 95, nov: 135, int: 185, adv: 225, elite: 315 },
   "Single-Arm Dumbbell Rows": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
@@ -86,7 +94,7 @@ function getMuscleImpact(exName, muscle, isPrimary) {
 }
 
 function calcSet1RM(exerciseName, weight, reps, bandsJson) {
-  const isAssist = exerciseName === "Assisted Pull-Ups" || exerciseName === "Dips" || exerciseName === "Dead Hang + Scap Pulls" || exerciseName === "Hanging Knee Raise";
+  const isAssist = exerciseName === "Assisted Pull-Ups" || exerciseName === "Dips" || exerciseName === "Dead Hang + Scap Pulls" || exerciseName === "Hanging Knee Raise" || exerciseName === "Pull-Ups";
   
   let bandSum = 0;
   if (bandsJson) {
