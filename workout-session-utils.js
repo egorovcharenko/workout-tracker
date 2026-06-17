@@ -58,7 +58,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
       const rounds = ex.sets || 3;
       subs.forEach((sub, subIdx) => {
         const sets = [];
-        const subWorkingBySetNum = {};
+        let subWorkingBySetNum = {};
         [lastSessionMap, hintsMap].forEach(src => {
           Object.keys(src || {}).forEach(k => {
             const [exName, kind, setNumStr] = k.split("|");
@@ -67,6 +67,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
             }
           });
         });
+        if (Object.keys(subWorkingBySetNum).length !== rounds) subWorkingBySetNum = {};
         const subFallback = (want) => {
           if (subWorkingBySetNum[want] != null) return subWorkingBySetNum[want];
           const nums = Object.keys(subWorkingBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
@@ -115,15 +116,14 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
       const isBandOnly = ex.equipment === "band" && !ex.bandAddon && !isAssist;
       if (!ex.noWarmup) {
         const warmupCount = Math.max(1, ex.warmups || 1);
-        const warmupLastBySetNum = {};
+        let warmupLastBySetNum = {};
         [lastSessionMap, hintsMap].forEach(src => {
           Object.keys(src || {}).forEach(k => {
             const [exName, kind, setNumStr] = k.split("|");
-            if (exName === ex.name && kind === "warmup") {
-              warmupLastBySetNum[parseInt(setNumStr)] = src[k];
-            }
+            if (exName === ex.name && kind === "warmup") warmupLastBySetNum[parseInt(setNumStr)] = src[k];
           });
         });
+        if (Object.keys(warmupLastBySetNum).length !== warmupCount) warmupLastBySetNum = {};
         const fallbackForWarmup = (want) => {
           if (warmupLastBySetNum[want] != null) return warmupLastBySetNum[want];
           const nums = Object.keys(warmupLastBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
@@ -145,15 +145,14 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
           }));
         }
       }
-      const workingLastBySetNum = {};
+      let workingLastBySetNum = {};
       [lastSessionMap, hintsMap].forEach(src => {
         Object.keys(src || {}).forEach(k => {
           const [exName, kind, setNumStr] = k.split("|");
-          if (exName === ex.name && kind === "working") {
-            workingLastBySetNum[parseInt(setNumStr)] = src[k];
-          }
+          if (exName === ex.name && kind === "working") workingLastBySetNum[parseInt(setNumStr)] = src[k];
         });
       });
+      if (ex.sets && Object.keys(workingLastBySetNum).length !== ex.sets) workingLastBySetNum = {};
       const fallbackForWorking = (want) => {
         if (workingLastBySetNum[want] != null) return workingLastBySetNum[want];
         const nums = Object.keys(workingLastBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
@@ -198,45 +197,37 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
 }
 
 function buildSet({ kind, idx, template, last, setNumber, saveExerciseName, isAssist, isBandOnly, fallbackGrip }) {
-  const set = {
-    kind, idx,
-    setNumber,
-    saveExerciseName,
-    completed: false,
-    active: false,
-    reps: null,
-  };
+  const set = { kind, idx, setNumber, saveExerciseName, completed: false, active: false, reps: null };
+  let defW = null, defR = null;
+  if (kind === "warmup" && template.defaultWarmup) {
+    defW = template.defaultWarmup[setNumber]; defR = template.defaultWarmupReps?.[setNumber];
+  } else if (kind === "work" && template.defaultWork) {
+    defW = template.defaultWork[setNumber - 1]; defR = template.defaultWorkReps?.[setNumber - 1];
+  }
   if (last) {
-    set.lastReps = parseInt(last.reps) || null;
+    set.lastReps = parseInt(last.reps) || defR || null;
     set.lastBands = last.bands_json ? safeJSON(last.bands_json) : [];
     set.lastGrip = last.grip || fallbackGrip || null;
-    const lastBandSum = (set.lastBands || []).reduce((a, b) => a + b, 0);
-    const savedLb = last.weight_lb || 0;
-    if (template.assist) {
-      set.lastBodyweight = savedLb + lastBandSum;
-    } else if (template.bandAddon) {
-      set.lastWeight = Math.max(0, savedLb - lastBandSum);
-    } else if (isBandOnly) {
-      // noop
-    } else {
-      set.lastWeight = savedLb;
-    }
+    const sum = set.lastBands.reduce((a, b) => a + b, 0), saved = last.weight_lb || 0;
+    if (template.assist) set.lastBodyweight = saved + sum;
+    else set.lastWeight = template.bandAddon ? Math.max(0, saved - sum) : saved;
   } else {
     set.lastBands = [];
     if (fallbackGrip) set.lastGrip = fallbackGrip;
+    if (defR) set.lastReps = defR;
+    if (defW) {
+      if (template.assist) set.lastBodyweight = defW; else set.lastWeight = defW;
+    }
   }
   if (template.assist) {
     set.bodyweight = loadBodyweight() || set.lastBodyweight || 175;
-    set.bands = (set.lastBands || []).slice();
-    set.grip = set.lastGrip || (template.grips ? template.grips[0] : null);
+    set.bands = [...set.lastBands]; set.grip = set.lastGrip || template.grips?.[0] || null;
   } else if (isBandOnly) {
-    set.weight = 0;
-    set.bands = (set.lastBands || []).slice();
-    set.bandsOnly = true;
+    set.weight = 0; set.bands = [...set.lastBands]; set.bandsOnly = true;
   } else {
-    const isBarbell = template.equipment === "barbell" || template.name.includes("Barbell") || template.name === "Standing Overhead Press";
-    set.weight = set.lastWeight || (isBarbell ? 45 : 0);
-    set.bands = template.bandAddon ? (set.lastBands || []).slice() : [];
+    const isB = template.equipment === "barbell" || template.name.includes("Barbell") || template.name === "Standing Overhead Press";
+    set.weight = set.lastWeight || defW || (isB ? 45 : 0);
+    set.bands = template.bandAddon ? [...set.lastBands] : [];
     if (template.grips) set.grip = set.lastGrip || template.grips[0];
   }
   return set;
