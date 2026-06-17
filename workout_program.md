@@ -1,46 +1,36 @@
-# Bench Program — Current Spec
+# Bench + Pull-up Program — Current Spec
 
 ## Goal
-- **Primary**: Chest hypertrophy.
-- **Strength Target**: Flat Bench 175 lb single (true +8% off current ~162 lb 1RM). Stretch option: 180 lb (~+11%).
-- **Taper/Deload**: None. Strength is carried by one heavy top set per flat session.
+- **Primary**: Chest/back hypertrophy.
+- **Strength Target**: Flat Bench 175 lb single (true +8% off ~162 lb 1RM); 180 lb = stretch target.
+- **Pull-up Goal**: First unassisted rep.
+- **Taper/Deload**: None.
 
-## Schedule (Alternating A/B)
+## Schedule
 - Every other day, alternating **Training A** and **Training B**.
-- **Training A** = Flat Barbell Bench (+ existing Main A exercises: Back Squat, Pull-Ups, Standing Overhead Press, optional Bulgarian Split Squats).
-- **Training B** = Barbell RDL / Deadlift, Incline Barbell Press, Assisted Pull-Ups, Bent-Over Barbell Rows.
+- **Training A** = Flat Barbell Bench (+ existing A exercises, unchanged: Back Squat, Pull-Ups, Standing Overhead Press, Bulgarian Split Squats).
+- **Training B** = Barbell Deadlift, Incline Barbell Press, Band-Assisted Pull-Ups, Bent-Over Rows.
+
+## Progression Rule (All Lifts) — TOP-SET DRIVEN
+- When the **TOP working set** (first set, highest reps) reaches the top of its rep range, increase load one increment next session. Lower sets reset and get driven back up over subsequent sessions.
+- Keep working sets ~1–2 RIR; reserve true max effort for test days.
 
 ---
 
-## Training A — Flat Bench Prescription
-- **Warmup Sets**:
-  1. 45 lb × 10 reps
-  2. 95 lb × 5 reps
-  3. 115 lb × 3 reps
-  4. Primer: ~90% of top set (e.g. 125 lb × 2 reps)
-- **Top Set (1 set × 4–5 reps @ ~1 RIR)**:
-  * Currently starting at 140 lb.
-  * *Double progression*: Hit 5 reps → +5 lb next A session.
-  * Climbs toward ~160 lb for 4–5 reps; in the final week, test the single (work up: 135x3, 155x1, 170x1, then 175 [or 180]).
-- **Back-off Sets (3 sets × 8 reps @ 1–2 RIR)**:
-  * Currently starting at 125 lb.
-  * *Double progression*: 8 reps on all 3 sets → +5 lb (next step 130 lb).
+## Training A — Flat Bench
+- **Warmup**: 45x10, 95x5, 115x3, primer ~90% of top set (e.g. 125x2).
+- **Top Set**: 1 × 4–5 reps @ ~1 RIR (don't grind to failure each session). Currently 140 lb. Top set hits 5 reps → +5 lb next A session. Climbs toward ~160 lb; final week, one session tests the single (work up: 135x3, 155x1, 170x1, then 175 [or 180]).
+- **Back-off**: 3 × 8 reps @ 1–2 RIR. Currently 125 lb. Lead set (index 1) hits 8 reps → +5 lb (next 130 lb).
 
 ---
 
-## Training B — Incline Barbell Press Prescription
-- **Working Sets (4 sets × 8–12 reps @ 1–2 RIR)**:
-  * Currently holding 100 lb.
-  * *Double progression*: 12 reps on all sets → +5 lb (next step 105 lb).
-- **Other B Exercises** (RDL, Pull-Ups, Rows): Unchanged, own progression rules.
+## Training B
+- **Incline Barbell Press**: 4 × 8–12 reps. Top set hits 12 reps → +5 lb next session. (Top set already hit 12 at 100 lb → next session 105 lb).
+- **Band-Assisted Pull-Ups**: reps up to 12. Top set hits 12 reps → REDUCE band assistance (lighter/thinner band = more resistance), progressing toward unassisted.
+  - *Optional accelerators*: 3–4 sets of 3–5 slow negatives (3–5s lowering) done fresh, plus 1 weekly fresh unassisted attempt before other pulling.
+- **Deadlift, Bent-Over Rows**: Unchanged, own progression.
 
 ---
 
-## Global Progression Rules
-- **Double Progression**: Add weight only when the top of the rep range is hit on **ALL** working sets.
-- **RIR**: Keep working sets 1–2 RIR; reserve true max effort for the single test.
-
-## Safety
-- Perform bench press in the power rack.
-- Set safety bars just below chest height (verify with empty bar).
-- Always use collars.
+## Safety (Solo, Power Rack)
+- Safeties set just below chest height; verify with empty bar. (Collars optional.)

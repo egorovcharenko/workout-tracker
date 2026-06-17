@@ -195,7 +195,8 @@ function renderSetRow(exIdx, setKey, label, isDone, targetReps, isWarmup, isNext
         <span style="font-size:11px;color:#6b7280;font-weight:600;display:block;margin-bottom:4px">Reps:</span>
         <div class="scroll-row" style="display:flex;gap:4px;overflow-x:auto;padding:2px 0;WebkitOverflowScrolling:touch" data-scroll-row>
           ${(() => {
-            const [lo, hi] = parseRepRange(targetReps);
+            const setRepRangeStr = getSetRepRange(targetReps, typeof setKey === 'number' ? setKey : 0);
+            const [lo, hi] = parseRepRange(setRepRangeStr);
             const candidates = repsOptions(Math.max(1, lo - 4), Math.max(20, hi + 4));
             return candidates.map(r => {
               const selected = loggedReps === r;

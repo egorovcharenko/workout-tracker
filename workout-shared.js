@@ -30,7 +30,7 @@ const WORKOUTS = [
     exercises: [
       { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-10", notes: "Primary quad driver. Set safety pins low.", equipment: "barbell", rest: 150 },
       { name: "Barbell Bench Press", sets: 4, warmups: 4, reps: "1x4-5, 3x8", notes: "Top set: 1x4-5 @ ~1 RIR. Back-off: 3x8 @ 1-2 RIR. Safeties just below chest.", equipment: "barbell", rest: 150, defaultWarmup: [45, 95, 115, 125], defaultWarmupReps: [10, 5, 3, 2], defaultWork: [140, 125, 125, 125], defaultWorkReps: [5, 8, 8, 8] },
-      { name: "Assisted Pull-Ups", sets: 3, reps: "1-8", notes: "1. Fresh attempt (1 unassisted). 2. Set 1–2: assisted. 3. Set 3: negatives.", equipment: "band", assist: true, grips: ['pullup', 'neutral', 'chinup'], rest: 150, noWarmup: true },
+      { name: "Assisted Pull-Ups", sets: 3, reps: "1-12", notes: "1. Fresh attempt (1 unassisted). 2. Set 1–2: assisted. 3. Set 3: negatives (3-5s lowering). Top set hits 12 -> REDUCE assistance.", equipment: "band", assist: true, grips: ['pullup', 'neutral', 'chinup'], rest: 150, noWarmup: true },
       { name: "Standing Overhead Press", sets: 3, warmups: 1, reps: "6-10", notes: "Front delt. Brace hard.", equipment: "barbell", rest: 120 },
       { name: "Bulgarian Split Squat", sets: 2, reps: "10-15", notes: "Optional more quad/glute volume.", equipment: "dumbbell", bandAddon: true, rest: 90, optional: true },
     ],
@@ -48,10 +48,10 @@ const WORKOUTS = [
   {
     id: "main-b", name: "Main B", program: true, kind: "main", abSplit: "B", rest: 120, warmup: "Light hinges + band pull-aparts",
     exercises: [
-      { name: "Barbell RDL", sets: 3, warmups: 3, reps: "8-12", equipment: "barbell", rest: 150, notes: "Hamstring gap + fatigue fix. Flat back, hinge." },
-      { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120, notes: "Bench at ~30°. Double progression: 12 on all sets -> +5 lb.", defaultWarmup: [45], defaultWarmupReps: [10], defaultWork: [100, 100, 100, 100], defaultWorkReps: [8, 8, 8, 8] },
+      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "3-5", equipment: "barbell", rest: 150, notes: "Brace hard, keep flat back. Top-set driven." },
+      { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120, notes: "Bench at ~30°. Top-set driven: 12 reps on top set -> +5 lb next session.", defaultWarmup: [45], defaultWarmupReps: [10], defaultWork: [105, 105, 105, 105], defaultWorkReps: [8, 8, 8, 8] },
       { name: "Bent-Over Barbell Rows", sets: 3, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120, notes: "Keep back flat, pull to lower chest." },
-      { name: "Assisted Pull-Ups", sets: 3, reps: "1-8", notes: "1. Fresh attempt (1 unassisted). 2. Set 1–2: assisted. 3. Set 3: negatives.", equipment: "band", assist: true, grips: ['pullup', 'neutral', 'chinup'], rest: 150, noWarmup: true },
+      { name: "Assisted Pull-Ups", sets: 3, reps: "1-12", notes: "1. Fresh attempt (1 unassisted). 2. Set 1–2: assisted. 3. Set 3: negatives (3-5s lowering). Top set hits 12 -> REDUCE assistance.", equipment: "band", assist: true, grips: ['pullup', 'neutral', 'chinup'], rest: 150, noWarmup: true },
     ],
   },
   {
@@ -181,6 +181,9 @@ function getSwapGroup(n) { const name = n === "Bench Dips" ? "Dips" : n, g = SWA
 function getSwapGroupName(n) { const name = n === "Bench Dips" ? "Dips" : n, g = SWAP_GROUPS.find(grp => grp.exercises.some(e => e.name === name)); return g ? g.family : null; }
 function getSwapOptions(n) { const name = n === "Bench Dips" ? "Dips" : n, g = getSwapGroup(name); return g ? g.filter(e => e.name !== name) : []; }
 function isSwappable(n) { const name = n === "Bench Dips" ? "Dips" : n; return SWAP_GROUPS.some(g => g.exercises.some(e => e.name === name)); }
+function getSetRepRange(repsStr, setIdx) { if (!repsStr.includes(",")) return repsStr; let cur = 0; for (const p of repsStr.split(",")) { const m = p.match(/(\d+)x([\d-]+)/); if (m) { const c = +m[1]; if (setIdx >= cur && setIdx < cur + c) return m[2]; cur += c; } } return repsStr; }
+function getDrivingSetIdx(exName, setKey) { return exName === "Barbell Bench Press" ? (setKey === 0 ? 0 : 1) : 0; }
+
 
 function getSetupTime(exName, equipment) {
   const name = exName.toLowerCase();
@@ -289,9 +292,8 @@ function estimateTemplateWorkoutDuration(w) {
 }
 
 if (typeof window !== "undefined") {
-  Object.assign(window, { WORKOUTS, localDate, interleavedSetNumber, SWAP_GROUPS, findExerciseConfig, getSwapGroup, getSwapGroupName, getSwapOptions, isSwappable, estimateExerciseDuration, estimateActiveWorkoutDuration, estimateTemplateWorkoutDuration });
+  Object.assign(window, { WORKOUTS, localDate, interleavedSetNumber, SWAP_GROUPS, findExerciseConfig, getSwapGroup, getSwapGroupName, getSwapOptions, isSwappable, estimateExerciseDuration, estimateActiveWorkoutDuration, estimateTemplateWorkoutDuration, getSetRepRange, getDrivingSetIdx });
 }
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { WORKOUTS, estimateTemplateWorkoutDuration, estimateExerciseDuration, estimateActiveWorkoutDuration };
+  module.exports = { WORKOUTS, estimateTemplateWorkoutDuration, estimateExerciseDuration, estimateActiveWorkoutDuration, getSetRepRange, getDrivingSetIdx };
 }
-

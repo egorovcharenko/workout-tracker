@@ -62,7 +62,7 @@ function getProgressionSuggestion(exIdx, setKey) {
       if (isNaN(reps) || reps <= 0) continue;
       const w = getEffectiveWeight(exIdx, i);
       const bands = getBandSelection(exIdx, i);
-      inSessionSets.push({ weight: w, reps, bands: bands.length ? bands : null });
+      inSessionSets.push({ setIdx: i, weight: w, reps, bands: bands.length ? bands : null });
     }
   }
 
@@ -76,6 +76,7 @@ function getProgressionSuggestion(exIdx, setKey) {
       const reps = parseInt(data.reps);
       if (isNaN(reps) || reps <= 0) continue;
       lastSets.push({
+        setIdx: n - 1,
         weight: data.weight_lb ?? null,
         reps,
         bands: data.bands_json ? (() => { try { return JSON.parse(data.bands_json); } catch { return null; } })() : null,
@@ -85,9 +86,12 @@ function getProgressionSuggestion(exIdx, setKey) {
   }
   if (lastSets.length === 0) return null;
 
-  const [lo, hi] = parseRepRange(effective.reps);
-  const lastWeight = lastSets[0].weight;
-  const lastBands  = lastSets[0].bands;
+  const targetRepsStr = getSetRepRange(effective.reps, typeof setKey === 'number' ? setKey : 0);
+  const [lo, hi] = parseRepRange(targetRepsStr);
+  const drivingSetIdx = getDrivingSetIdx(name, typeof setKey === 'number' ? setKey : 0);
+  const drivingSet = lastSets.find(s => s.setIdx === drivingSetIdx) || lastSets[0];
+  const lastWeight = drivingSet.weight;
+  const lastBands  = drivingSet.bands;
   const isInSession = source === 'in-session';
 
   let thisSetLastReps = null;
@@ -98,16 +102,24 @@ function getProgressionSuggestion(exIdx, setKey) {
       if (!isNaN(r) && r > 0) thisSetLastReps = r;
     }
   }
-  let lastWeekWorst = null;
-  if (state.lastSession) {
-    for (let n = 1; n <= 6; n++) {
-      const d = state.lastSession[`${name}|working|${n}`];
-      if (!d) continue;
+
+  let drivingSetLastReps = null;
+  if (source === 'last-session') {
+    const ds = lastSets.find(s => s.setIdx === drivingSetIdx);
+    if (ds) {
+      drivingSetLastReps = ds.reps;
+    }
+  } else if (state.lastSession) {
+    const d = state.lastSession[`${name}|working|${drivingSetIdx + 1}`];
+    if (d) {
       const r = parseInt(d.reps);
-      if (isNaN(r) || r <= 0) continue;
-      if (lastWeekWorst === null || r < lastWeekWorst) lastWeekWorst = r;
+      if (!isNaN(r) && r > 0) drivingSetLastReps = r;
     }
   }
+
+  const drivingRepsStr = getSetRepRange(effective.reps, drivingSetIdx);
+  const [drivingLo, drivingHi] = parseRepRange(drivingRepsStr);
+  const canGraduate = !isInSession && drivingSetLastReps != null && drivingSetLastReps >= drivingHi;
 
   const _repTarget = () => {
     if (thisSetLastReps != null) return Math.min(hi, thisSetLastReps + 1);
@@ -123,10 +135,8 @@ function getProgressionSuggestion(exIdx, setKey) {
     return 'add-rep';
   };
 
-  const canGraduate = !isInSession && lastWeekWorst != null && lastWeekWorst >= hi;
-
   if (isBW) {
-    if (canGraduate) return { weight: null, bands: null, reps: hi + 1, reason: `🔥 Crushed ${hi} clean across all sets — push to ${hi + 1}`, mode: 'graduate', source };
+    if (canGraduate) return { weight: null, bands: null, reps: hi + 1, reason: `🔥 Top set hit ${drivingHi} — push to ${hi + 1}`, mode: 'graduate', source };
     return { weight: null, bands: null, reps: _repTarget(), reason: _repReason(), mode: _mode(), source };
   }
 
@@ -134,7 +144,7 @@ function getProgressionSuggestion(exIdx, setKey) {
     if (canGraduate && lastBands && lastBands.length > 0) {
       const lighter = _lighterAssist(lastBands);
       const droppedSum = lastBands.reduce((a,b)=>a+b,0) - (lighter ? lighter.reduce((a,b)=>a+b,0) : 0);
-      return { weight: null, bands: lighter || [], reps: lo, reason: `🔥 Hit ${hi} across all sets — drop ${droppedSum}lb assist`, mode: 'graduate', source };
+      return { weight: null, bands: lighter || [], reps: lo, reason: `🔥 Top set hit ${drivingHi} — drop ${droppedSum}lb assist`, mode: 'graduate', source };
     }
     return { weight: null, bands: lastBands, reps: _repTarget(), reason: _repReason(' at same assist'), mode: _mode(), source };
   }
@@ -144,7 +154,7 @@ function getProgressionSuggestion(exIdx, setKey) {
       const heavier = _heavierBandStack(lastBands || []);
       if (heavier) {
         const addedSum = heavier.reduce((a,b)=>a+b,0) - (lastBands || []).reduce((a,b)=>a+b,0);
-        return { weight: null, bands: heavier, reps: lo, reason: `🔥 Crushed ${hi} across all sets — stack +${addedSum}lb band`, mode: 'graduate', source };
+        return { weight: null, bands: heavier, reps: lo, reason: `🔥 Top set hit ${drivingHi} — stack +${addedSum}lb band`, mode: 'graduate', source };
       }
     }
     return { weight: null, bands: lastBands, reps: _repTarget(), reason: _repReason(' at same bands'), mode: _mode(), source };
@@ -156,7 +166,7 @@ function getProgressionSuggestion(exIdx, setKey) {
     if (canGraduate) {
       const nextDB = _nextWeightStep(lastDB, effective);
       if (nextDB) {
-        return { weight: nextDB, bands: lastBands || [], reps: lo, reason: `🔥 Crushed ${hi} at ${lastWeight}lb — bump DB to ${nextDB}`, mode: 'graduate', source };
+        return { weight: nextDB, bands: lastBands || [], reps: lo, reason: `🔥 Top set hit ${drivingHi} at ${lastWeight}lb — bump DB to ${nextDB}`, mode: 'graduate', source };
       }
       const heavier = _heavierBandStack(lastBands || []);
       if (heavier) {
@@ -170,7 +180,8 @@ function getProgressionSuggestion(exIdx, setKey) {
   if (lastWeight == null) return null;
   if (canGraduate) {
     const next = _nextWeightStep(lastWeight, effective);
-    if (next) return { weight: next, bands: null, reps: lo, reason: `🔥 Crushed ${hi} at ${lastWeight}lb — bump to ${next}`, mode: 'graduate', source };
+    const setDescr = name === "Barbell Bench Press" ? (setKey === 0 ? "Top set" : "Lead back-off set") : "Top set";
+    if (next) return { weight: next, bands: null, reps: lo, reason: `🔥 ${setDescr} hit ${drivingHi} at ${lastWeight}lb — bump to ${next}`, mode: 'graduate', source };
     return { weight: lastWeight, bands: null, reps: hi + 1, reason: `🔥 Top of ladder — push past ${hi}`, mode: 'add-rep', source };
   }
   return { weight: lastWeight, bands: null, reps: _repTarget(), reason: _repReason(` at ${lastWeight}lb`), mode: _mode(), source };
