@@ -55,7 +55,19 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
       const subs = ex.supersetExercises;
       const letter = supersetLetter;
       supersetLetter = String.fromCharCode(supersetLetter.charCodeAt(0) + 1);
-      const rounds = ex.sets || 3;
+      let maxLastSets = 0;
+      subs.forEach(sub => {
+        [lastSessionMap, hintsMap].forEach(src => {
+          Object.keys(src || {}).forEach(k => {
+            const [exName, kind, setNumStr] = k.split("|");
+            if (exName === sub.name && kind === "working") {
+              const num = parseInt(setNumStr);
+              if (num > maxLastSets) maxLastSets = num;
+            }
+          });
+        });
+      });
+      const rounds = Math.max(ex.sets || 3, maxLastSets);
       subs.forEach((sub, subIdx) => {
         const sets = [];
         let subWorkingBySetNum = {};
@@ -114,7 +126,6 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
       const isAssist = !!ex.assist;
       const isBandOnly = ex.equipment === "band" && !ex.bandAddon && !isAssist;
       if (!ex.noWarmup) {
-        const warmupCount = Math.max(1, ex.warmups || 1);
         let warmupLastBySetNum = {};
         [lastSessionMap, hintsMap].forEach(src => {
           Object.keys(src || {}).forEach(k => {
@@ -122,6 +133,8 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
             if (exName === ex.name && kind === "warmup") warmupLastBySetNum[parseInt(setNumStr)] = src[k];
           });
         });
+        const maxWarmupLast = Math.max(0, ...Object.keys(warmupLastBySetNum).map(Number).map(n => n + 1));
+        const warmupCount = Math.max(1, ex.warmups || 1, maxWarmupLast);
         const fallbackForWarmup = (want) => {
           if (warmupLastBySetNum[want] != null) return warmupLastBySetNum[want];
           const nums = Object.keys(warmupLastBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
@@ -156,7 +169,9 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
         return nums.length ? workingLastBySetNum[nums[0]] : null;
       };
       const workGripFallback = lookupExerciseGrip(ex.name);
-      for (let i = 0; i < (ex.sets || 3); i++) {
+      const maxWorkingLast = Math.max(0, ...Object.keys(workingLastBySetNum).map(Number));
+      const workingCount = Math.max(ex.sets || 3, maxWorkingLast);
+      for (let i = 0; i < workingCount; i++) {
         const setNumber = i + 1;
         const last = fallbackForWorking(setNumber);
         sets.push(buildSet({
