@@ -169,6 +169,21 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
         return nums.length ? workingLastBySetNum[nums[0]] : null;
       };
       const workGripFallback = lookupExerciseGrip(ex.name);
+      if (ex.name === "Assisted Pull-Ups") {
+        const uaSet = buildSet({
+          kind: "work", idx: "UA",
+          template: ex,
+          last: lookupLast(`${ex.name}|working|0`),
+          setNumber: 0,
+          saveExerciseName: ex.name,
+          isAssist: true,
+          isBandOnly: false,
+          fallbackGrip: workGripFallback,
+        });
+        uaSet.bands = [];
+        uaSet.lastBands = [];
+        sets.push(uaSet);
+      }
       const maxWorkingLast = Math.max(0, ...Object.keys(workingLastBySetNum).map(Number));
       const workingCount = Math.max(ex.sets || 3, maxWorkingLast);
       for (let i = 0; i < workingCount; i++) {
