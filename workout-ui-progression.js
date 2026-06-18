@@ -8,7 +8,7 @@ function _exerciseAt(exIdx, setKey) {
 
 function _nextWeightStep(currentLb, effectiveEx) {
   if (effectiveEx.equipment === "barbell" || effectiveEx.name.includes("Barbell") || effectiveEx.name === "Standing Overhead Press") {
-    const step = (effectiveEx.name === "Barbell Deadlift") ? 10 : 5;
+    const step = (effectiveEx.name === "Barbell RDL") ? 10 : 5;
     return currentLb + step;
   }
   const ladder = [...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b);
@@ -18,7 +18,7 @@ function _nextWeightStep(currentLb, effectiveEx) {
 
 function _prevWeightStep(currentLb, effectiveEx) {
   if (effectiveEx.equipment === "barbell" || effectiveEx.name.includes("Barbell") || effectiveEx.name === "Standing Overhead Press") {
-    const step = (effectiveEx.name === "Barbell Deadlift") ? 10 : 5;
+    const step = (effectiveEx.name === "Barbell RDL") ? 10 : 5;
     return Math.max(45, currentLb - step);
   }
   const ladder = [...new Set([...WEIGHTS_LB, ...(effectiveEx.extraWeights || [])])].sort((a,b) => a-b);

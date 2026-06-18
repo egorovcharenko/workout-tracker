@@ -48,7 +48,7 @@ const WORKOUTS = [
   {
     id: "main-b", name: "Main B", program: true, kind: "main", abSplit: "B", rest: 120, warmup: "Light hinges + band pull-aparts",
     exercises: [
-      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "3-5", equipment: "barbell", rest: 150, notes: "Brace hard, keep flat back. Top-set driven." },
+      { name: "Barbell RDL", sets: 3, warmups: 3, reps: "3-5", equipment: "barbell", rest: 150, notes: "Brace hard, keep flat back. Top-set driven." },
       { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120, notes: "Bench at ~30°. Top-set driven: 12 reps on top set -> +5 lb next session.", defaultWarmup: [45], defaultWarmupReps: [10], defaultWork: [105, 105, 105, 105], defaultWorkReps: [8, 8, 8, 8] },
       { name: "Bent-Over Barbell Rows", sets: 3, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120, notes: "Keep back flat, pull to lower chest." },
       { name: "Assisted Pull-Ups", sets: 3, reps: "1-12", notes: "1. Fresh attempt (1 unassisted). 2. Set 1–2: assisted. 3. Set 3: negatives (3-5s lowering). Top set hits 12 -> REDUCE assistance.", equipment: "band", assist: true, grips: ['pullup', 'neutral', 'chinup'], rest: 150, noWarmup: true },
@@ -81,7 +81,7 @@ const WORKOUTS = [
   {
     id: "deadlift-day", name: "Deadlift Day", hidden: true, abSplit: "B", rest: 90, warmup: "Hinges + pull-aparts",
     exercises: [
-      { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "3-5", equipment: "barbell", rest: 120 },
+      { name: "Barbell RDL", sets: 3, warmups: 3, reps: "3-5", equipment: "barbell", rest: 120 },
       { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120 },
       { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
       { name: "Standing Overhead Press", sets: 3, reps: "6-8", equipment: "barbell", warmups: 1, rest: 120 },
@@ -142,11 +142,11 @@ const interleavedSetNumber = (round, subIdx, subCount) => round * subCount + sub
 
 const SWAP_GROUPS = [
   { family: "Deadlifts & Hinge (Posterior)", exercises: [
-    { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "3-5", equipment: "barbell", rest: 120 }, { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", equipment: "barbell", rest: 120 }, { name: "Barbell RDL", sets: 3, warmups: 3, reps: "8-12", equipment: "barbell", rest: 150 },
+    { name: "Barbell RDL", sets: 3, warmups: 3, reps: "3-5", equipment: "barbell", rest: 120 }, { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", equipment: "barbell", rest: 120 },
     { name: "Dumbbell Romanian Deadlift", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/cGMaBqaExBo", rest: 120, noWarmup: true }, { name: "Band Romanian Deadlift", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/Op7zRCBjGvs", equipment: "band", rest: 120, noWarmup: true }, { name: "Single-Leg DB RDL", sets: 3, reps: "8-10", rest: 120 }
   ]},
   { family: "Squats & Quads (Legs)", exercises: [
-    { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", equipment: "barbell", rest: 120 }, { name: "Barbell Deadlift", sets: 3, warmups: 3, reps: "3-5", equipment: "barbell", rest: 120 }, { name: "Bulgarian Split Squat", sets: 3, warmups: 2, reps: "8-10", video: "https://www.youtube.com/shorts/2C-uNgKwPLE", bandAddon: true, rest: 120 },
+    { name: "Barbell Back Squat", sets: 3, warmups: 3, reps: "6-8", equipment: "barbell", rest: 120 }, { name: "Barbell RDL", sets: 3, warmups: 3, reps: "3-5", equipment: "barbell", rest: 120 }, { name: "Bulgarian Split Squat", sets: 3, warmups: 2, reps: "8-10", video: "https://www.youtube.com/shorts/2C-uNgKwPLE", bandAddon: true, rest: 120 },
     { name: "Goblet Squat", sets: 3, warmups: 2, reps: "10-12", video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, rest: 120 }, { name: "Band Squat", sets: 3, warmups: 2, reps: "12-15", video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" }, { name: "Lunges", sets: 3, reps: "10-12", rest: 90 }
   ]},
   { family: "Chest Press (Push)", exercises: [
@@ -188,7 +188,7 @@ function getDrivingSetIdx(exName, setKey) { return exName === "Barbell Bench Pre
 function getSetupTime(exName, equipment) {
   const name = exName.toLowerCase();
   const eq = (equipment || "").toLowerCase();
-  if (name.includes("back squat") || name.includes("bench press") || name.includes("deadlift")) return 180;
+  if (name.includes("back squat") || name.includes("bench press") || name.includes("deadlift") || name.includes("rdl")) return 180;
   if (eq === "barbell" || name.includes("barbell") || name.includes("overhead press")) return 120;
   if (name.includes("dead hang") || name.includes("torso rotation") || name.includes("face pull") || name.includes("reverse flye") || name.includes("shrug")) return 30;
   return 60;

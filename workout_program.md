@@ -9,7 +9,7 @@
 ## Schedule
 - Every other day, alternating **Training A** and **Training B**.
 - **Training A** = Flat Barbell Bench (+ existing A exercises, unchanged: Back Squat, Pull-Ups, Standing Overhead Press, Bulgarian Split Squats).
-- **Training B** = Barbell Deadlift, Incline Barbell Press, Band-Assisted Pull-Ups, Bent-Over Rows.
+- **Training B** = Barbell RDL, Incline Barbell Press, Band-Assisted Pull-Ups, Bent-Over Rows.
 
 ## Progression Rule (All Lifts) — TOP-SET DRIVEN
 - When the **TOP working set** (first set, highest reps) reaches the top of its rep range, increase load one increment next session. Lower sets reset and get driven back up over subsequent sessions.
@@ -28,7 +28,7 @@
 - **Incline Barbell Press**: 4 × 8–12 reps. Top set hits 12 reps → +5 lb next session. (Top set already hit 12 at 100 lb → next session 105 lb).
 - **Band-Assisted Pull-Ups**: reps up to 12. Top set hits 12 reps → REDUCE band assistance (lighter/thinner band = more resistance), progressing toward unassisted.
   - *Optional accelerators*: 3–4 sets of 3–5 slow negatives (3–5s lowering) done fresh, plus 1 weekly fresh unassisted attempt before other pulling.
-- **Deadlift, Bent-Over Rows**: Unchanged, own progression.
+- **Barbell RDL, Bent-Over Rows**: Unchanged, own progression.
 
 ---
 

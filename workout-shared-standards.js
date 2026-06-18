@@ -1,5 +1,5 @@
 const EXERCISE_MUSCLES = {
-  "Barbell RDL": { primary: ["hamstrings", "glutes"], secondary: ["lower_back"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.5 } },
+  "Barbell RDL": { primary: ["hamstrings", "glutes", "lower_back"], secondary: ["upper_back", "lats", "quads", "forearms", "core"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 1.0, upper_back: 0.5, lats: 0.3, quads: 0.3, forearms: 0.4, core: 0.3 } },
   "Dumbbell Lateral Raises": { primary: ["shoulders"], secondary: [], ratios: { shoulders: 1.0 } },
   "Incline DB Curls": { primary: ["biceps"], secondary: ["forearms"], ratios: { biceps: 1.0, forearms: 0.3 } },
   "Overhead Dumbbell Press": { primary: ["shoulders"], secondary: ["triceps"], ratios: { shoulders: 1.0, triceps: 0.4 } },
@@ -27,7 +27,6 @@ const EXERCISE_MUSCLES = {
   "Calf Raises": { primary: ["calves"], secondary: [], ratios: { calves: 1.0 } },
   "Single-Leg DB RDL": { primary: ["hamstrings", "glutes"], secondary: ["lower_back", "core"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 0.4, core: 0.3 } },
   "Barbell Back Squat": { primary: ["quads", "glutes"], secondary: ["lower_back", "core"], ratios: { quads: 1.0, glutes: 0.8, lower_back: 0.4, core: 0.4 } },
-  "Barbell Deadlift": { primary: ["hamstrings", "glutes", "lower_back"], secondary: ["upper_back", "lats", "quads", "forearms", "core"], ratios: { hamstrings: 1.0, glutes: 1.0, lower_back: 1.0, upper_back: 0.5, lats: 0.3, quads: 0.3, forearms: 0.4, core: 0.3 } },
   "Bent-Over Barbell Rows": { primary: ["lats", "upper_back"], secondary: ["biceps", "rear_delts", "lower_back"], ratios: { lats: 1.0, upper_back: 1.0, biceps: 0.3, rear_delts: 0.4, lower_back: 0.4 } },
   "Bended Barbell Rows": { primary: ["lats", "upper_back"], secondary: ["biceps", "rear_delts", "lower_back"], ratios: { lats: 1.0, upper_back: 1.0, biceps: 0.3, rear_delts: 0.4, lower_back: 0.4 } },
   "Incline Dumbbell Press": { primary: ["chest"], secondary: ["shoulders", "triceps"], ratios: { chest: 1.0, shoulders: 0.6, triceps: 0.4 } },
@@ -41,7 +40,7 @@ const EXERCISE_MUSCLES = {
 };
 
 const STRENGTH_STANDARDS = {
-  "Barbell RDL": { beg: 95, nov: 135, int: 205, adv: 275, elite: 365 },
+  "Barbell RDL": { beg: 135, nov: 185, int: 275, adv: 365, elite: 465 },
   "Dumbbell Lateral Raises": { beg: 10, nov: 15, int: 25, adv: 35, elite: 45 },
   "Incline DB Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
   "Dumbbell Flat Bench Press": { beg: 25, nov: 45, int: 70, adv: 95, elite: 120 },
@@ -65,7 +64,6 @@ const STRENGTH_STANDARDS = {
   "Band Tricep Pushdowns": { beg: 10, nov: 20, int: 35, adv: 52, elite: 70 },
   "Pallof Press": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 },
   "Barbell Back Squat": { beg: 95, nov: 135, int: 205, adv: 285, elite: 365 },
-  "Barbell Deadlift": { beg: 135, nov: 185, int: 275, adv: 365, elite: 465 },
   "Bent-Over Barbell Rows": { beg: 85, nov: 125, int: 175, adv: 215, elite: 295 },
   "Bended Barbell Rows": { beg: 85, nov: 125, int: 175, adv: 215, elite: 295 },
   "Incline Dumbbell Press": { beg: 25, nov: 40, int: 65, adv: 90, elite: 115 },
