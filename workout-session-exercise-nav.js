@@ -3,7 +3,7 @@
 // Tapping a row focuses that exercise in the center column; the App's onSelect
 // also activates the exercise's next set so you can log it.
 
-function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise, onAddExercise, variant, isFinished }) {
+function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSelectSet, onSwapExercise, onAddExercise, variant, isFinished }) {
   const [swapOpenIdx, setSwapOpenIdx] = useState(null);
   const [showAllFamilies, setShowAllFamilies] = useState(false);
   const [showAddLibrary, setShowAddLibrary] = useState(false);
@@ -190,6 +190,7 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
                   shownIdx={shownIdx}
                   currentIdx={currentIdx}
                   onSelect={onSelect}
+                  onSelectSet={onSelectSet}
                   onSwapExercise={onSwapExercise}
                   swapOpenIdx={swapOpenIdx}
                   setSwapOpenIdx={setSwapOpenIdx}
@@ -243,6 +244,7 @@ function ExerciseNav({ exercises, shownIdx, currentIdx, onSelect, onSwapExercise
                             shownIdx={shownIdx}
                             currentIdx={currentIdx}
                             onSelect={onSelect}
+                            onSelectSet={onSelectSet}
                             onSwapExercise={onSwapExercise}
                             swapOpenIdx={swapOpenIdx}
                             setSwapOpenIdx={setSwapOpenIdx}

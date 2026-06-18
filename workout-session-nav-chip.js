@@ -16,7 +16,7 @@ function navSetDisplay(s, exercise) {
   return { lb: prevW || cur, reps: s.lastReps != null ? s.lastReps : null, state: "upcoming", preview: true, kind: s.kind };
 }
 
-function SetChip({ d, k }) {
+function SetChip({ d, k, onClick }) {
   let box;
   if (d.state === "current") {
     box = { border: "1px solid rgba(96,165,250,0.85)", background: "rgba(59,130,246,0.85)", color: "#FFFFFF", xColor: "rgba(255,255,255,0.65)" };
@@ -38,12 +38,13 @@ function SetChip({ d, k }) {
     }
   }
   return (
-    <span key={k} style={{
+    <span key={k} onClick={onClick} style={{
       display: "inline-flex", alignItems: "baseline", gap: 1,
       padding: "5px 9px", borderRadius: 8,
       border: box.border, background: box.background, color: box.color,
       fontFamily: T.mono, fontSize: 12.5, fontWeight: 700,
       fontStyle: d.preview ? "italic" : "normal", whiteSpace: "nowrap",
+      cursor: onClick ? "pointer" : "default",
     }}>
       {d.lb || "—"}<span style={{ color: box.xColor, fontWeight: 400, fontSize: 11 }}>×</span>{d.reps != null ? d.reps : "—"}
     </span>

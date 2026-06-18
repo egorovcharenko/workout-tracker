@@ -1,214 +1,107 @@
-function App() {
-  const [workoutId, setWorkoutId] = useState(() => {
-    const fromUrl = new URLSearchParams(window.location.search).get("w");
-    return (fromUrl && WORKOUTS.some(w => w.id === fromUrl)) ? fromUrl : (WORKOUTS.find(w => w.main) || WORKOUTS[0]).id;
-  });
+function App() { const [workoutId, setWorkoutId] = useState(() => { const fromUrl = new URLSearchParams(window.location.search).get("w");
+    return (fromUrl && WORKOUTS.some(w => w.id === fromUrl)) ? fromUrl : (WORKOUTS.find(w => w.main) || WORKOUTS[0]).id; });
   const workout = useMemo(() => WORKOUTS.find(w => w.id === workoutId) || WORKOUTS[0], [workoutId]);
-
-  const onPickWorkout = (id) => {
-    if (id === workoutId) return;
+  const onPickWorkout = (id) => { if (id === workoutId) return;
     const url = new URL(window.location.href); url.searchParams.set("w", id);
-    window.history.replaceState({}, "", url); setWorkoutId(id);
-  };
-
+    window.history.replaceState({}, "", url); setWorkoutId(id); };
   const [exercises, setExercises] = useState([]);
   const [sessionDate, setSessionDate] = useState(() => localDate());
   const [loaded, setLoaded] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [focusIdx, setFocusIdx] = useState(null);
-  
   const { elapsed, running, startedAt, rest, setElapsed, setRunning, setStartedAt, setRest, startTimer, restAdd, restSkip, restToggle } = useWorkoutTimers(workoutId, exercises);
-  
   const [motivations, setMotivations] = useState({});
   const [history, setHistory] = useState([]);
   const [statHistory, setStatHistory] = useState({});
   const [swaps, setSwaps] = useState({});
   const dataRef = useRef({ last: {}, hints: {} });
-
-  useEffect(() => {
-    let cancelled = false;
+  useEffect(() => { let cancelled = false;
     setLoaded(false); setExercises([]); setSessionId(null); setMotivations({}); setHistory([]); setStatHistory([]); setSwaps({});
-    (async () => {
-      try {
-        const results = await Promise.allSettled([
-          api.lastSession(workout.name),
-          api.todaySession(workout.name),
-          api.hints(),
-          api.history(100),
-          api.history1RM(),
-        ]);
+    (async () => { try { const results = await Promise.allSettled([ api.lastSession(workout.name), api.todaySession(workout.name), api.hints(), api.history(100), api.history1RM(), ]);
         if (cancelled) return;
         const last = results[0].status === "fulfilled" ? results[0].value : {};
         const today = results[1].status === "fulfilled" ? results[1].value : null;
         const hints = results[2].status === "fulfilled" ? results[2].value : {};
-        
         setHistory(results[3].status === "fulfilled" ? results[3].value || [] : []);
         setStatHistory(results[4].status === "fulfilled" ? results[4].value || {} : {});
         dataRef.current = { last: last || {}, hints: hints || {} };
         const activeDate = (today && today.date) ? today.date : localDate();
-        setSessionDate(activeDate);
-        const swapMap = loadSwaps(workout.name, activeDate);
-        let hasNewSwap = false;
-        if (today && today.sets) {
-          today.sets.forEach(set => {
-            if (set.exercise === "Barbell Back Squat" && !swapMap["0"]) {
-              swapMap["0"] = "Barbell Back Squat";
-              hasNewSwap = true;
-            }
-            if (set.exercise === "Dips" && !swapMap["5-0"]) {
-              swapMap["5-0"] = "Dips";
-              hasNewSwap = true;
-            }
-          });
-        }
+        setSessionDate(activeDate); const swapMap = loadSwaps(workout.name, activeDate);
+        let hasNewSwap = false; if (today && today.sets) { today.sets.forEach(set => { if (set.exercise === "Barbell Back Squat" && !swapMap["0"]) { swapMap["0"] = "Barbell Back Squat";
+              hasNewSwap = true; }
+            if (set.exercise === "Dips" && !swapMap["5-0"]) { swapMap["5-0"] = "Dips";
+              hasNewSwap = true; } }); }
         if (hasNewSwap) saveSwaps(workout.name, activeDate, swapMap);
-        setSwaps(swapMap);
-        let exs = flattenTemplate(applySwaps(workout, swapMap), last || {}, hints || {});
+        setSwaps(swapMap); let exs = flattenTemplate(applySwaps(workout, swapMap), last || {}, hints || {});
         const savedSetsMap = loadSessionSets(workout.name, activeDate);
-
-        if (savedSetsMap && Object.keys(savedSetsMap).length) {
-          exs = exs.map(ex => {
-            const saved = savedSetsMap[ex.name];
+        if (savedSetsMap && Object.keys(savedSetsMap).length) { exs = exs.map(ex => { const saved = savedSetsMap[ex.name];
             if (saved) return { ...ex, sets: saved.map(s => ({ ...s })) };
-            return ex;
-          });
-        }
-        if (today && today.id) {
-          exs = hydrateToday(exs, today.sets || []);
-          setSessionId(today.id);
-          if (today.started_at) {
-            const startedMs = Date.parse(today.started_at);
-            if (!isNaN(startedMs)) setStartedAt(startedMs);
-          }
+            return ex; }); } if (today && today.id) { exs = hydrateToday(exs, today.sets || []);
+          setSessionId(today.id); if (today.started_at) { const startedMs = Date.parse(today.started_at);
+            if (!isNaN(startedMs)) setStartedAt(startedMs); }
           setElapsed(today.duration_sec || 0);
-        } else {
-          if (exs.length && exs[0].sets.length) exs[0].sets[0].active = true;
-        }
+        } else { if (exs.length && exs[0].sets.length) exs[0].sets[0].active = true; }
         const skippedNames = loadSkippedExercises(workout.name, activeDate);
-        if (skippedNames.size) {
-          exs = exs.map(e => skippedNames.has(e.name) ? { ...e, skipped: true } : e);
-        }
+        if (skippedNames.size) { exs = exs.map(e => skippedNames.has(e.name) ? { ...e, skipped: true } : e); }
         const deferredNames = loadDeferred(workout.name, activeDate);
         if (deferredNames.length) exs = applyDeferredOrder(exs, deferredNames);
         if (skippedNames.size || deferredNames.length) activateNextSet(exs);
-
-        setExercises(exs);
-        setLoaded(true);
-      } catch (e) {
-        console.error("[V2] mount failed:", e);
-        setLoaded(true);
-      }
-    })();
-    return () => { cancelled = true; };
+        setExercises(exs); setLoaded(true);
+      } catch (e) { console.error("[V2] mount failed:", e);
+        setLoaded(true); } })(); return () => { cancelled = true; };
   }, [workout]);
-
   const saveDebounceRef = useRef(null);
-  const queueSave = (currentExercises, currentSessionId, currentStartedAt, currentElapsed) => {
-    clearTimeout(saveDebounceRef.current);
-    saveDebounceRef.current = setTimeout(() => {
-      const payload = serializeForSave(currentExercises, workout.name, currentSessionId, currentStartedAt, currentElapsed, sessionDate);
+  const queueSave = (currentExercises, currentSessionId, currentStartedAt, currentElapsed) => { clearTimeout(saveDebounceRef.current);
+    saveDebounceRef.current = setTimeout(() => { const payload = serializeForSave(currentExercises, workout.name, currentSessionId, currentStartedAt, currentElapsed, sessionDate);
       if (payload.sets.length === 0) return;
-      autoSavePayload(payload, (newId) => {
-        if (!currentSessionId && newId) setSessionId(newId);
-      });
-    }, 400);
-  };
-
-  const actions = useWorkoutActions({
-    workout,
-    exercises,
-    setExercises,
-    sessionDate,
-    sessionId,
-    setSessionId,
-    startedAt,
-    elapsed,
-    swaps,
-    setSwaps,
-    dataRef,
-    startTimer,
-    setRest,
-    queueSave
-  });
-
-
-
-  const currentIdx = (() => {
-    let i = exercises.findIndex(e => !e.skipped && e.sets.some(s => s.active));
+      autoSavePayload(payload, (newId) => { if (!currentSessionId && newId) setSessionId(newId); });
+    }, 400); };
+  const actions = useWorkoutActions({ workout, exercises, setExercises, sessionDate, sessionId, setSessionId, startedAt, elapsed, swaps, setSwaps, dataRef, startTimer, setRest, queueSave });
+  const currentIdx = (() => { let i = exercises.findIndex(e => !e.skipped && e.sets.some(s => s.active));
     if (i !== -1) return i;
     i = exercises.findIndex(e => !e.skipped && e.sets.some(s => !s.completed));
     if (i !== -1) return i;
-    return exercises.length - 1;
-  })();
-
+    return exercises.length - 1; })();
   useEffect(() => { setFocusIdx(null); }, [currentIdx]);
-
   const totalSets = exercises.reduce((n, e) => n + e.sets.length, 0);
-  const doneSets = exercises.reduce((n, e) =>
-    e.skipped ? n + e.sets.length : n + e.sets.filter(s => s.completed).length, 0);
-
+  const doneSets = exercises.reduce((n, e) => e.skipped ? n + e.sets.length : n + e.sets.filter(s => s.completed).length, 0);
   const isFinished = totalSets > 0 && doneSets === totalSets;
-
-  useEffect(() => {
-    if (isFinished) {
-      setRunning(false);
-      setRest(null);
-    }
-  }, [isFinished]);
-
-  const onSelectExercise = (idx) => {
-    setFocusIdx(idx);
-    const ex = exercises[idx];
-    if (!ex || ex.skipped) return;
+  useEffect(() => { if (isFinished) { setRunning(false);
+      setRest(null); } }, [isFinished]);
+  const onSelectExercise = (idx) => { setFocusIdx(idx);
+    const ex = exercises[idx]; if (!ex || ex.skipped) return;
     const hasActiveHere = ex.sets.some(s => s.active);
     const firstIncomplete = ex.sets.findIndex(s => !s.completed);
-    if (!hasActiveHere && firstIncomplete !== -1) {
-      const next = exercises.map((e) => ({
-        ...e,
-        sets: e.sets.map(s => s.active ? { ...s, active: false } : s),
-      }));
-      next[idx] = {
-        ...next[idx],
-        sets: next[idx].sets.map((s, j) => j === firstIncomplete ? { ...s, active: true } : s),
-      };
-      setExercises(next);
-      actions.onPickWeight(idx, firstIncomplete, next[idx].sets[firstIncomplete].weight);
-    }
-  };
-
-  if (!loaded) {
-    return (
-      <div style={{ height: "100%", overflowY: "auto" }}>
+    if (!hasActiveHere && firstIncomplete !== -1) { const next = exercises.map((e) => ({ ...e, sets: e.sets.map(s => s.active ? { ...s, active: false } : s), }));
+      next[idx] = { ...next[idx], sets: next[idx].sets.map((s, j) => j === firstIncomplete ? { ...s, active: true } : s), };
+      setExercises(next); actions.onPickWeight(idx, firstIncomplete, next[idx].sets[firstIncomplete].weight); } };
+  const onSelectSet = (exIdx, setIdx) => { setFocusIdx(exIdx);
+    const ex = exercises[exIdx]; if (!ex || ex.skipped) return;
+    const next = exercises.map((e, idx) => idx !== exIdx ? { ...e, sets: e.sets.map(s => s.active ? { ...s, active: false } : s) } : { ...e, sets: e.sets.map((s, j) => ({ ...s, active: j === setIdx })), });
+    setExercises(next); const selectedSet = next[exIdx].sets[setIdx];
+    actions.onPickWeight(exIdx, setIdx, selectedSet.weight || selectedSet.lastWeight || 0); };
+  if (!loaded) { return ( <div style={{ height: "100%", overflowY: "auto" }}>
         <div style={{ maxWidth: 448, margin: "0 auto", minHeight: "100%", background: T.page }}>
           <Header workout={workout} workouts={WORKOUTS} onPickWorkout={onPickWorkout} done={0} total={0} elapsedSec={0} running={false} onToggleTimer={() => {}} />
           <div style={{ margin: "40px 16px", padding: "20px", textAlign: "center", color: T.muted, fontFamily: T.mono, fontSize: 13, border: `1px dashed ${T.cardBorder}`, borderRadius: 12 }}>
             loading workout…
           </div>
         </div>
-      </div>
-    );
-  }
-
+      </div> ); }
   const shownIdx = (focusIdx != null && exercises[focusIdx]) ? focusIdx : (isFinished ? null : currentIdx);
   const shownExercise = shownIdx !== null ? exercises[shownIdx] : null;
-
-  const nav = (variant) => (
-    <ExerciseNav
+  const nav = (variant) => ( <ExerciseNav
       exercises={exercises}
       shownIdx={shownIdx}
       currentIdx={currentIdx}
       onSelect={onSelectExercise}
+      onSelectSet={onSelectSet}
       onSwapExercise={actions.onSwapExercise}
       onAddExercise={actions.onAddExercise}
       variant={variant}
-      isFinished={isFinished}
-    />
-  );
-
-  return (
-    <div style={{ height: "100%", overflowY: "auto", background: T.page }}>
-      {TEST_MODE && (
-        <div style={{ position: "sticky", top: 0, zIndex: 9000, background: "#F59E0B", color: "#1A1A1A", textAlign: "center", fontFamily: T.mono, fontWeight: 800, fontSize: 12, letterSpacing: 1, padding: "6px 10px" }}>
+      isFinished={isFinished} /> );
+  return ( <div style={{ height: "100%", overflowY: "auto", background: T.page }}>
+      {TEST_MODE && ( <div style={{ position: "sticky", top: 0, zIndex: 9000, background: "#F59E0B", color: "#1A1A1A", textAlign: "center", fontFamily: T.mono, fontWeight: 800, fontSize: 12, letterSpacing: 1, padding: "6px 10px" }}>
           ⚠ TEST MODE — nothing is being saved
         </div>
       )}
@@ -225,33 +118,21 @@ function App() {
             total={totalSets}
             elapsedSec={elapsed}
             running={running}
-            onToggleTimer={() => setRunning(r => !r)}
-          />
+            onToggleTimer={() => setRunning(r => !r)} />
           <div className="exercise-nav-strip">
             {nav("strip")}
           </div>
-          {shownIdx === null && isFinished ? (
-            <WorkoutCompleteScreen
+          {shownIdx === null && isFinished ? ( <WorkoutCompleteScreen
               workoutName={workout.name}
               elapsedSec={elapsed}
               totalSets={totalSets}
-              onFinish={() => actions.onFinishWorkout(elapsed)}
-            />
-          ) : shownExercise && (() => {
-            const i = shownIdx;
-            const ex = shownExercise;
-            // Combined superset view: partners render as one unit — collapsed
-            // summary rows around the full card for the exercise you're on,
-            // with shared round framing on top and a next-step hint below.
-            const group = ex.superset
-              ? exercises.map((e2, idx) => ({ e: e2, idx })).filter(g => !g.e.skipped && g.e.superset === ex.superset)
-              : [];
+              onFinish={() => actions.onFinishWorkout(elapsed)} />
+          ) : shownExercise && (() => { const i = shownIdx;
+            const ex = shownExercise; const group = ex.superset ? exercises.map((e2, idx) => ({ e: e2, idx })).filter(g => !g.e.skipped && g.e.superset === ex.superset) : [];
             const combined = group.length > 1;
             const posInGroup = combined ? group.findIndex(g => g.idx === i) + 1 : null;
             const supersetTag = ex.superset ? `${ex.superset}${ex.supersetPos || posInGroup || ''}` : null;
-            const card = (
-              <ExerciseCard
-                exercise={ex}
+            const card = ( <ExerciseCard exercise={ex}
                 supersetTag={supersetTag}
                 embedded={combined}
                 rest={rest}
@@ -271,15 +152,9 @@ function App() {
                 onReopenSet={(sIdx) => actions.onReopenSet(i, sIdx)}
                 onAddSet={() => actions.onAddSet(i)}
                 onRemoveSet={() => actions.onRemoveSet(i)}
-                onRemoveWarmup={() => actions.onRemoveWarmup(i)}
-
-              />
-            );
-            if (!combined) {
-              return (
-                <React.Fragment key={ex.id}>
-                  {ex.superset && (
-                    <div style={{ margin: "4px 16px 6px", display: "flex", alignItems: "center", gap: 8 }}>
+                onRemoveWarmup={() => actions.onRemoveWarmup(i)} /> );
+            if (!combined) { return ( <React.Fragment key={ex.id}>
+                  {ex.superset && ( <div style={{ margin: "4px 16px 6px", display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ flex: 1, height: 1, background: "rgba(192,132,252,0.18)" }} />
                       <span style={{ color: T.bands, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1.2 }}>
                         SUPERSET {ex.superset}
@@ -288,9 +163,7 @@ function App() {
                     </div>
                   )}
                   {card}
-                </React.Fragment>
-              );
-            }
+                </React.Fragment> ); }
             const working = m => m.e.sets.filter(s => s.kind !== "warmup");
             const roundsTotal = Math.min(...group.map(m => working(m).length));
             const completedRounds = Math.min(...group.map(m => working(m).filter(s => s.completed).length));
@@ -302,33 +175,18 @@ function App() {
             const isWarmupStep = activeSet && activeSet.kind === "warmup";
             const nextPartner = group.find(g => g.idx !== i && g.idx > i && g.e.sets.some(s => !s.completed));
             const firstWithWork = group.find(g => g.e.sets.some(s => !s.completed));
-            const fmtLast = (m) => {
-              const done = m.e.sets.filter(s => s.completed && s.reps);
+            const fmtLast = (m) => { const done = m.e.sets.filter(s => s.completed && s.reps);
               const s = done[done.length - 1];
               if (!s) return null;
               const bandSum = (s.bands || []).reduce((a, b) => a + b, 0);
-              let w;
-              if (m.e.assist) w = bandSum ? `BW −${bandSum}` : "BW";
+              let w; if (m.e.assist) w = bandSum ? `BW −${bandSum}` : "BW";
               else if (m.e.isBandsOnly) w = bandSum ? `${bandSum} lb band` : "band";
               else w = `${s.weight || 0} lb`;
-              return `${w} × ${s.reps}`;
-            };
-            const dots = Array.from({ length: roundsTotal }, (_, r) => {
-              const c = r < completedRounds ? T.green
-                : (r === completedRounds && completedRounds < roundsTotal) ? T.accentLight
-                : "rgba(255,255,255,0.12)";
-              return <span key={r} style={{ width: 8, height: 8, borderRadius: "50%", background: c, display: "inline-block" }} />;
-            });
+              return `${w} × ${s.reps}`; }; const dots = Array.from({ length: roundsTotal }, (_, r) => { const c = r < completedRounds ? T.green : (r === completedRounds && completedRounds < roundsTotal) ? T.accentLight : "rgba(255,255,255,0.12)";
+              return <span key={r} style={{ width: 8, height: 8, borderRadius: "50%", background: c, display: "inline-block" }} />; });
             const divider = "1px solid rgba(255,255,255,0.05)";
-            return (
-              <React.Fragment key={ex.id}>
-                <div style={{
-                  margin: "0 16px 12px",
-                  background: T.cardBg,
-                  border: "1px solid rgba(192,132,252,0.25)",
-                  borderRadius: 14,
-                  overflow: "hidden",
-                }}>
+            return ( <React.Fragment key={ex.id}>
+                <div style={{ margin: "0 16px 12px", background: T.cardBg, border: "1px solid rgba(192,132,252,0.25)", borderRadius: 14, overflow: "hidden", }}>
                   <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, background: "rgba(192,132,252,0.06)" }}>
                     <span style={{ color: T.bands, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1.2 }}>
                       ⇄ SUPERSET {ex.superset}
@@ -341,49 +199,25 @@ function App() {
                       <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 10, marginLeft: 4 }}>{doneGroupSets}/{totalGroupSets}</span>
                     </span>
                   </div>
-                  {extras.length > 0 && (
-                    <div style={{ padding: "6px 14px 0", color: T.faint, fontFamily: T.mono, fontSize: 10 }}>
+                  {extras.length > 0 && ( <div style={{ padding: "6px 14px 0", color: T.faint, fontFamily: T.mono, fontSize: 10 }}>
                       {extras.map(x => `+${x.extra} solo ${x.m.e.name} set${x.extra > 1 ? "s" : ""} at the end`).join(" · ")}
                     </div>
                   )}
-                  {group.map((m, k) => {
-                    const tag = `${ex.superset}${k + 1}`;
-                    if (m.idx === i) {
-                      return (
-                        <div key={m.idx} style={{ padding: "12px 14px 14px", borderTop: k > 0 ? divider : "none" }}>
+                  {group.map((m, k) => { const tag = `${ex.superset}${k + 1}`;
+                    if (m.idx === i) { return ( <div key={m.idx} style={{ padding: "12px 14px 14px", borderTop: k > 0 ? divider : "none" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{
-                              color: T.bands, fontFamily: T.mono, fontSize: 11, fontWeight: 800, letterSpacing: 1,
-                              padding: "2px 6px", borderRadius: 5, background: "rgba(192,132,252,0.12)", flexShrink: 0,
-                            }}>{tag}</span>
+                            <span style={{ color: T.bands, fontFamily: T.mono, fontSize: 11, fontWeight: 800, letterSpacing: 1, padding: "2px 6px", borderRadius: 5, background: "rgba(192,132,252,0.12)", flexShrink: 0, }}>{tag}</span>
                             <h2 style={{ margin: 0, color: T.strong, fontSize: 18, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.3 }}>{m.e.name}</h2>
                           </div>
-                          {m.e.note && (
-                            <p style={{ margin: "5px 0 0", color: T.muted, fontSize: 12, lineHeight: 1.4 }}>{m.e.note}</p>
+                          {m.e.note && ( <p style={{ margin: "5px 0 0", color: T.muted, fontSize: 12, lineHeight: 1.4 }}>{m.e.note}</p>
                           )}
                           {card}
-                        </div>
-                      );
-                    }
+                        </div> ); }
                     const total = m.e.sets.length;
                     const done = m.e.sets.filter(s => s.completed).length;
                     const allDone = done === total;
-                    const last = fmtLast(m);
-                    return (
-                      <div key={m.idx} onClick={() => onSelectExercise(m.idx)} style={{
-                        padding: "10px 14px",
-                        borderTop: k > 0 ? divider : "none",
-                        display: "flex", alignItems: "center", gap: 10,
-                        cursor: "pointer",
-                        opacity: allDone ? 0.55 : 1,
-                      }}>
-                        <span style={{
-                          width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
-                          display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          fontFamily: T.mono, fontSize: 10, fontWeight: 800,
-                          background: allDone ? "rgba(52,211,153,0.15)" : "rgba(192,132,252,0.15)",
-                          color: allDone ? T.green : T.bands,
-                        }}>{allDone ? "✓" : tag}</span>
+                    const last = fmtLast(m); return ( <div key={m.idx} onClick={() => onSelectExercise(m.idx)} style={{ padding: "10px 14px", borderTop: k > 0 ? divider : "none", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", opacity: allDone ? 0.55 : 1, }}>
+                        <span style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: T.mono, fontSize: 10, fontWeight: 800, background: allDone ? "rgba(52,211,153,0.15)" : "rgba(192,132,252,0.15)", color: allDone ? T.green : T.bands, }}>{allDone ? "✓" : tag}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ color: T.text, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.e.name}</div>
                           <div style={{ color: T.faint, fontFamily: T.mono, fontSize: 11 }}>
@@ -391,24 +225,20 @@ function App() {
                           </div>
                         </div>
                         <span style={{ color: T.faint, fontFamily: T.mono, fontSize: 10, flexShrink: 0 }}>{allDone ? "edit" : "open →"}</span>
-                      </div>
-                    );
+                      </div> );
                   })}
                   <div style={{ padding: "9px 14px", borderTop: divider, background: "rgba(255,255,255,0.02)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    {nextPartner ? (
-                      <React.Fragment>
+                    {nextPartner ? ( <React.Fragment>
                         <span style={{ color: T.amber, fontFamily: T.mono, fontSize: 10, fontWeight: 800, letterSpacing: 1 }}>NO REST</span>
                         <span style={{ color: T.faint, fontSize: 11 }}>— log this set, then go straight to {nextPartner.e.name}</span>
                       </React.Fragment>
-                    ) : (
-                      <span style={{ color: T.faint, fontSize: 11 }}>
+                    ) : ( <span style={{ color: T.faint, fontSize: 11 }}>
                         after this set: {ex.rest || 60}s round rest{firstWithWork && firstWithWork.idx !== i ? ` → back to ${firstWithWork.e.name}` : ""}
                       </span>
                     )}
                   </div>
                 </div>
-              </React.Fragment>
-            );
+              </React.Fragment> );
           })()}
         </div>
         <aside className="stats-pane-wrap">
@@ -416,12 +246,8 @@ function App() {
             exercise={shownExercise}
             history={history}
             statHistory={statHistory}
-            exercises={exercises}
-          />
+            exercises={exercises} />
         </aside>
       </div>
-    </div>
-  );
-}
-
+    </div> ); }
 window.App = App;

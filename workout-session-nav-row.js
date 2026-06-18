@@ -1,4 +1,4 @@
-function ExerciseNavRow({ i, exercises, shownIdx, currentIdx, onSelect, onSwapExercise, swapOpenIdx, setSwapOpenIdx, showAllFamilies, setShowAllFamilies }) {
+function ExerciseNavRow({ i, exercises, shownIdx, currentIdx, onSelect, onSelectSet, onSwapExercise, swapOpenIdx, setSwapOpenIdx, showAllFamilies, setShowAllFamilies }) {
   const e = exercises[i];
   const doneWork = e.sets.filter(s => s.completed).length;
   const allDone = e.sets.length > 0 && e.sets.every(s => s.completed);
@@ -47,7 +47,17 @@ function ExerciseNavRow({ i, exercises, shownIdx, currentIdx, onSelect, onSwapEx
     if (!work.length) return null;
     return (
       <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 10 }}>
-        {work.map((s, k) => <SetChip key={k} k={k} d={navSetDisplay(s, e)} />)}
+        {work.map((s, k) => (
+          <SetChip
+            key={k}
+            k={k}
+            d={navSetDisplay(s, e)}
+            onClick={(ev) => {
+              ev.stopPropagation();
+              if (onSelectSet) onSelectSet(i, k);
+            }}
+          />
+        ))}
       </div>
     );
   };
