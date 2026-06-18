@@ -182,10 +182,12 @@ function renderWorkoutSummaryCard() {
     const pct = maxSessionVol ? (h.volume / maxSessionVol) * 100 : 0;
     const isLatest = h.date === latest.date;
     const dl = mmdd(h.date);
+    const vStr = h.volume >= 1000 ? `${(h.volume / 1000).toFixed(1)}k` : Math.round(h.volume);
     const tip = `${dl} · ${Math.round(h.volume).toLocaleString()} lb volume`;
-    return `<div title="${tip}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer">
-      <div style="height:54px;width:100%;display:flex;align-items:end">
-        <div style="width:100%;height:${Math.max(8, pct)}%;background:${isLatest ? '#a78bfa' : 'rgba(255,255,255,0.09)'};border-radius:4px"></div>
+    return `<div title="${tip}" style="flex:1;display:flex;flex-direction:column;align-items:center;cursor:pointer">
+      <span style="font-size:9px;font-family:${MONO};color:${isLatest ? '#a78bfa' : '#9CA3AF'};margin-bottom:4px;font-weight:${isLatest ? '800' : '500'}">${vStr}</span>
+      <div style="height:44px;width:100%;display:flex;align-items:end;justify-content:center;margin-bottom:4px">
+        <div style="width:16px;height:${Math.max(8, pct)}%;background:${isLatest ? '#a78bfa' : 'rgba(255,255,255,0.2)'};border-radius:3px"></div>
       </div>
       <span style="font-size:9px;font-family:${MONO};color:${isLatest ? '#a78bfa' : '#6B7280'};font-weight:${isLatest ? '800' : '500'}">${dl}</span>
     </div>`;

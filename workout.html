@@ -67,6 +67,9 @@
   #app img, #app video, #app svg, #app iframe, #app embed, #app object, #app [data-noinvert] {
     filter: invert(1) hue-rotate(180deg) saturate(1.28);
   }
+  [data-noinvert] img, [data-noinvert] video, [data-noinvert] svg, [data-noinvert] iframe, [data-noinvert] [data-noinvert] {
+    filter: none !important;
+  }
 
   /* ---------- Celebration animations ---------- */
   #celebration-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9999; overflow: hidden; }
@@ -209,7 +212,7 @@
 <script src="/workout-ui-home-sparklines.js?v=5"></script>
 <script src="/workout-ui-home-muscle-map.js"></script>
 <script src="/workout-ui-home-calendar.js?v=3"></script>
-<script src="/workout-ui-home-summary.js?v=14"></script>
+<script src="/workout-ui-home-summary.js?v=15"></script>
 <script src="/workout-ui-home-percentiles.js?v=4"></script>
 <script src="/workout-ui-home.js?v=8"></script>
 <script src="/workout-ui-workout-set-row.js"></script>
