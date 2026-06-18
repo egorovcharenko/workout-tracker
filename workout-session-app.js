@@ -35,7 +35,7 @@ function App() { const [workoutId, setWorkoutId] = useState(() => { const fromUr
         setSwaps(swapMap); let exs = flattenTemplate(applySwaps(workout, swapMap), last || {}, hints || {});
         const savedSetsMap = loadSessionSets(workout.name, activeDate);
         if (savedSetsMap && Object.keys(savedSetsMap).length) { exs = exs.map(ex => { const saved = savedSetsMap[ex.name];
-            if (saved) return { ...ex, sets: saved.map(s => ({ ...s })) };
+            if (saved && saved.some(s => s.completed)) return { ...ex, sets: saved.map(s => ({ ...s })) };
             return ex; }); } if (today && today.id) { exs = hydrateToday(exs, today.sets || []);
           setSessionId(today.id); if (today.started_at) { const startedMs = Date.parse(today.started_at);
             if (!isNaN(startedMs)) setStartedAt(startedMs); }
