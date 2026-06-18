@@ -67,7 +67,6 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
             }
           });
         });
-        if (Object.keys(subWorkingBySetNum).length !== rounds) subWorkingBySetNum = {};
         const subFallback = (want) => {
           if (subWorkingBySetNum[want] != null) return subWorkingBySetNum[want];
           const nums = Object.keys(subWorkingBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
@@ -123,7 +122,6 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
             if (exName === ex.name && kind === "warmup") warmupLastBySetNum[parseInt(setNumStr)] = src[k];
           });
         });
-        if (Object.keys(warmupLastBySetNum).length !== warmupCount) warmupLastBySetNum = {};
         const fallbackForWarmup = (want) => {
           if (warmupLastBySetNum[want] != null) return warmupLastBySetNum[want];
           const nums = Object.keys(warmupLastBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
@@ -152,7 +150,6 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
           if (exName === ex.name && kind === "working") workingLastBySetNum[parseInt(setNumStr)] = src[k];
         });
       });
-      if (ex.sets && Object.keys(workingLastBySetNum).length !== ex.sets) workingLastBySetNum = {};
       const fallbackForWorking = (want) => {
         if (workingLastBySetNum[want] != null) return workingLastBySetNum[want];
         const nums = Object.keys(workingLastBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
