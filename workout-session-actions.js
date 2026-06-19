@@ -225,13 +225,13 @@ function useWorkoutActions({
 
   const onRemoveSet = (eIdx) => {
     const targetSuperset = exercises[eIdx]?.superset;
-    const targets = exercises.filter((e, i) => targetSuperset ? (e.superset === targetSuperset) : (i === eIdx));
-    if (!targets.every(e => e.sets.filter(s => s.kind === "work").length > 1)) return;
-    const minWork = Math.min(...targets.map(e => e.sets.filter(s => s.kind === "work").length));
+    const targets = exercises.filter(e => targetSuperset ? e.superset === targetSuperset : e.id === exercises[eIdx].id);
+    const maxWork = Math.max(...targets.map(e => e.sets.filter(s => s.kind === "work").length));
     const next = exercises.map((e, i) => {
-      if (targetSuperset ? (e.superset !== targetSuperset) : (i !== eIdx)) return e;
+      if (targetSuperset ? e.superset !== targetSuperset : i !== eIdx) return e;
       const workSets = e.sets.filter(s => s.kind === "work");
-      if (targetSuperset && workSets.length <= minWork) return e;
+      if (workSets.length <= 1) return e;
+      if (targetSuperset && workSets.length < maxWork) return e;
       const trailing = workSets[workSets.length - 1];
       if (trailing?.completed) return e;
       let sets = e.sets.filter(s => s !== trailing);
