@@ -59,7 +59,7 @@ const WORKOUTS = [
     exercises: [
       { name: "Dumbbell Lateral Raises", sets: 3, reps: "12-20", rest: 45, notes: "Second weekly delt hit. Chase reps.", superset: "A", noWarmup: true },
       { name: "Face Pulls", sets: 2, reps: "15-20", equipment: "band", rest: 45, notes: "Rear delt + upper trap; anchor band.", superset: "A", noWarmup: true },
-      { name: "Dumbbell Shrugs", sets: 3, reps: "12-20", rest: 45, notes: "Pause + squeeze; trap priority.", superset: "B", noWarmup: true },
+      { name: "Barbell Shrugs", sets: 3, reps: "12-20", rest: 45, notes: "Pause + squeeze; trap priority.", superset: "B", noWarmup: true, equipment: "barbell" },
       { name: "Reverse Flyes", sets: 2, reps: "12-20", video: "https://www.youtube.com/shorts/LsT-bR_zxLo", rest: 45, notes: "Rear delt.", superset: "B", noWarmup: true },
       { name: "Band Tricep Pushdowns", sets: 2, reps: "10-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI", rest: 60, notes: "Constant tension tricep work.", superset: "C", noWarmup: true },
       { name: "Incline DB Curls", sets: 2, reps: "10-15", rest: 60, notes: "Stretch-biased biceps.", superset: "C", noWarmup: true },
@@ -115,22 +115,8 @@ const WORKOUTS = [
       { name: "Sleeve-Buster Superset", sets: 3, reps: "15", rest: 60, supersetExercises: [{ name: "Band Tricep Pushdowns", reps: "12-15", equipment: "band", video: "https://www.youtube.com/shorts/eGjSphOefTI" }, { name: "Dumbbell Hammer Curls", reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", grips: ['hammer', 'supinated', 'reverse'] }]},
     ],
   },
-  {
-    id: "arms-shoulders", name: "Arms & Shoulders", hidden: true, rest: 60, warmup: "Elbows/wrists",
-    exercises: [
-      { name: "Overhead Dumbbell Press", sets: 4, reps: "6-10", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw", rest: 120 },
-      { name: "Dumbbell Bicep Curls", sets: 3, reps: "8-12", superset: "A", video: "https://www.youtube.com/shorts/MKWBV29S6c0", grips: ['supinated', 'hammer', 'reverse'] },
-      { name: "Overhead Tricep Extension", sets: 3, reps: "10-15", superset: "A", video: "https://www.youtube.com/shorts/b_r_LW4HEcM" },
-    ],
-  },
-  {
-    id: "back", name: "Back", hidden: true, rest: 60, warmup: "Light rows",
-    exercises: [
-      { name: "Dumbbell Bent-Over Rows", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/dpYI8K6e-jE" },
-      { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 75, noWarmup: true },
-      { name: "Reverse Flyes", sets: 3, reps: "15-20", video: "https://www.youtube.com/shorts/LsT-bR_zxLo" },
-    ],
-  }
+  { id: "arms-shoulders", name: "Arms & Shoulders", hidden: true, rest: 60, warmup: "Elbows/wrists", exercises: [{ name: "Overhead Dumbbell Press", sets: 4, reps: "6-10", video: "https://www.youtube.com/shorts/E9ShwbwZ1zw", rest: 120 }, { name: "Dumbbell Bicep Curls", sets: 3, reps: "8-12", superset: "A", video: "https://www.youtube.com/shorts/MKWBV29S6c0", grips: ['supinated', 'hammer', 'reverse'] }, { name: "Overhead Tricep Extension", sets: 3, reps: "10-15", superset: "A", video: "https://www.youtube.com/shorts/b_r_LW4HEcM" }] },
+  { id: "back", name: "Back", hidden: true, rest: 60, warmup: "Light rows", exercises: [{ name: "Dumbbell Bent-Over Rows", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/dpYI8K6e-jE" }, { name: "Single-Arm Dumbbell Rows", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/H8jf3DwlIlo", rest: 75, noWarmup: true }, { name: "Reverse Flyes", sets: 3, reps: "15-20", video: "https://www.youtube.com/shorts/LsT-bR_zxLo" }] }
 ];
 
 function localDate() {
@@ -171,6 +157,7 @@ const SWAP_GROUPS = [
     { name: "Dumbbell Hammer Curls", sets: 3, reps: "8-12", video: "https://www.youtube.com/shorts/0IAJqSwFnHI", grips: ['hammer', 'supinated', 'reverse'] }, { name: "Band Bicep Curls", sets: 2, reps: "12-15", video: "https://www.youtube.com/shorts/5ACsDBt_sMQ", equipment: "band", grips: ['supinated', 'hammer', 'reverse'] }
   ]},
   { family: "Calves", exercises: [{ name: "Calf Raises", sets: 3, reps: "15-20", rest: 60 }]},
+  { family: "Shrugs (Traps)", exercises: [{ name: "Barbell Shrugs", sets: 3, reps: "12-20", rest: 45, notes: "Pause + squeeze; trap priority.", equipment: "barbell", noWarmup: true }, { name: "Dumbbell Shrugs", sets: 3, reps: "12-20", rest: 45, notes: "Pause + squeeze; trap priority.", noWarmup: true }]},
   { family: "Core", exercises: [
     { name: "Band Torso Rotation", sets: 3, reps: "10-12", equipment: "band", rest: 60, noWarmup: true }, { name: "Hanging Knee Raise", sets: 3, reps: "10-15", rest: 60, noWarmup: true }, { name: "Pallof Press", sets: 3, reps: "10-12", equipment: "band", rest: 60, noWarmup: true }
   ]}

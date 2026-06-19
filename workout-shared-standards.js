@@ -36,6 +36,7 @@ const EXERCISE_MUSCLES = {
   "Band Torso Rotation": { primary: ["core"], secondary: [], ratios: { core: 1.0 } },
   "Hanging Knee Raise": { primary: ["core"], secondary: ["forearms"], ratios: { core: 1.0, forearms: 0.2 } },
   "Dumbbell Shrugs": { primary: ["upper_back"], secondary: ["forearms"], ratios: { upper_back: 1.0, forearms: 0.3 } },
+  "Barbell Shrugs": { primary: ["upper_back"], secondary: ["forearms"], ratios: { upper_back: 1.0, forearms: 0.3 } },
   "Dead Hang + Scap Pulls": { primary: ["upper_back"], secondary: ["lats", "forearms"], ratios: { upper_back: 1.0, lats: 0.3, forearms: 0.5 } }
 };
 
@@ -77,6 +78,7 @@ const STRENGTH_STANDARDS = {
   "Band Torso Rotation": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 },
   "Hanging Knee Raise": { beg: 15, nov: 35, int: 60, adv: 85, elite: 110 },
   "Dumbbell Shrugs": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
+  "Barbell Shrugs": { beg: 135, nov: 185, int: 275, adv: 365, elite: 465 },
   "Dead Hang + Scap Pulls": { beg: -20, nov: 15, int: 50, adv: 85, elite: 120 }
 };
 
