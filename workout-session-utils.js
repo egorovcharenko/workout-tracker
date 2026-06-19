@@ -34,19 +34,12 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
   const lookupExerciseGrip = (exName) => {
     if (exerciseGripCache[exName] !== undefined) return exerciseGripCache[exName];
     let found = null;
-    const scan = (src, kindFilter) => {
-      Object.keys(src || {}).forEach(k => {
-        if (found) return;
-        const [n, kind] = k.split("|");
-        if (n === exName && (!kindFilter || kind === kindFilter) && src[k].grip) found = src[k].grip;
-      });
-    };
-    scan(hintsMap, "working");
-    scan(lastSessionMap, "working");
-    scan(hintsMap, "warmup");
-    scan(lastSessionMap, "warmup");
-    exerciseGripCache[exName] = found;
-    return found;
+    const scan = (src, kF) => Object.keys(src || {}).forEach(k => {
+      const [n, kind] = k.split("|");
+      if (!found && n === exName && (!kF || kind === kF) && src[k].grip) found = src[k].grip;
+    });
+    scan(hintsMap, "working"); scan(lastSessionMap, "working"); scan(hintsMap, "warmup"); scan(lastSessionMap, "warmup");
+    return exerciseGripCache[exName] = found;
   };
   const out = [];
   let supersetLetter = 'A';
@@ -67,7 +60,8 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
           });
         });
       });
-      const rounds = Math.max(ex.sets || 3, maxLastSets);
+      const historyRounds = maxLastSets > 0 ? Math.floor((maxLastSets - 1) / subs.length) + 1 : 0;
+      const rounds = Math.max(ex.sets || 3, historyRounds);
       subs.forEach((sub, subIdx) => {
         const sets = [];
         let subWorkingBySetNum = {};
@@ -266,36 +260,21 @@ function transitionActiveSetAfterLog(prev, eIdx, sIdx) {
   const cur = prev[eIdx];
   if (cur.superset) {
     const partnerIdx = prev.findIndex((e2, j) => j !== eIdx && e2.superset === cur.superset);
-    if (partnerIdx !== -1) {
-      const partner = prev[partnerIdx];
-      const partnerNext = partner.sets.findIndex(s => !s.completed);
-      if (partnerNext !== -1) {
-        return prev.map((e, i) => {
-          if (i === eIdx) return { ...e, sets: e.sets.map((s, j) => j === sIdx ? { ...s, active: false } : s) };
-          if (i === partnerIdx) return { ...e, sets: e.sets.map((s, j) => j === partnerNext ? { ...s, active: true } : s) };
-          return e;
-        });
-      }
+    const partnerNext = partnerIdx !== -1 ? prev[partnerIdx].sets.findIndex(s => !s.completed) : -1;
+    if (partnerNext !== -1) {
+      return prev.map((e, i) => i === eIdx ? { ...e, sets: e.sets.map((s, j) => j === sIdx ? { ...s, active: false } : s) } : i === partnerIdx ? { ...e, sets: e.sets.map((s, j) => j === partnerNext ? { ...s, active: true } : s) } : e);
     }
   }
   const sameExNext = cur.sets.findIndex((s, k) => k > sIdx && !s.completed);
   if (sameExNext !== -1) {
-    return prev.map((e, i) => i !== eIdx ? e : ({
-      ...e,
-      sets: e.sets.map((s, j) => {
-        if (j === sIdx) return { ...s, active: false };
-        if (j === sameExNext) return { ...s, active: true };
-        return s;
-      }),
-    }));
+    return prev.map((e, i) => i !== eIdx ? e : ({ ...e, sets: e.sets.map((s, j) => j === sIdx ? { ...s, active: false } : j === sameExNext ? { ...s, active: true } : s) }));
   }
   const nextExIdx = prev.findIndex((e, k) => k > eIdx && e.sets.some(s => !s.completed));
   return prev.map((e, i) => {
     if (i === eIdx) return { ...e, sets: e.sets.map((s, j) => j === sIdx ? { ...s, active: false } : s) };
     if (i === nextExIdx) {
       const firstUndone = e.sets.findIndex(s => !s.completed);
-      if (firstUndone === -1) return e;
-      return { ...e, sets: e.sets.map((s, j) => j === firstUndone ? { ...s, active: true } : s) };
+      return firstUndone === -1 ? e : { ...e, sets: e.sets.map((s, j) => j === firstUndone ? { ...s, active: true } : s) };
     }
     return e;
   });
