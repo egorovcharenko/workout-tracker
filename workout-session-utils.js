@@ -48,9 +48,20 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
       const subs = ex.supersetExercises;
       const letter = supersetLetter;
       supersetLetter = String.fromCharCode(supersetLetter.charCodeAt(0) + 1);
+      let hasLastSessionSuperset = false;
+      subs.forEach(sub => {
+        if (Object.keys(lastSessionMap || {}).some(k => {
+          const [exName, kind] = k.split("|");
+          return exName === sub.name && kind === "working";
+        })) {
+          hasLastSessionSuperset = true;
+        }
+      });
+      const supersetSources = hasLastSessionSuperset ? [lastSessionMap] : [lastSessionMap, hintsMap];
+
       let maxLastSets = 0;
       subs.forEach(sub => {
-        [lastSessionMap, hintsMap].forEach(src => {
+        supersetSources.forEach(src => {
           Object.keys(src || {}).forEach(k => {
             const [exName, kind, setNumStr] = k.split("|");
             if (exName === sub.name && kind === "working") {
@@ -65,7 +76,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
       subs.forEach((sub, subIdx) => {
         const sets = [];
         let subWorkingBySetNum = {};
-        [lastSessionMap, hintsMap].forEach(src => {
+        supersetSources.forEach(src => {
           Object.keys(src || {}).forEach(k => {
             const [exName, kind, setNumStr] = k.split("|");
             if (exName === sub.name && kind === "working") {
@@ -119,9 +130,15 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
       const sets = [];
       const isAssist = !!ex.assist;
       const isBandOnly = ex.equipment === "band" && !ex.bandAddon && !isAssist;
+      const hasLastSessionWarmup = Object.keys(lastSessionMap || {}).some(k => {
+        const [exName, kind] = k.split("|");
+        return exName === ex.name && kind === "warmup";
+      });
+      const warmupSources = hasLastSessionWarmup ? [lastSessionMap] : [lastSessionMap, hintsMap];
+
       if (!ex.noWarmup) {
         let warmupLastBySetNum = {};
-        [lastSessionMap, hintsMap].forEach(src => {
+        warmupSources.forEach(src => {
           Object.keys(src || {}).forEach(k => {
             const [exName, kind, setNumStr] = k.split("|");
             if (exName === ex.name && kind === "warmup") warmupLastBySetNum[parseInt(setNumStr)] = src[k];
@@ -150,8 +167,15 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
           }));
         }
       }
+      
+      const hasLastSessionWorking = Object.keys(lastSessionMap || {}).some(k => {
+        const [exName, kind] = k.split("|");
+        return exName === ex.name && kind === "working";
+      });
+      const workingSources = hasLastSessionWorking ? [lastSessionMap] : [lastSessionMap, hintsMap];
+
       let workingLastBySetNum = {};
-      [lastSessionMap, hintsMap].forEach(src => {
+      workingSources.forEach(src => {
         Object.keys(src || {}).forEach(k => {
           const [exName, kind, setNumStr] = k.split("|");
           if (exName === ex.name && kind === "working") workingLastBySetNum[parseInt(setNumStr)] = src[k];
