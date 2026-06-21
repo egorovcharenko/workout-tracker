@@ -26,7 +26,15 @@ function App() { const [workoutId, setWorkoutId] = useState(() => { const fromUr
         setStatHistory(results[4].status === "fulfilled" ? results[4].value || {} : {});
         dataRef.current = { last: last || {}, hints: hints || {} };
         const activeDate = (today && today.date) ? today.date : localDate();
-        setSessionDate(activeDate); const swapMap = loadSwaps(workout.name, activeDate);
+        setSessionDate(activeDate);
+        if (today && today.state_json) {
+          try {
+            window.setSessionStateCache(workout.name, activeDate, JSON.parse(today.state_json));
+          } catch (e) {
+            console.error("[V2] failed to parse state_json:", e);
+          }
+        }
+        const swapMap = loadSwaps(workout.name, activeDate);
         let hasNewSwap = false; if (today && today.sets) { today.sets.forEach(set => { if (set.exercise === "Barbell Back Squat" && !swapMap["0"]) { swapMap["0"] = "Barbell Back Squat";
               hasNewSwap = true; }
             if (set.exercise === "Dips" && !swapMap["5-0"]) { swapMap["5-0"] = "Dips";
@@ -53,7 +61,7 @@ function App() { const [workoutId, setWorkoutId] = useState(() => { const fromUr
   const saveDebounceRef = useRef(null);
   const queueSave = (currentExercises, currentSessionId, currentStartedAt, currentElapsed) => { clearTimeout(saveDebounceRef.current);
     saveDebounceRef.current = setTimeout(() => { const payload = serializeForSave(currentExercises, workout.name, currentSessionId, currentStartedAt, currentElapsed, sessionDate);
-      if (payload.sets.length === 0) return;
+      if (payload.sets.length === 0 && !currentStartedAt && !currentSessionId) return;
       autoSavePayload(payload, (newId) => { if (!currentSessionId && newId) setSessionId(newId); });
     }, 400); };
   const actions = useWorkoutActions({ workout, exercises, setExercises, sessionDate, sessionId, setSessionId, startedAt, elapsed, swaps, setSwaps, dataRef, startTimer, setRest, queueSave });

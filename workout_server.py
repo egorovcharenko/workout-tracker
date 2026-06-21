@@ -147,6 +147,8 @@ def get_db():
                 conn.commit()
             conn.execute("ALTER TABLE sets ADD COLUMN IF NOT EXISTS logged_at TEXT")
             conn.commit()
+            conn.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS state_json TEXT")
+            conn.commit()
             DB_INITIALIZED = True
         return conn
 
@@ -192,6 +194,11 @@ def get_db():
             pass
         try:
             conn.execute("ALTER TABLE sessions ADD COLUMN started_at TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN state_json TEXT")
             conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -363,10 +370,17 @@ def save_session(data):
 
     if session_id:
         # Update existing session (date validated above)
-        c.execute(
-            "UPDATE sessions SET duration_sec = ?, notes = ? WHERE id = ?",
-            (data.get("duration_sec", 0), data.get("notes", ""), session_id),
-        )
+        state_json = data.get("state_json")
+        if state_json is not None:
+            c.execute(
+                "UPDATE sessions SET duration_sec = ?, notes = ?, state_json = ? WHERE id = ?",
+                (data.get("duration_sec", 0), data.get("notes", ""), state_json, session_id),
+            )
+        else:
+            c.execute(
+                "UPDATE sessions SET duration_sec = ?, notes = ? WHERE id = ?",
+                (data.get("duration_sec", 0), data.get("notes", ""), session_id),
+            )
         # Replace all sets
         c.execute("DELETE FROM sets WHERE session_id = ?", (session_id,))
     else:
@@ -376,8 +390,8 @@ def save_session(data):
         # (its own Date.now() at workout start); fall back to server now.
         started_at = data.get("started_at") or datetime.datetime.utcnow().isoformat() + "Z"
         c.execute(
-            "INSERT INTO sessions (workout_name, date, duration_sec, notes, started_at) VALUES (?, ?, ?, ?, ?)",
-            (data["workout"], data["date"], data.get("duration_sec", 0), data.get("notes", ""), started_at),
+            "INSERT INTO sessions (workout_name, date, duration_sec, notes, started_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+            (data["workout"], data["date"], data.get("duration_sec", 0), data.get("notes", ""), started_at, data.get("state_json")),
         )
         session_id = c.lastrowid
 
@@ -600,7 +614,7 @@ def get_active_sessions(today=None):
     conn = get_db()
     c = conn.cursor()
     c.execute(
-        "SELECT id, workout_name, date, duration_sec, started_at FROM sessions WHERE date >= ? ORDER BY id DESC",
+        "SELECT id, workout_name, date, duration_sec, started_at, state_json FROM sessions WHERE date >= ? ORDER BY id DESC",
         (_yesterday(),),
     )
     now = datetime.datetime.utcnow()
@@ -639,6 +653,7 @@ def get_active_sessions(today=None):
                 "date": row["date"] if isinstance(row["date"], str) else str(row["date"]),
                 "duration_sec": max(0, duration),
                 "sets_done": cnt,
+                "state_json": row["state_json"],
             })
     conn.close()
     return sessions
@@ -649,7 +664,7 @@ def get_today_session(workout_name, today=None):
     conn = get_db()
     c = conn.cursor()
     c.execute(
-        "SELECT id, duration_sec, started_at, date FROM sessions WHERE workout_name = ? AND date >= ? ORDER BY id DESC LIMIT 1",
+        "SELECT id, duration_sec, started_at, date, state_json FROM sessions WHERE workout_name = ? AND date >= ? ORDER BY id DESC LIMIT 1",
         (workout_name, _yesterday()),
     )
     row = c.fetchone()
@@ -677,6 +692,7 @@ def get_today_session(workout_name, today=None):
         "duration_sec": row["duration_sec"],
         "started_at": started_at_str,
         "date": row["date"],
+        "state_json": row["state_json"],
         "sets": [],
     }
     c.execute("SELECT exercise, set_type, set_number, weight_lb, reps, bands_json, grip FROM sets WHERE session_id = ? ORDER BY id", (row["id"],))

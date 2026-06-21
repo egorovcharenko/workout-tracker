@@ -68,6 +68,13 @@ async function loadSessionData(workoutName) {
     const todayData = await todayRes.json();
 
     if (todayData && todayData.id) {
+      if (todayData.state_json && window.setSessionStateCache) {
+        try {
+          window.setSessionStateCache(workoutName, todayData.date || localDate(), JSON.parse(todayData.state_json));
+        } catch (e) {
+          console.error("[CLASSIC-UI] failed to parse state_json:", e);
+        }
+      }
       state.sessionId = todayData.id;
       if (todayData.started_at) {
         const startedMs = Date.parse(todayData.started_at);
@@ -226,6 +233,17 @@ async function loadHomeData() {
     state.history = await histRes.json();
     muscleStatus = computeMuscleStatus(state.history);
     state._activeSessions = await activeRes.json();
+    if (state._activeSessions && window.setSessionStateCache) {
+      state._activeSessions.forEach(sess => {
+        if (sess.state_json) {
+          try {
+            window.setSessionStateCache(sess.workout_name, sess.date, JSON.parse(sess.state_json));
+          } catch (e) {
+            console.error("[HOME] failed to parse active session state_json:", e);
+          }
+        }
+      });
+    }
     try { state.measurements = await measRes.json(); }
     catch (e) { state.measurements = []; }
     render();

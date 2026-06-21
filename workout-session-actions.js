@@ -147,6 +147,7 @@ function useWorkoutActions({
   };
 
   const onSkipExercise = (eIdx) => {
+    startTimer();
     const next = exercises.map((e, i) => {
       if (i !== eIdx) return e;
       const skipped = !e.skipped;
@@ -162,6 +163,7 @@ function useWorkoutActions({
   const onDeferExercise = (eIdx) => {
     const target = exercises[eIdx];
     if (!target || target.superset) return;
+    startTimer();
     const moved = { ...target, deferred: true, sets: target.sets.map(s => ({ ...s, active: false })) };
     const next = [...exercises.filter((_, i) => i !== eIdx), moved];
     activateNextSet(next);
@@ -170,6 +172,7 @@ function useWorkoutActions({
   };
 
   const onSwapExercise = (eIdx, newName) => {
+    startTimer();
     const ex = exercises[eIdx];
     const tIdx = ex.templateExIdx;
     const isSub = ex.subIdx != null;
@@ -200,6 +203,7 @@ function useWorkoutActions({
   };
 
   const onAddSet = (eIdx) => {
+    startTimer();
     const targetSuperset = exercises[eIdx]?.superset;
     const subCount = targetSuperset ? exercises.filter(ex => ex.superset === targetSuperset).length : 1;
     const next = exercises.map((e, i) => {
@@ -224,6 +228,7 @@ function useWorkoutActions({
   };
 
   const onRemoveSet = (eIdx) => {
+    startTimer();
     const targetSuperset = exercises[eIdx]?.superset;
     const targets = exercises.filter(e => targetSuperset ? e.superset === targetSuperset : e.id === exercises[eIdx].id);
     const maxWork = Math.max(...targets.map(e => e.sets.filter(s => s.kind === "work").length));
@@ -245,6 +250,7 @@ function useWorkoutActions({
   };
 
   const onRemoveWarmup = (eIdx) => {
+    startTimer();
     const next = exercises.map((e, i) => i !== eIdx ? e : ({ ...e, sets: e.sets.filter(s => s.kind !== "warmup") }));
     updateAndSave(next);
   };
@@ -258,6 +264,7 @@ function useWorkoutActions({
   };
 
   const onAddExercise = (name) => {
+    startTimer();
     const base = {
       name, sets: 3, reps: "8-12", notes: "Added from library.",
       equipment: name.toLowerCase().includes("barbell") ? "barbell" : name.toLowerCase().includes("band") ? "band" : "dumbbell",

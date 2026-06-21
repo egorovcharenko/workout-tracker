@@ -1,33 +1,53 @@
-const SWAP_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-swaps:${workoutName}:${date}`;
-function loadSwaps(workoutName, date) {
-  return {};
-}
-function saveSwaps(workoutName, date, swapMap) {
-  // No-op: Removed reliance on browser cache
+const _sessionStateCache = {}; // Key: "workoutName:date" -> { swaps, skipped, deferred, setsMap }
+
+function setSessionStateCache(workoutName, date, stateObj) {
+  if (!stateObj) return;
+  _sessionStateCache[`${workoutName}:${date}`] = {
+    swaps: stateObj.swaps || {},
+    skipped: stateObj.skipped || [],
+    deferred: stateObj.deferred || [],
+    setsMap: stateObj.setsMap || {},
+  };
 }
 
-const PM_STARTED_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-pm-started:${workoutName}:${date}`;
+function loadSwaps(workoutName, date) {
+  const cached = _sessionStateCache[`${workoutName}:${date}`];
+  return (cached && cached.swaps) || {};
+}
+function saveSwaps(workoutName, date, swapMap) {
+  if (!_sessionStateCache[`${workoutName}:${date}`]) {
+    _sessionStateCache[`${workoutName}:${date}`] = {};
+  }
+  _sessionStateCache[`${workoutName}:${date}`].swaps = swapMap;
+}
+
 function loadPmStarted(workoutName, date) {
   return false;
 }
 function savePmStarted(workoutName, date, started) {
-  // No-op: Removed reliance on browser cache
+  // No-op
 }
 
-const SKIPPED_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-skipped:${workoutName}:${date}`;
 function loadSkippedExercises(workoutName, date) {
-  return new Set();
+  const cached = _sessionStateCache[`${workoutName}:${date}`];
+  return new Set((cached && cached.skipped) || []);
 }
 function saveSkippedExercises(workoutName, date, namesSet) {
-  // No-op: Removed reliance on browser cache
+  if (!_sessionStateCache[`${workoutName}:${date}`]) {
+    _sessionStateCache[`${workoutName}:${date}`] = {};
+  }
+  _sessionStateCache[`${workoutName}:${date}`].skipped = Array.from(namesSet);
 }
 
-const DEFERRED_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-deferred:${workoutName}:${date}`;
 function loadDeferred(workoutName, date) {
-  return [];
+  const cached = _sessionStateCache[`${workoutName}:${date}`];
+  return (cached && cached.deferred) || [];
 }
 function saveDeferred(workoutName, date, names) {
-  // No-op: Removed reliance on browser cache
+  if (!_sessionStateCache[`${workoutName}:${date}`]) {
+    _sessionStateCache[`${workoutName}:${date}`] = {};
+  }
+  _sessionStateCache[`${workoutName}:${date}`].deferred = names;
 }
 function applyDeferredOrder(exercises, deferredNames) {
   if (!deferredNames || !deferredNames.length) return exercises;
@@ -40,20 +60,26 @@ function applyDeferredOrder(exercises, deferredNames) {
   return [...kept, ...moved];
 }
 
-const BODYWEIGHT_LS_KEY = LS_PREFIX + "v2-bodyweight";
 function loadBodyweight() {
   return null;
 }
 function saveBodyweight(w) {
-  // No-op: Removed reliance on browser cache
+  // No-op
 }
 
-const SETS_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-session-sets:${workoutName}:${date}`;
 function loadSessionSets(workoutName, date) {
-  return {};
+  const cached = _sessionStateCache[`${workoutName}:${date}`];
+  return (cached && cached.setsMap) || {};
 }
 function saveSessionSets(workoutName, date, exercises) {
-  // No-op: Removed reliance on browser cache
+  const setsMap = {};
+  exercises.forEach(ex => {
+    setsMap[ex.name] = ex.sets;
+  });
+  if (!_sessionStateCache[`${workoutName}:${date}`]) {
+    _sessionStateCache[`${workoutName}:${date}`] = {};
+  }
+  _sessionStateCache[`${workoutName}:${date}`].setsMap = setsMap;
 }
 
 function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed, activeDate) {
@@ -86,13 +112,28 @@ function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed,
       });
     });
   });
+
+  const date = activeDate || localDate();
+  const cached = _sessionStateCache[`${workoutName}:${date}`] || {};
+  const setsMap = {};
+  exercises.forEach(ex => {
+    setsMap[ex.name] = ex.sets;
+  });
+  const stateObj = {
+    swaps: cached.swaps || {},
+    skipped: cached.skipped || [],
+    deferred: cached.deferred || [],
+    setsMap: setsMap
+  };
+
   return {
     workout: workoutName,
-    date: activeDate || localDate(),
+    date: date,
     duration_sec: elapsed,
     session_id: sessionId || null,
     started_at: startedAt ? new Date(startedAt).toISOString() : null,
     sets,
+    state_json: JSON.stringify(stateObj),
   };
 }
 
@@ -183,6 +224,7 @@ function activateNextSet(exercises) {
 }
 
 if (typeof window !== "undefined") {
+  window.setSessionStateCache = setSessionStateCache;
   window.loadSwaps = loadSwaps;
   window.saveSwaps = saveSwaps;
   window.loadPmStarted = loadPmStarted;
