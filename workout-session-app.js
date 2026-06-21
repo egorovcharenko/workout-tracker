@@ -62,10 +62,17 @@ function App() { const [workoutId, setWorkoutId] = useState(() => { const fromUr
       } catch (e) { console.error("[V2] mount failed:", e);
         setLoaded(true); } })(); return () => { cancelled = true; };
   }, [workout]);
+  const startedAtRef = useRef(startedAt);
+  startedAtRef.current = startedAt;
+  const elapsedRef = useRef(elapsed);
+  elapsedRef.current = elapsed;
   const saveDebounceRef = useRef(null);
   const queueSave = (currentExercises, currentSessionId, currentStartedAt, currentElapsed) => { clearTimeout(saveDebounceRef.current);
-    saveDebounceRef.current = setTimeout(() => { const payload = serializeForSave(currentExercises, workout.name, currentSessionId, currentStartedAt, currentElapsed, sessionDate);
-      if (payload.sets.length === 0 && !currentStartedAt && !currentSessionId) return;
+    saveDebounceRef.current = setTimeout(() => {
+      const latestStartedAt = startedAtRef.current;
+      const latestElapsed = elapsedRef.current;
+      const payload = serializeForSave(currentExercises, workout.name, currentSessionId, latestStartedAt, latestElapsed, sessionDate);
+      if (payload.sets.length === 0 && !latestStartedAt && !currentSessionId) return;
       autoSavePayload(payload, (newId) => { if (!currentSessionId && newId) setSessionId(newId); });
     }, 400); };
   const actions = useWorkoutActions({ workout, exercises, setExercises, sessionDate, sessionId, setSessionId, startedAt, elapsed, swaps, setSwaps, dataRef, startTimer, setRest, queueSave });

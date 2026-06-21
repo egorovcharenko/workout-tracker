@@ -100,7 +100,9 @@ function useWorkoutTimers(workoutId, exercises) {
   const startTimer = () => {
     lastInteractionRef.current = Date.now();
     if (!running) setRunning(true);
-    if (!startedAt) setStartedAt(Date.now());
+    if (!startedAt) {
+      setStartedAt(Date.now() - (elapsed || 0) * 1000);
+    }
   };
 
   const restAdd = (sec) => setRest(r => {
