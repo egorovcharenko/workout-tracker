@@ -53,7 +53,7 @@ let state = {
   saved: false,
   sessionId: null,
   lastSaved: null,
-  bodyweight: parseInt(localStorage.getItem('bodyweight')) || 175,
+  bodyweight: 175,
   grip: {},
   exerciseNotes: {},
   editingNote: null,

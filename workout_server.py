@@ -38,9 +38,16 @@ class _PGCursor:
         self.lastrowid = None
 
     def execute(self, sql, params=()):
+        import re
         sql = sql.replace("?", "%s")
         stripped = sql.lstrip().upper()
-        add_returning = stripped.startswith("INSERT") and " RETURNING " not in stripped.upper()
+        add_returning = stripped.startswith("INSERT") and " RETURNING " not in stripped
+        if add_returning:
+            m = re.search(r'INSERT\s+INTO\s+(\w+)', stripped)
+            if m:
+                tbl = m.group(1).strip('"`\'')
+                if tbl in ('SETTINGS', 'EXERCISE_NOTES'):
+                    add_returning = False
         if add_returning:
             sql = sql.rstrip().rstrip(";") + " RETURNING id"
         self._cur.execute(sql, tuple(params) if params else None)

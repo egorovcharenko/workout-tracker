@@ -71,6 +71,9 @@ async function loadSessionData(workoutName) {
     const todayData = await todayRes.json();
     try {
       window.USER_SETTINGS = await settingsRes.json();
+      if (window.USER_SETTINGS && window.USER_SETTINGS.bodyweight) {
+        state.bodyweight = parseInt(window.USER_SETTINGS.bodyweight) || 175;
+      }
     } catch (_) {}
 
     if (todayData && todayData.id) {
@@ -240,6 +243,9 @@ async function loadHomeData() {
     state.history = await histRes.json();
     try {
       window.USER_SETTINGS = await settingsRes.json();
+      if (window.USER_SETTINGS && window.USER_SETTINGS.bodyweight) {
+        state.bodyweight = parseInt(window.USER_SETTINGS.bodyweight) || 175;
+      }
     } catch (_) {}
     muscleStatus = computeMuscleStatus(state.history);
     state._activeSessions = await activeRes.json();

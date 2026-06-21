@@ -85,7 +85,15 @@ function setBodyweight(v) {
   const n = parseInt(v);
   if (!isFinite(n) || n <= 0 || n > 600) return;
   state.bodyweight = n;
-  localStorage.setItem('bodyweight', String(n));
+  if (typeof window !== "undefined") {
+    if (!window.USER_SETTINGS) window.USER_SETTINGS = {};
+    window.USER_SETTINGS.bodyweight = String(n);
+  }
+  fetch("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bodyweight: String(n) })
+  }).catch(e => console.error("[SETTINGS] failed to save bodyweight:", e));
   // Re-derive effective weight for any not-yet-completed assist sets so the
   // displayed/saved value stays in sync with the new bodyweight.
   if (state.workout) {
