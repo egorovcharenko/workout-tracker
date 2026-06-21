@@ -22,6 +22,7 @@ const api = {
   hints: () => fetchTRetry("/api/exercise-hints", 8000),
   history: (limit = 20) => fetchTRetry(`/api/history?limit=${limit}`, 10000),
   history1RM: () => fetchTRetry("/api/1rm-history", 10000),
+  settings: () => fetchTRetry("/api/settings", 6000),
   save: (body) => fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
   motivate: (body) => fetch("/api/motivate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
   motivations: (sid) => fetchT(`/api/motivations?session_id=${sid}`),

@@ -64,8 +64,14 @@ function triggerSave() {
 
 async function loadSessionData(workoutName) {
   try {
-    const todayRes = await fetch(`/api/today-session?workout=${encodeURIComponent(workoutName)}`);
+    const [todayRes, settingsRes] = await Promise.all([
+      fetch(`/api/today-session?workout=${encodeURIComponent(workoutName)}`),
+      fetch("/api/settings")
+    ]);
     const todayData = await todayRes.json();
+    try {
+      window.USER_SETTINGS = await settingsRes.json();
+    } catch (_) {}
 
     if (todayData && todayData.id) {
       if (todayData.state_json && window.setSessionStateCache) {
@@ -225,12 +231,16 @@ async function loadHistory() {
 
 async function loadHomeData() {
   try {
-    const [histRes, activeRes, measRes] = await Promise.all([
+    const [histRes, activeRes, measRes, settingsRes] = await Promise.all([
       fetch("/api/history?limit=100"),
       fetch("/api/active-sessions"),
       fetch("/api/measurements"),
+      fetch("/api/settings")
     ]);
     state.history = await histRes.json();
+    try {
+      window.USER_SETTINGS = await settingsRes.json();
+    } catch (_) {}
     muscleStatus = computeMuscleStatus(state.history);
     state._activeSessions = await activeRes.json();
     if (state._activeSessions && window.setSessionStateCache) {

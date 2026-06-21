@@ -61,10 +61,18 @@ function applyDeferredOrder(exercises, deferredNames) {
 }
 
 function loadBodyweight() {
-  return null;
+  return (typeof window !== "undefined" && window.USER_SETTINGS && window.USER_SETTINGS.bodyweight) || null;
 }
 function saveBodyweight(w) {
-  // No-op
+  if (typeof window !== "undefined") {
+    if (!window.USER_SETTINGS) window.USER_SETTINGS = {};
+    window.USER_SETTINGS.bodyweight = w;
+    fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bodyweight: w })
+    }).catch(e => console.error("[SETTINGS] failed to auto-save bodyweight:", e));
+  }
 }
 
 function loadSessionSets(workoutName, date) {

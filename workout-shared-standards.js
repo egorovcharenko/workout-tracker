@@ -111,30 +111,90 @@ function calcSet1RM(exerciseName, weight, reps, bandsJson) {
   }
 }
 
+if (typeof window !== "undefined") {
+  window.USER_SETTINGS = { gender: "male", birth_date: "1983-11-08", bodyweight: 175 };
+}
+
+function getMcCullochCoefficient(age) {
+  if (age <= 40) return 1.0;
+  const table = [
+    { age: 40, coeff: 1.0 },
+    { age: 45, coeff: 1.06 },
+    { age: 50, coeff: 1.15 },
+    { age: 55, coeff: 1.25 },
+    { age: 60, coeff: 1.38 },
+    { age: 65, coeff: 1.53 },
+    { age: 70, coeff: 1.70 },
+    { age: 75, coeff: 1.87 },
+    { age: 80, coeff: 2.06 },
+    { age: 90, coeff: 2.50 }
+  ];
+  if (age >= 90) return 2.50;
+  for (let i = 0; i < table.length - 1; i++) {
+    const p1 = table[i];
+    const p2 = table[i+1];
+    if (age >= p1.age && age <= p2.age) {
+      const t = (age - p1.age) / (p2.age - p1.age);
+      return p1.coeff + t * (p2.coeff - p1.coeff);
+    }
+  }
+  return 1.0;
+}
+
 function getStrengthPercentile(exerciseName, weight1RM) {
   const stds = STRENGTH_STANDARDS[exerciseName];
   if (!stds) return null;
   const w = weight1RM || 0;
-  
-  if (w < stds.beg) {
-    const minW = stds.beg < 0 ? stds.beg * 2 : 0;
+
+  const settings = (typeof window !== "undefined" && window.USER_SETTINGS) || { gender: "male", birth_date: "1983-11-08", bodyweight: 175 };
+  const gender = settings.gender || "male";
+  const birthDate = settings.birth_date || "1983-11-08";
+  const bodyweight = parseFloat(settings.bodyweight) || 175;
+
+  const birth = new Date(birthDate);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  const ageCoeff = getMcCullochCoefficient(age);
+  const bwCoeff = Math.pow(bodyweight / 180, 0.9);
+
+  let genderCoeff = 1.0;
+  if (gender === "female") {
+    const lowerExercises = ["Barbell Back Squat", "Barbell RDL", "Bulgarian Split Squat", "Goblet Squat", "Band Squat", "Band Romanian Deadlift", "Lunges", "Calf Raises"];
+    const isLower = lowerExercises.some(ex => exerciseName.toLowerCase().includes(ex.toLowerCase()));
+    genderCoeff = isLower ? 0.75 : 0.65;
+  }
+
+  const scale = (val) => val * genderCoeff * bwCoeff / ageCoeff;
+
+  const beg = scale(stds.beg);
+  const nov = scale(stds.nov);
+  const int = scale(stds.int);
+  const adv = scale(stds.adv);
+  const elite = scale(stds.elite);
+
+  if (w < beg) {
+    const minW = beg < 0 ? beg * 2 : 0;
     if (w <= minW) return { percentile: 0, tier: "Untrained" };
-    const p = 0 + ((w - minW) / (stds.beg - minW)) * 5;
+    const p = 0 + ((w - minW) / (beg - minW)) * 5;
     return { percentile: Math.round(p), tier: "Untrained" };
-  } else if (w < stds.nov) {
-    const p = 5 + ((w - stds.beg) / (stds.nov - stds.beg)) * 15;
+  } else if (w < nov) {
+    const p = 5 + ((w - beg) / (nov - beg)) * 15;
     return { percentile: Math.round(p), tier: "Beginner" };
-  } else if (w < stds.int) {
-    const p = 20 + ((w - stds.nov) / (stds.int - stds.nov)) * 30;
+  } else if (w < int) {
+    const p = 20 + ((w - nov) / (int - nov)) * 30;
     return { percentile: Math.round(p), tier: "Novice" };
-  } else if (w < stds.adv) {
-    const p = 50 + ((w - stds.int) / (stds.adv - stds.int)) * 30;
+  } else if (w < adv) {
+    const p = 50 + ((w - int) / (adv - int)) * 30;
     return { percentile: Math.round(p), tier: "Intermediate" };
-  } else if (w < stds.elite) {
-    const p = 80 + ((w - stds.adv) / (stds.elite - stds.adv)) * 15;
+  } else if (w < elite) {
+    const p = 80 + ((w - adv) / (elite - adv)) * 15;
     return { percentile: Math.round(p), tier: "Advanced" };
   } else {
-    const p = 95 + Math.min(4, ((w - stds.elite) / (stds.elite || 1)) * 5);
+    const p = 95 + Math.min(4, ((w - elite) / (elite || 1)) * 5);
     return { percentile: Math.round(p), tier: "Elite" };
   }
 }

@@ -17,13 +17,17 @@ function App() { const [workoutId, setWorkoutId] = useState(() => { const fromUr
   const dataRef = useRef({ last: {}, hints: {} });
   useEffect(() => { let cancelled = false;
     setLoaded(false); setExercises([]); setSessionId(null); setMotivations({}); setHistory([]); setStatHistory([]); setSwaps({});
-    (async () => { try { const results = await Promise.allSettled([ api.lastSession(workout.name), api.todaySession(workout.name), api.hints(), api.history(100), api.history1RM(), ]);
+    (async () => { try { const results = await Promise.allSettled([ api.lastSession(workout.name), api.todaySession(workout.name), api.hints(), api.history(100), api.history1RM(), api.settings() ]);
         if (cancelled) return;
         const last = results[0].status === "fulfilled" ? results[0].value : {};
         const today = results[1].status === "fulfilled" ? results[1].value : null;
         const hints = results[2].status === "fulfilled" ? results[2].value : {};
         setHistory(results[3].status === "fulfilled" ? results[3].value || [] : []);
         setStatHistory(results[4].status === "fulfilled" ? results[4].value || {} : {});
+        const settings = results[5].status === "fulfilled" ? results[5].value : null;
+        if (settings) {
+          window.USER_SETTINGS = settings;
+        }
         dataRef.current = { last: last || {}, hints: hints || {} };
         const activeDate = (today && today.date) ? today.date : localDate();
         setSessionDate(activeDate);

@@ -149,6 +149,12 @@ def get_db():
             conn.commit()
             conn.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS state_json TEXT")
             conn.commit()
+            conn.execute('''CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )''')
+            conn.commit()
+            seed_default_settings(conn)
             DB_INITIALIZED = True
         return conn
 
@@ -231,9 +237,54 @@ def get_db():
             body TEXT NOT NULL,
             updated_at TEXT DEFAULT (datetime('now'))
         )''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )''')
         conn.commit()
+        seed_default_settings(conn)
         DB_INITIALIZED = True
     return conn
+
+
+def seed_default_settings(conn):
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) as cnt FROM settings")
+    row = c.fetchone()
+    count = row["cnt"] if isinstance(row, dict) else (row[0] if isinstance(row, tuple) else row["cnt"])
+    if count == 0:
+        defaults = [
+            ("gender", "male"),
+            ("birth_date", "1983-11-08"),
+            ("bodyweight", "175")
+        ]
+        for key, val in defaults:
+            c.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (key, val))
+        conn.commit()
+
+
+def get_settings():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT key, value FROM settings")
+    res = {}
+    for row in c.fetchall():
+        res[row["key"]] = row["value"]
+    conn.close()
+    return res
+
+
+def save_settings(data):
+    conn = get_db()
+    c = conn.cursor()
+    for k, v in data.items():
+        c.execute("SELECT 1 FROM settings WHERE key = ?", (k,))
+        if c.fetchone():
+            c.execute("UPDATE settings SET value = ? WHERE key = ?", (str(v), k))
+        else:
+            c.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (k, str(v)))
+    conn.commit()
+    conn.close()
 
 
 def list_exercise_notes():
@@ -844,6 +895,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(json.dumps(data, default=str).encode())
+        elif parsed.path == "/api/settings":
+            data = get_settings()
+            print(f"  [SETTINGS] Returning settings: {data}")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(data, default=str).encode())
         elif parsed.path.endswith(".js"):
             filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), parsed.path.lstrip("/"))
             if os.path.exists(filepath):
@@ -964,6 +1023,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     body.get("set_number", 0), body.get("weight_lb"), body.get("bands_json"),
                 )
                 print(f"  [UPDATE-SET] s{body['session_id']} {body['exercise']} {body['set_type']}#{body.get('set_number',0)} → {body.get('weight_lb')}lb {body.get('bands_json')}")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True}).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+            return
+        if self.path == "/api/settings":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body = json.loads(self.rfile.read(length))
+                save_settings(body)
+                print(f"  [SETTINGS] Saved settings: {body}")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
