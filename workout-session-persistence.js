@@ -1,65 +1,33 @@
 const SWAP_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-swaps:${workoutName}:${date}`;
 function loadSwaps(workoutName, date) {
-  try {
-    const raw = localStorage.getItem(SWAP_LS_KEY(workoutName, date));
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
+  return {};
 }
 function saveSwaps(workoutName, date, swapMap) {
-  try {
-    if (swapMap && Object.keys(swapMap).length) {
-      localStorage.setItem(SWAP_LS_KEY(workoutName, date), JSON.stringify(swapMap));
-    } else {
-      localStorage.removeItem(SWAP_LS_KEY(workoutName, date));
-    }
-  } catch (e) {
-    console.warn("[V2-SWAP] localStorage save failed:", e);
-  }
+  // No-op: Removed reliance on browser cache
 }
 
 const PM_STARTED_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-pm-started:${workoutName}:${date}`;
 function loadPmStarted(workoutName, date) {
-  try { return localStorage.getItem(PM_STARTED_LS_KEY(workoutName, date)) === "1"; }
-  catch { return false; }
+  return false;
 }
 function savePmStarted(workoutName, date, started) {
-  try {
-    if (started) localStorage.setItem(PM_STARTED_LS_KEY(workoutName, date), "1");
-    else localStorage.removeItem(PM_STARTED_LS_KEY(workoutName, date));
-  } catch (e) {
-    console.warn("[V2-PM] localStorage save failed:", e);
-  }
+  // No-op: Removed reliance on browser cache
 }
 
 const SKIPPED_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-skipped:${workoutName}:${date}`;
 function loadSkippedExercises(workoutName, date) {
-  try {
-    const raw = localStorage.getItem(SKIPPED_LS_KEY(workoutName, date));
-    return new Set(raw ? JSON.parse(raw) : []);
-  } catch { return new Set(); }
+  return new Set();
 }
 function saveSkippedExercises(workoutName, date, namesSet) {
-  try {
-    localStorage.setItem(SKIPPED_LS_KEY(workoutName, date), JSON.stringify([...namesSet]));
-  } catch (e) {
-    console.warn("[V2-SKIPPED] localStorage save failed:", e);
-  }
+  // No-op: Removed reliance on browser cache
 }
 
 const DEFERRED_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-deferred:${workoutName}:${date}`;
 function loadDeferred(workoutName, date) {
-  try {
-    const raw = localStorage.getItem(DEFERRED_LS_KEY(workoutName, date));
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  return [];
 }
 function saveDeferred(workoutName, date, names) {
-  try {
-    if (names && names.length) localStorage.setItem(DEFERRED_LS_KEY(workoutName, date), JSON.stringify(names));
-    else localStorage.removeItem(DEFERRED_LS_KEY(workoutName, date));
-  } catch (e) {
-    console.warn("[V2-DEFERRED] localStorage save failed:", e);
-  }
+  // No-op: Removed reliance on browser cache
 }
 function applyDeferredOrder(exercises, deferredNames) {
   if (!deferredNames || !deferredNames.length) return exercises;
@@ -74,36 +42,18 @@ function applyDeferredOrder(exercises, deferredNames) {
 
 const BODYWEIGHT_LS_KEY = LS_PREFIX + "v2-bodyweight";
 function loadBodyweight() {
-  try {
-    const v = parseFloat(localStorage.getItem(BODYWEIGHT_LS_KEY));
-    return isFinite(v) && v > 0 ? v : null;
-  } catch { return null; }
+  return null;
 }
 function saveBodyweight(w) {
-  try {
-    if (isFinite(w) && w > 0) localStorage.setItem(BODYWEIGHT_LS_KEY, String(w));
-  } catch (e) {
-    console.warn("[V2-BODYWEIGHT] localStorage save failed:", e);
-  }
+  // No-op: Removed reliance on browser cache
 }
 
 const SETS_LS_KEY = (workoutName, date) => `${LS_PREFIX}v2-session-sets:${workoutName}:${date}`;
 function loadSessionSets(workoutName, date) {
-  try {
-    const raw = localStorage.getItem(SETS_LS_KEY(workoutName, date));
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
+  return {};
 }
 function saveSessionSets(workoutName, date, exercises) {
-  try {
-    const map = {};
-    exercises.forEach(ex => {
-      map[ex.name] = ex.sets;
-    });
-    localStorage.setItem(SETS_LS_KEY(workoutName, date), JSON.stringify(map));
-  } catch (e) {
-    console.warn("[V2-SESSION-SETS] localStorage save failed:", e);
-  }
+  // No-op: Removed reliance on browser cache
 }
 
 function serializeForSave(exercises, workoutName, sessionId, startedAt, elapsed, activeDate) {
