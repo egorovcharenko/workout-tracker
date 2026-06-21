@@ -32,7 +32,6 @@ const WORKOUTS = [
       { name: "Barbell Bench Press", sets: 4, warmups: 3, reps: "1x4-5, 3x8", notes: "Top set: 1x4-5 @ ~1 RIR. Back-off: 3x8 @ 1-2 RIR. Safeties just below chest.", equipment: "barbell", rest: 150, defaultWarmup: [45, 95, 115], defaultWarmupReps: [10, 5, 3], defaultWork: [140, 125, 125, 125], defaultWorkReps: [5, 8, 8, 8] },
       { name: "Assisted Pull-Ups", sets: 3, reps: "1-12", notes: "1. Fresh attempt (1 unassisted). 2. Set 1–2: assisted. 3. Set 3: negatives (3-5s lowering). Top set hits 12 -> REDUCE assistance.", equipment: "band", assist: true, grips: ['pullup', 'neutral', 'chinup'], rest: 150, noWarmup: true },
       { name: "Standing Overhead Press", sets: 3, warmups: 1, reps: "6-10", notes: "Front delt. Brace hard.", equipment: "barbell", rest: 120 },
-      { name: "Bulgarian Split Squat", sets: 2, reps: "10-15", notes: "Optional more quad/glute volume.", equipment: "dumbbell", bandAddon: true, rest: 90, optional: true },
     ],
   },
   {
