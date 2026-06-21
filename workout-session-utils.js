@@ -147,9 +147,7 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
         const maxWarmupLast = Math.max(0, ...Object.keys(warmupLastBySetNum).map(Number).map(n => n + 1));
         const warmupCount = Math.max(1, ex.warmups || 1, maxWarmupLast);
         const fallbackForWarmup = (want) => {
-          if (warmupLastBySetNum[want] != null) return warmupLastBySetNum[want];
-          const nums = Object.keys(warmupLastBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
-          return nums.length ? warmupLastBySetNum[nums[0]] : null;
+          return warmupLastBySetNum[want] || null;
         };
         const exGripFallback = lookupExerciseGrip(ex.name);
         for (let wi = 0; wi < warmupCount; wi++) {
