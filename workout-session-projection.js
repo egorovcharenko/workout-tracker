@@ -49,7 +49,7 @@ function PercentileProjectionSparkline({ exerciseName, ormHistory, color, label,
 
   const historyPoints = filteredHistory.map(h => {
     const ms = Date.parse(h.date + 'T00:00:00Z');
-    const pctInfo = getStrengthPercentile(exerciseName, h.orm) || { percentile: 0, tier: "Untrained" };
+    const pctInfo = getStrengthPercentile(exerciseName, h.orm, h.date) || { percentile: 0, tier: "Untrained" };
     return {
       ms,
       date: h.date,
@@ -64,7 +64,8 @@ function PercentileProjectionSparkline({ exerciseName, ormHistory, color, label,
   for (let i = 0; i <= 30; i++) {
     const ms = todayMs + i * 86400000;
     const projectedOrm = last + slope * i;
-    const pctInfo = getStrengthPercentile(exerciseName, projectedOrm) || { percentile: 0, tier: "Untrained" };
+    const dateStr = new Date(ms).toISOString().slice(0, 10);
+    const pctInfo = getStrengthPercentile(exerciseName, projectedOrm, dateStr) || { percentile: 0, tier: "Untrained" };
     projectionPoints.push({
       ms,
       date: new Date(ms).toISOString().slice(0, 10),

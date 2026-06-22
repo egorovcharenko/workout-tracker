@@ -41,45 +41,45 @@ const EXERCISE_MUSCLES = {
 };
 
 const STRENGTH_STANDARDS = {
-  "Barbell RDL": { beg: 135, nov: 185, int: 275, adv: 365, elite: 465 },
-  "Dumbbell Lateral Raises": { beg: 10, nov: 15, int: 25, adv: 35, elite: 45 },
-  "Incline DB Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
-  "Dumbbell Flat Bench Press": { beg: 25, nov: 45, int: 70, adv: 95, elite: 120 },
-  "Barbell Bench Press": { beg: 95, nov: 135, int: 185, adv: 225, elite: 315 },
-  "Single-Arm Dumbbell Rows": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
-  "Dumbbell Bent-Over Rows": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
-  "Overhead Dumbbell Press": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
-  "Seated Overhead Press": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
-  "Goblet Squat": { beg: 35, nov: 60, int: 95, adv: 135, elite: 180 },
-  "Bulgarian Split Squat": { beg: 20, nov: 40, int: 65, adv: 95, elite: 125 },
-  "Dumbbell Romanian Deadlift": { beg: 30, nov: 55, int: 85, adv: 120, elite: 155 },
-  "Single-Leg DB RDL": { beg: 20, nov: 35, int: 55, adv: 80, elite: 110 },
-  "Dumbbell Bicep Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
-  "Dumbbell Hammer Curls": { beg: 12, nov: 22, int: 35, adv: 50, elite: 70 },
-  "Dips": { beg: -17, nov: 38, int: 106, adv: 183, elite: 267 },
-  "Assisted Pull-Ups": { beg: -28, nov: 18, int: 75, adv: 138, elite: 206 },
-  "Band Row": { beg: 20, nov: 35, int: 55, adv: 75, elite: 95 },
-  "Band Squat": { beg: 25, nov: 45, int: 75, adv: 105, elite: 135 },
-  "Band Romanian Deadlift": { beg: 25, nov: 45, int: 70, adv: 100, elite: 130 },
-  "Band Bicep Curls": { beg: 8, nov: 15, int: 25, adv: 38, elite: 52 },
-  "Band Tricep Pushdowns": { beg: 10, nov: 20, int: 35, adv: 52, elite: 70 },
-  "Pallof Press": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 },
-  "Barbell Back Squat": { beg: 95, nov: 135, int: 205, adv: 285, elite: 365 },
-  "Bent-Over Barbell Rows": { beg: 85, nov: 125, int: 175, adv: 215, elite: 295 },
-  "Bended Barbell Rows": { beg: 85, nov: 125, int: 175, adv: 215, elite: 295 },
-  "Incline Dumbbell Press": { beg: 25, nov: 40, int: 65, adv: 90, elite: 115 },
-  "Incline Barbell Press": { beg: 80, nov: 115, int: 155, adv: 190, elite: 265 },
-  "Standing Overhead Press": { beg: 65, nov: 95, int: 135, adv: 175, elite: 225 },
-  "Face Pulls": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 },
-  "Reverse Flyes": { beg: 10, nov: 20, int: 30, adv: 45, elite: 60 },
-  "Overhead Tricep Extension": { beg: 15, nov: 25, int: 45, adv: 65, elite: 85 },
-  "Lunges": { beg: 25, nov: 45, int: 70, adv: 100, elite: 130 },
-  "Calf Raises": { beg: 20, nov: 45, int: 75, adv: 110, elite: 150 },
-  "Band Torso Rotation": { beg: 10, nov: 20, int: 35, adv: 50, elite: 70 },
-  "Hanging Knee Raise": { beg: 15, nov: 35, int: 60, adv: 85, elite: 110 },
-  "Dumbbell Shrugs": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
-  "Barbell Shrugs": { beg: 135, nov: 185, int: 275, adv: 365, elite: 465 },
-  "Dead Hang + Scap Pulls": { beg: -20, nov: 15, int: 50, adv: 85, elite: 120 }
+  "Barbell RDL": { beg: 135, nov: 205, int: 265, adv: 340, elite: 420 },
+  "Dumbbell Lateral Raises": { beg: 10, nov: 18, int: 26, adv: 36, elite: 47 },
+  "Incline DB Curls": { beg: 15, nov: 26, int: 36, adv: 49, elite: 64 },
+  "Dumbbell Flat Bench Press": { beg: 32, nov: 55, int: 73, adv: 96, elite: 121 },
+  "Barbell Bench Press": { beg: 99, nov: 167, int: 221, adv: 290, elite: 367 },
+  "Single-Arm Dumbbell Rows": { beg: 36, nov: 60, int: 81, adv: 106, elite: 133 },
+  "Dumbbell Bent-Over Rows": { beg: 36, nov: 60, int: 81, adv: 106, elite: 133 },
+  "Overhead Dumbbell Press": { beg: 23, nov: 39, int: 54, adv: 71, elite: 90 },
+  "Seated Overhead Press": { beg: 23, nov: 39, int: 54, adv: 71, elite: 90 },
+  "Goblet Squat": { beg: 45, nov: 75, int: 100, adv: 130, elite: 165 },
+  "Bulgarian Split Squat": { beg: 25, nov: 45, int: 65, adv: 90, elite: 115 },
+  "Dumbbell Romanian Deadlift": { beg: 35, nov: 60, int: 80, adv: 105, elite: 130 },
+  "Single-Leg DB RDL": { beg: 20, nov: 35, int: 50, adv: 70, elite: 90 },
+  "Dumbbell Bicep Curls": { beg: 15, nov: 26, int: 36, adv: 49, elite: 64 },
+  "Dumbbell Hammer Curls": { beg: 15, nov: 26, int: 36, adv: 49, elite: 64 },
+  "Dips": { beg: -31, nov: 29, int: 79, adv: 137, elite: 199 },
+  "Assisted Pull-Ups": { beg: -49, nov: 5, int: 50, adv: 101, elite: 153 },
+  "Band Row": { beg: 25, nov: 45, int: 65, adv: 90, elite: 115 },
+  "Band Squat": { beg: 30, nov: 55, int: 80, adv: 110, elite: 140 },
+  "Band Romanian Deadlift": { beg: 30, nov: 55, int: 75, adv: 105, elite: 135 },
+  "Band Bicep Curls": { beg: 10, nov: 18, int: 28, adv: 40, elite: 52 },
+  "Band Tricep Pushdowns": { beg: 12, nov: 22, int: 36, adv: 52, elite: 70 },
+  "Pallof Press": { beg: 15, nov: 28, int: 42, adv: 58, elite: 76 },
+  "Barbell Back Squat": { beg: 133, nov: 211, int: 273, adv: 352, elite: 438 },
+  "Bent-Over Barbell Rows": { beg: 91, nov: 152, int: 199, adv: 259, elite: 325 },
+  "Bended Barbell Rows": { beg: 91, nov: 152, int: 199, adv: 259, elite: 325 },
+  "Incline Dumbbell Press": { beg: 28, nov: 48, int: 65, adv: 86, elite: 108 },
+  "Incline Barbell Press": { beg: 83, nov: 145, int: 193, adv: 254, elite: 322 },
+  "Standing Overhead Press": { beg: 69, nov: 111, int: 145, adv: 185, elite: 229 },
+  "Face Pulls": { beg: 15, nov: 28, int: 42, adv: 58, elite: 76 },
+  "Reverse Flyes": { beg: 10, nov: 18, int: 26, adv: 36, elite: 47 },
+  "Overhead Tricep Extension": { beg: 18, nov: 32, int: 48, adv: 66, elite: 86 },
+  "Lunges": { beg: 30, nov: 50, int: 75, adv: 105, elite: 135 },
+  "Calf Raises": { beg: 25, nov: 50, int: 80, adv: 115, elite: 155 },
+  "Band Torso Rotation": { beg: 15, nov: 28, int: 42, adv: 58, elite: 76 },
+  "Hanging Knee Raise": { beg: 20, nov: 40, int: 65, adv: 90, elite: 115 },
+  "Dumbbell Shrugs": { beg: 36, nov: 60, int: 81, adv: 106, elite: 133 },
+  "Barbell Shrugs": { beg: 135, nov: 205, int: 265, adv: 340, elite: 420 },
+  "Dead Hang + Scap Pulls": { beg: -35, nov: 10, int: 40, adv: 75, elite: 110 }
 };
 
 function getMuscleImpact(exName, muscle, isPrimary) {
@@ -141,7 +141,29 @@ function getMcCullochCoefficient(age) {
   return 1.0;
 }
 
-function getStrengthPercentile(exerciseName, weight1RM) {
+function getBodyweightOn(dateStr) {
+  const measurements = (typeof window !== "undefined" && window.state && window.state.measurements) 
+    || (typeof state !== "undefined" && state.measurements) 
+    || [];
+    
+  const sorted = [...measurements]
+    .filter(m => m.weight_kg != null)
+    .sort((a, b) => (b.taken_at || b.date || '').localeCompare(a.taken_at || a.date || ''));
+
+  if (sorted.length > 0) {
+    const target = dateStr ? dateStr.slice(0, 10) : new Date().toISOString().slice(0, 10);
+    const match = sorted.find(m => (m.date || m.taken_at || '').slice(0, 10) <= target);
+    if (match) {
+      return match.weight_kg * 2.20462; // Convert kg to lb
+    }
+    return sorted[sorted.length - 1].weight_kg * 2.20462;
+  }
+
+  const settings = (typeof window !== "undefined" && window.USER_SETTINGS) || {};
+  return parseFloat(settings.bodyweight) || 175;
+}
+
+function getStrengthPercentile(exerciseName, weight1RM, dateStr) {
   const stds = STRENGTH_STANDARDS[exerciseName];
   if (!stds) return null;
   const w = weight1RM || 0;
@@ -149,13 +171,13 @@ function getStrengthPercentile(exerciseName, weight1RM) {
   const settings = (typeof window !== "undefined" && window.USER_SETTINGS) || { gender: "male", birth_date: "1983-11-08", bodyweight: 175 };
   const gender = settings.gender || "male";
   const birthDate = settings.birth_date || "1983-11-08";
-  const bodyweight = parseFloat(settings.bodyweight) || 175;
+  const bodyweight = getBodyweightOn(dateStr);
 
   const birth = new Date(birthDate);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+  const targetDate = dateStr ? new Date(dateStr) : new Date();
+  let age = targetDate.getFullYear() - birth.getFullYear();
+  const m = targetDate.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && targetDate.getDate() < birth.getDate())) {
     age--;
   }
   const ageCoeff = getMcCullochCoefficient(age);
