@@ -21,7 +21,10 @@ function Sparkline({ exerciseName, data, valueKey, color, label, fmt, showTip, h
     if (day) day.value = +d[valueKey] || 0;
   });
 
-  const historicalVals = days.filter(d => d.value != null && d.value > 0).map(d => d.value);
+  const isAssist = exerciseName === "Assisted Pull-Ups" || exerciseName === "Dips" || exerciseName === "Dead Hang + Scap Pulls" || exerciseName === "Hanging Knee Raise";
+  const isValidVal = (v) => v != null && (isAssist ? v > -1000 : v > 0);
+
+  const historicalVals = days.filter(d => isValidVal(d.value)).map(d => d.value);
   if (historicalVals.length === 0) {
     return (
       <div style={{ marginBottom: 14 }}>
@@ -39,8 +42,10 @@ function Sparkline({ exerciseName, data, valueKey, color, label, fmt, showTip, h
   }
 
   const first = historicalVals[0], last = historicalVals[historicalVals.length - 1];
+  const lastDay = [...days].reverse().find(d => isValidVal(d.value));
+  const lastDate = lastDay ? lastDay.date : null;
 
-  const presentVals = days.filter(d => d.value != null && d.value > 0).map(d => d.value);
+  const presentVals = days.filter(d => isValidVal(d.value)).map(d => d.value);
   let min = Math.min(...presentVals);
   let max = Math.max(...presentVals);
 
@@ -56,7 +61,7 @@ function Sparkline({ exerciseName, data, valueKey, color, label, fmt, showTip, h
   const dayX = (i) => padX + (i * (w - 2 * padX)) / totalSlots;
   const yFor = (v) => h - padY - ((v - min) / range) * (h - 2 * padY);
 
-  const pts = days.map((d, i) => d.value != null && d.value > 0 ? {
+  const pts = days.map((d, i) => isValidVal(d.value) ? {
     x: dayX(i), y: yFor(d.value), value: d.value, isToday: d.isToday, isFuture: d.isFuture, date: d.date,
   } : null);
   const presentPts = pts.filter(Boolean);
@@ -71,7 +76,7 @@ function Sparkline({ exerciseName, data, valueKey, color, label, fmt, showTip, h
   const delta = first ? Math.round(((last - first) / first) * 100) : 0;
   const deltaColor = delta > 0 ? T.green : delta < 0 ? T.red : T.faint;
   const gradId = `spark-${label}-${color.replace(/[^a-z0-9]/gi, "")}`;
-  const pctInfo = valueKey === "orm" ? getStrengthPercentile(exerciseName, last) : null;
+  const pctInfo = valueKey === "orm" ? getStrengthPercentile(exerciseName, last, lastDate) : null;
 
   return (
     <div style={{ marginBottom: 14 }}>
@@ -120,7 +125,7 @@ function Sparkline({ exerciseName, data, valueKey, color, label, fmt, showTip, h
           );
         })}
         {presentPts.map((p, i) => {
-          const pctInfo = valueKey === "orm" ? getStrengthPercentile(exerciseName, p.value) : null;
+          const pctInfo = valueKey === "orm" ? getStrengthPercentile(exerciseName, p.value, p.date) : null;
           const pctStr = pctInfo ? ` (${pctInfo.percentile}%)` : "";
           return (
             <g key={`p${i}`}>

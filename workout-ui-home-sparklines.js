@@ -50,14 +50,16 @@ function renderSparkline(pts, color, startMs, endMs, exerciseName) {
             const w = parseFloat(st.weight_lb) || 0, r = parseInt(st.reps) || 0;
             if (w > 0 && r > 0) {
               const orm = typeof calcSet1RM === 'function' ? calcSet1RM(exName, w, r, st.bands_json) : w;
-              datesObj[sess.date] = Math.max(datesObj[sess.date] || 0, orm);
+              if (datesObj[sess.date] === undefined || orm > datesObj[sess.date]) {
+                datesObj[sess.date] = orm;
+              }
             }
           }
         });
       }
     });
     const computedPts = Object.keys(datesObj).sort().map(d => {
-      const orm = datesObj[d], pct = typeof getStrengthPercentile === 'function' ? getStrengthPercentile(exName, orm) : null;
+      const orm = datesObj[d], pct = typeof getStrengthPercentile === 'function' ? getStrengthPercentile(exName, orm, d) : null;
       return pct ? { date: d, ms: Date.parse(d + 'T00:00:00'), orm, percentile: pct.percentile, tier: pct.tier } : null;
     }).filter(Boolean);
     return renderSparkline(computedPts, color || '#8b5cf6', sMs, eMs, exName);
@@ -252,6 +254,109 @@ function renderMeasurementSparkline(pts, color, startMs, endMs, unit) {
   `;
 }
 
+function renderPairedMeasurementSparkline(leftPts, rightPts, color, startMs, endMs, unit) {
+  if (leftPts.length === 0 && rightPts.length === 0) return '';
+  const w = 150, h = 50, padLeft = 28, padRight = 6, padTop = 6, padBottom = 12;
+
+  const leftVals = leftPts.map(p => p.value);
+  const rightVals = rightPts.map(p => p.value);
+  const allVals = [...leftVals, ...rightVals];
+  const max = Math.max(...allVals), min = Math.min(...allVals), range = max - min || 1;
+
+  const getX = (ms) => {
+    const r = endMs - startMs || 1;
+    return padLeft + ((ms - startMs) / r) * (w - padLeft - padRight);
+  };
+  const getY = (v) => (h - padBottom) - ((v - min) / range) * (h - padBottom - padTop);
+
+  const gridLines = `
+    <line x1="${padLeft}" y1="${padTop}" x2="${w - padRight}" y2="${padTop}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="2,2" />
+    <text x="${padLeft - 4}" y="${padTop + 3.5}" font-size="8px" fill="#6b7280" text-anchor="end">${max.toFixed(1)}</text>
+    <line x1="${padLeft}" y1="${h - padBottom}" x2="${w - padRight}" y2="${h - padBottom}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="2,2" />
+    <text x="${padLeft - 4}" y="${h - padBottom + 3.5}" font-size="8px" fill="#6b7280" text-anchor="end">${min.toFixed(1)}</text>
+  `;
+
+  const dayMs = 24 * 3600 * 1000;
+  const weekMarks = Array.from({length: 8}, (_, i) => ({ label: `W${i + 1}`, ms: startMs + (i * 7 + 6) * dayMs }));
+
+  const weekLines = weekMarks
+    .filter(mark => mark.ms <= endMs)
+    .map(mark => {
+      const x = getX(mark.ms);
+      return `
+        <line x1="${x}" y1="${padTop}" x2="${x}" y2="${h - padBottom}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="2,2" />
+        <text x="${x}" y="${h - 2}" font-size="7px" fill="#9ca3af" text-anchor="middle">${mark.label}</text>
+      `;
+    }).join('');
+
+  let leftPathHTML = '';
+  let rightPathHTML = '';
+
+  if (leftPts.length > 1) {
+    const pathD = leftPts.map(p => `L ${getX(p.ms)} ${getY(p.value)}`).join(' ').replace(/^L/, 'M');
+    leftPathHTML = `<path d="${pathD}" fill="none" stroke="${color}" stroke-width="1.4" stroke-dasharray="3,2" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" />`;
+  } else if (leftPts.length === 1) {
+    const x = getX(leftPts[0].ms);
+    const y = getY(leftPts[0].value);
+    leftPathHTML = `<circle cx="${x}" cy="${y}" r="2" fill="white" stroke="${color}" stroke-width="1.2" stroke-dasharray="2,1" opacity="0.8" />`;
+  }
+
+  if (rightPts.length > 1) {
+    const pathD = rightPts.map(p => `L ${getX(p.ms)} ${getY(p.value)}`).join(' ').replace(/^L/, 'M');
+    rightPathHTML = `<path d="${pathD}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.95" />`;
+  } else if (rightPts.length === 1) {
+    const x = getX(rightPts[0].ms);
+    const y = getY(rightPts[0].value);
+    rightPathHTML = `<circle cx="${x}" cy="${y}" r="2" fill="${color}" />`;
+  }
+
+  const pointsByMs = {};
+  leftPts.forEach(p => {
+    if (!pointsByMs[p.ms]) pointsByMs[p.ms] = { date: p.date, ms: p.ms };
+    pointsByMs[p.ms].left = p.value;
+  });
+  rightPts.forEach(p => {
+    if (!pointsByMs[p.ms]) pointsByMs[p.ms] = { date: p.date, ms: p.ms };
+    pointsByMs[p.ms].right = p.value;
+  });
+
+  const sortedMsList = Object.keys(pointsByMs).sort((a, b) => Number(a) - Number(b));
+  const dotsHTML = sortedMsList.map(msKey => {
+    const p = pointsByMs[msKey];
+    const x = getX(p.ms);
+    const elements = [];
+    let tipParts = [];
+
+    if (p.left != null) {
+      const yL = getY(p.left);
+      elements.push(`<circle cx="${x}" cy="${yL}" r="2" fill="white" stroke="${color}" stroke-width="1" opacity="0.75" />`);
+      tipParts.push(`L: ${p.left.toFixed(1)}`);
+    }
+    if (p.right != null) {
+      const yR = getY(p.right);
+      elements.push(`<circle cx="${x}" cy="${yR}" r="2" fill="${color}" />`);
+      tipParts.push(`R: ${p.right.toFixed(1)}`);
+    }
+
+    const tip = `${mmdd(p.date)} · ${tipParts.join(' ')} ${unit}`.replace(/'/g, "\\'");
+    const centerY = p.left != null && p.right != null ? (getY(p.left) + getY(p.right)) / 2 : getY(p.left || p.right);
+    elements.push(`<circle cx="${x}" cy="${centerY}" r="7" fill="transparent" style="cursor:pointer"
+                   onmouseenter="sparkTip(event,'${tip}')" onmouseleave="sparkTip()" onclick="sparkTip(event,'${tip}',true)"></circle>`);
+
+    return elements.join('');
+  }).join('');
+
+  return `
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;overflow:visible">
+      ${gridLines}
+      ${weekLines}
+      ${leftPathHTML}
+      ${rightPathHTML}
+      ${dotsHTML}
+    </svg>
+  `;
+}
+
 function getTierStyle(tier) {
   const s = { Elite: 'background:#fee2e2;color:#b91c1c;', Advanced: 'background:#ffedd5;color:#c2410c;', Intermediate: 'background:#dcfce7;color:#15803d;', Novice: 'background:#e0f2fe;color:#0369a1;', Beginner: 'background:#f3f4f6;color:#4b5563;' };
   return s[tier] || 'background:#f9fafb;color:#9ca3af;';
@@ -276,6 +381,7 @@ if (typeof window !== "undefined") {
   window.microSparkline = microSparkline;
   window.renderSparkline = renderSparkline;
   window.renderMeasurementSparkline = renderMeasurementSparkline;
+  window.renderPairedMeasurementSparkline = renderPairedMeasurementSparkline;
   window.getTierStyle = getTierStyle;
   window.MUSCLE_TO_UNIFIED_GROUP = MUSCLE_TO_UNIFIED_GROUP;
   window.METRIC_TO_UNIFIED_GROUP = METRIC_TO_UNIFIED_GROUP;

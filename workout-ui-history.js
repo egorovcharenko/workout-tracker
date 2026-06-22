@@ -232,7 +232,9 @@ function renderSessionList() {
           const prev = prevByEx[ex];
           if (!prev) return;
           const shortName = ex.split(' ').pop();
-          if (cur.best1RM > prev.best1RM && prev.best1RM > 0) {
+          const isAssist = ex === "Assisted Pull-Ups" || ex === "Dips" || ex === "Dead Hang + Scap Pulls" || ex === "Hanging Knee Raise";
+          const hasPrev = isAssist ? prev.best1RM > -Infinity : prev.best1RM > 0;
+          if (cur.best1RM > prev.best1RM && hasPrev) {
             const diff = Math.round(cur.best1RM - prev.best1RM);
             if (diff > 0) { prs.push(`💪 ${shortName}: +${diff}lb e1RM`); return; }
           }

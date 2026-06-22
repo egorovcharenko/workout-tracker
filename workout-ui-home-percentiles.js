@@ -35,7 +35,7 @@ function renderPercentilesCard() {
         if (!exerciseDates[st.exercise]) {
           exerciseDates[st.exercise] = {};
         }
-        if (!exerciseDates[st.exercise][sess.date] || orm > exerciseDates[st.exercise][sess.date]) {
+        if (exerciseDates[st.exercise][sess.date] === undefined || orm > exerciseDates[st.exercise][sess.date]) {
           exerciseDates[st.exercise][sess.date] = orm;
         }
       });
@@ -51,7 +51,7 @@ function renderPercentilesCard() {
 
     sortedDates.forEach(date => {
       const orm = datesObj[date];
-      const pctInfo = getStrengthPercentile(exName, orm);
+      const pctInfo = getStrengthPercentile(exName, orm, date);
       if (!pctInfo) return;
 
       pts.push({
@@ -120,44 +120,141 @@ function renderPercentilesCard() {
       </div>`;
   } else {
     rowsHTML = groupData.map(g => {
-      const renderedMetrics = g.metrics.map(m => {
-        const pts = sortedMeasAsc.map(e => {
-          const d = e.taken_at || e.date || '';
-          return { date: d.slice(0, 10), ms: Date.parse(d.replace(' ', 'T') || 0), value: e[m.id] };
-        }).filter(p => p.value != null && p.ms >= startMs && p.ms <= endMs);
-        if (!pts.length) return '';
-        const v = pts[pts.length - 1].value;
-        const pv = pts.length > 1 ? pts[0].value : null;
-        const delta = _measurementDelta(v, pv, m.direction);
-        const vals = pts.map(p => p.value);
-        const range = vals.length > 1 ? `${Math.min(...vals).toFixed(1)} → ${Math.max(...vals).toFixed(1)}` : `${vals[0].toFixed(1)}`;
-        const unit = m.unit || 'cm';
+      const visualRows = [];
+      const visited = new Set();
+      g.metrics.forEach(m => {
+        if (visited.has(m.id)) return;
+        
+        let pairedPartner = null;
+        let pairedLabel = '';
+        if (m.id === 'l_arm_cm') { pairedPartner = 'r_arm_cm'; pairedLabel = 'Arms (L/R)'; }
+        else if (m.id === 'r_arm_cm') { pairedPartner = 'l_arm_cm'; pairedLabel = 'Arms (L/R)'; }
+        else if (m.id === 'l_thigh_cm') { pairedPartner = 'r_thigh_cm'; pairedLabel = 'Thighs (L/R)'; }
+        else if (m.id === 'r_thigh_cm') { pairedPartner = 'l_thigh_cm'; pairedLabel = 'Thighs (L/R)'; }
+        else if (m.id === 'l_calf_cm') { pairedPartner = 'r_calf_cm'; pairedLabel = 'Calves (L/R)'; }
+        else if (m.id === 'r_calf_cm') { pairedPartner = 'l_calf_cm'; pairedLabel = 'Calves (L/R)'; }
 
-        const diffColor = delta ? delta.color : '#9ca3af';
-        const diffText = delta
-          ? `<span style="font-size:10px;font-weight:700;color:${diffColor};width:42px;text-align:right;flex-shrink:0">${delta.sign}${Math.abs(delta.d).toFixed(1)}</span>`
-          : `<span style="font-size:10px;font-weight:700;color:#9ca3af;width:42px;text-align:right;flex-shrink:0;opacity:0.25">-</span>`;
+        if (pairedPartner) {
+          const leftId = m.id.startsWith('l_') ? m.id : pairedPartner;
+          const rightId = m.id.startsWith('r_') ? m.id : pairedPartner;
+          const leftMetric = g.metrics.find(x => x.id === leftId);
+          const rightMetric = g.metrics.find(x => x.id === rightId);
+          
+          visualRows.push({
+            isPaired: true,
+            leftId,
+            rightId,
+            leftLabel: leftMetric ? leftMetric.label : 'L',
+            rightLabel: rightMetric ? rightMetric.label : 'R',
+            label: pairedLabel,
+            color: m.color,
+            direction: m.direction,
+            unit: m.unit || 'cm'
+          });
+          visited.add(leftId);
+          visited.add(rightId);
+        } else {
+          visualRows.push({
+            isPaired: false,
+            ...m
+          });
+          visited.add(m.id);
+        }
+      });
 
-        const sparklineHTML = renderMeasurementSparkline(pts, m.color, startMs, endMs, unit);
+      const renderedMetrics = visualRows.map(m => {
+        if (!m.isPaired) {
+          const pts = sortedMeasAsc.map(e => {
+            const d = e.taken_at || e.date || '';
+            return { date: d.slice(0, 10), ms: Date.parse(d.replace(' ', 'T') || 0), value: e[m.id] };
+          }).filter(p => p.value != null && p.ms >= startMs && p.ms <= endMs);
+          if (!pts.length) return '';
+          const v = pts[pts.length - 1].value;
+          const pv = pts.length > 1 ? pts[0].value : null;
+          const delta = _measurementDelta(v, pv, m.direction);
+          const vals = pts.map(p => p.value);
+          const range = vals.length > 1 ? `${Math.min(...vals).toFixed(1)} → ${Math.max(...vals).toFixed(1)}` : `${vals[0].toFixed(1)}`;
+          const unit = m.unit || 'cm';
 
-        return `
-          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:8px;border:1px solid #f3f4f6;background:#ffffff;border-radius:8px;gap:12px">
-            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
-              <div style="display:flex;align-items:center;gap:6px">
-                <span style="width:7px;height:7px;border-radius:50%;background:${m.color};display:inline-block;flex-shrink:0"></span>
-                <span style="color:#111827;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.label}</span>
+          const diffColor = delta ? delta.color : '#9ca3af';
+          const diffText = delta
+            ? `<span style="font-size:10px;font-weight:700;color:${diffColor};width:42px;text-align:right;flex-shrink:0">${delta.sign}${Math.abs(delta.d).toFixed(1)}</span>`
+            : `<span style="font-size:10px;font-weight:700;color:#9ca3af;width:42px;text-align:right;flex-shrink:0;opacity:0.25">-</span>`;
+
+          const sparklineHTML = renderMeasurementSparkline(pts, m.color, startMs, endMs, unit);
+
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:8px;border:1px solid #f3f4f6;background:#ffffff;border-radius:8px;gap:12px">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="width:7px;height:7px;border-radius:50%;background:${m.color};display:inline-block;flex-shrink:0"></span>
+                  <span style="color:#111827;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.label}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                  <span style="font-size:10px;color:#6b7280">${v != null ? v.toFixed(1) : '—'} ${unit}</span>
+                  <span style="font-size:8px;color:#9ca3af;font-family:monospace">${range} range</span>
+                </div>
               </div>
-              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                <span style="font-size:10px;color:#6b7280">${v != null ? v.toFixed(1) : '—'} ${unit}</span>
-                <span style="font-size:8px;color:#9ca3af;font-family:monospace">${range} range</span>
+              <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+                ${sparklineHTML}
+                ${diffText}
               </div>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-              ${sparklineHTML}
-              ${diffText}
+          `;
+        } else {
+          const leftPts = sortedMeasAsc.map(e => {
+            const d = e.taken_at || e.date || '';
+            return { date: d.slice(0, 10), ms: Date.parse(d.replace(' ', 'T') || 0), value: e[m.leftId] };
+          }).filter(p => p.value != null && p.ms >= startMs && p.ms <= endMs);
+
+          const rightPts = sortedMeasAsc.map(e => {
+            const d = e.taken_at || e.date || '';
+            return { date: d.slice(0, 10), ms: Date.parse(d.replace(' ', 'T') || 0), value: e[m.rightId] };
+          }).filter(p => p.value != null && p.ms >= startMs && p.ms <= endMs);
+
+          if (!leftPts.length && !rightPts.length) return '';
+
+          const leftLatest = leftPts.length ? leftPts[leftPts.length - 1].value : null;
+          const leftPrev = leftPts.length > 1 ? leftPts[0].value : null;
+          const leftDelta = _measurementDelta(leftLatest, leftPrev, m.direction);
+
+          const rightLatest = rightPts.length ? rightPts[rightPts.length - 1].value : null;
+          const rightPrev = rightPts.length > 1 ? rightPts[0].value : null;
+          const rightDelta = _measurementDelta(rightLatest, rightPrev, m.direction);
+
+          const unit = m.unit || 'cm';
+          const leftValStr = leftLatest != null ? leftLatest.toFixed(1) : '—';
+          const rightValStr = rightLatest != null ? rightLatest.toFixed(1) : '—';
+
+          const diffText = `
+            <div style="display:flex;flex-direction:column;align-items:flex-end;width:42px;flex-shrink:0;line-height:1.2;font-size:9px;font-family:monospace">
+              <div><span style="color:#6b7280;font-size:8px">L:</span>${leftDelta ? `<span style="font-weight:700;color:${leftDelta.color}">${leftDelta.sign}${Math.abs(leftDelta.d).toFixed(1)}</span>` : '<span style="color:#9ca3af;opacity:0.25">-</span>'}</div>
+              <div><span style="color:#6b7280;font-size:8px">R:</span>${rightDelta ? `<span style="font-weight:700;color:${rightDelta.color}">${rightDelta.sign}${Math.abs(rightDelta.d).toFixed(1)}</span>` : '<span style="color:#9ca3af;opacity:0.25">-</span>'}</div>
             </div>
-          </div>
-        `;
+          `;
+
+          const sparklineHTML = renderPairedMeasurementSparkline(leftPts, rightPts, m.color, startMs, endMs, unit);
+
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:8px;border:1px solid #f3f4f6;background:#ffffff;border-radius:8px;gap:12px">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="width:7px;height:7px;border-radius:50%;background:${m.color};display:inline-block;flex-shrink:0"></span>
+                  <span style="color:#111827;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.label}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                  <span style="font-size:10px;color:#374151">
+                    L: <strong>${leftValStr}</strong> · R: <strong>${rightValStr}</strong> <span style="font-size:9px;color:#6b7280">${unit}</span>
+                  </span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+                ${sparklineHTML}
+                ${diffText}
+              </div>
+            </div>
+          `;
+        }
       }).join('');
 
       const renderedExercises = g.exercises.map(ex => {

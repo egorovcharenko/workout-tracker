@@ -91,9 +91,10 @@ function renderWorkoutSummaryCard() {
     const priors = perSession.slice(0, -1);
     const priorMax = priors.length ? Math.max(...priors.map(p => p.value)) : (_assist(exName) ? -Infinity : 0);
     const prevBest = priors.length ? priors.reduce((m, p) => p.value > m.value ? p : m, priors[0]) : null;
-    const isPR = today1RM > priorMax && today1RM > 0;
-    const deltaPct = (prior1RM != null && prior1RM > 0)
-      ? Math.round(((today1RM - prior1RM) / prior1RM) * 100)
+    const isAssist = _assist(exName);
+    const isPR = today1RM > priorMax && (isAssist ? today1RM > -Infinity : today1RM > 0);
+    const deltaPct = (prior1RM != null && (isAssist ? prior1RM > -Infinity : prior1RM > 0))
+      ? Math.round(((today1RM - prior1RM) / Math.abs(prior1RM || 1)) * 100)
       : null;
     return { exName, sum, isPR, deltaPct, prevBest, sparkPts: perSession.slice(-6) };
   });
