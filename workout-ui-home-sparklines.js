@@ -36,6 +36,38 @@ function microSparkline(vals, color) {
   </svg>`;
 }
 
+function _renderSparklineGridLines(startMs, endMs, getX, padTop, h, padBottom) {
+  const dayMs = 24 * 3600 * 1000;
+  const totalDays = Math.ceil((endMs - startMs) / dayMs) || 1;
+  
+  if (totalDays <= 65) {
+    const numWeeks = Math.ceil(totalDays / 7);
+    const weekMarks = Array.from({length: numWeeks}, (_, i) => ({ label: `W${i + 1}`, ms: startMs + (i * 7 + 6) * dayMs }));
+    return weekMarks
+      .filter(mark => mark.ms <= endMs)
+      .map(mark => {
+        const x = getX(mark.ms);
+        return `
+          <line x1="${x}" y1="${padTop}" x2="${x}" y2="${h - padBottom}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="2,2" />
+          <text x="${x}" y="${h - 2}" font-size="7px" fill="#9ca3af" text-anchor="middle">${mark.label}</text>
+        `;
+      }).join('');
+  } else {
+    const numIntervals = 4;
+    const intervalMs = (endMs - startMs) / numIntervals;
+    return Array.from({length: numIntervals + 1}, (_, i) => {
+      const ms = startMs + i * intervalMs;
+      const x = getX(ms);
+      const date = new Date(ms);
+      const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `
+        <line x1="${x}" y1="${padTop}" x2="${x}" y2="${h - padBottom}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="2,2" />
+        <text x="${x}" y="${h - 2}" font-size="7px" fill="#9ca3af" text-anchor="middle">${label}</text>
+      `;
+    }).join('');
+  }
+}
+
 function renderSparkline(pts, color, startMs, endMs, exerciseName) {
   if (typeof pts === 'string') {
     const exName = pts, history = (typeof state !== 'undefined' && state.history) || [];
@@ -128,18 +160,7 @@ function renderSparkline(pts, color, startMs, endMs, exerciseName) {
     `;
   }).join('');
 
-  const dayMs = 24 * 3600 * 1000;
-  const weekMarks = Array.from({length: 8}, (_, i) => ({ label: `W${i + 1}`, ms: startMs + (i * 7 + 6) * dayMs }));
-
-  const weekLines = weekMarks
-    .filter(mark => mark.ms <= endMs)
-    .map(mark => {
-      const x = getX(mark.ms);
-      return `
-        <line x1="${x}" y1="${padTop}" x2="${x}" y2="${h - padBottom}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="2,2" />
-        <text x="${x}" y="${h - 2}" font-size="7px" fill="#9ca3af" text-anchor="middle">${mark.label}</text>
-      `;
-    }).join('');
+  const weekLines = _renderSparklineGridLines(startMs, endMs, getX, padTop, h, padBottom);
 
   let pathHTML = '';
   let dotsHTML = '';
@@ -276,18 +297,7 @@ function renderPairedMeasurementSparkline(leftPts, rightPts, color, startMs, end
     <text x="${padLeft - 4}" y="${h - padBottom + 3.5}" font-size="8px" fill="#6b7280" text-anchor="end">${min.toFixed(1)}</text>
   `;
 
-  const dayMs = 24 * 3600 * 1000;
-  const weekMarks = Array.from({length: 8}, (_, i) => ({ label: `W${i + 1}`, ms: startMs + (i * 7 + 6) * dayMs }));
-
-  const weekLines = weekMarks
-    .filter(mark => mark.ms <= endMs)
-    .map(mark => {
-      const x = getX(mark.ms);
-      return `
-        <line x1="${x}" y1="${padTop}" x2="${x}" y2="${h - padBottom}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="2,2" />
-        <text x="${x}" y="${h - 2}" font-size="7px" fill="#9ca3af" text-anchor="middle">${mark.label}</text>
-      `;
-    }).join('');
+  const weekLines = _renderSparklineGridLines(startMs, endMs, getX, padTop, h, padBottom);
 
   let leftPathHTML = '';
   let rightPathHTML = '';

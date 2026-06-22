@@ -1,20 +1,50 @@
 function renderPercentilesCard() {
   const history = state.history || [];
-  const offset = state.percentilesMonthOffset || 0;
   const measurements = state.measurements || [];
   const sortedMeasAsc = [...measurements].sort((a, b) => (a.taken_at || '').localeCompare(b.taken_at || ''));
-
   const endDate = new Date();
-  endDate.setDate(endDate.getDate() + offset * 60);
   const endMs = endDate.setHours(23, 59, 59, 999);
   
-  const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - 60);
-  const startMs = startDate.setHours(0, 0, 0, 0);
-  
-  let timeLabel = "Last 60 Days";
-  if (offset === -1) timeLabel = "Previous 60 Days";
-  else if (offset < -1) timeLabel = `${Math.abs(offset - 1) * 60} - ${Math.abs(offset) * 60} Days Ago`;
+  let startMs = 0;
+  let hasData = false;
+  let minMs = Date.now();
+
+  history.forEach(sess => {
+    if (sess.date) {
+      const sessMs = Date.parse(sess.date + 'T00:00:00');
+      if (!isNaN(sessMs)) {
+        if (sessMs < minMs) {
+          minMs = sessMs;
+        }
+        hasData = true;
+      }
+    }
+  });
+
+  measurements.forEach(e => {
+    const d = e.taken_at || e.date;
+    if (d) {
+      const mMs = Date.parse(d.replace(' ', 'T'));
+      if (!isNaN(mMs)) {
+        if (mMs < minMs) {
+          minMs = mMs;
+        }
+        hasData = true;
+      }
+    }
+  });
+
+  if (hasData) {
+    const earliestDate = new Date(minMs);
+    earliestDate.setHours(0, 0, 0, 0);
+    startMs = earliestDate.getTime();
+  } else {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 60);
+    startMs = startDate.setHours(0, 0, 0, 0);
+  }
+
+  const timeLabel = "All Time";
   
   const exerciseDates = {};
 
@@ -370,10 +400,6 @@ function renderPercentilesCard() {
     <div class="card" style="padding:16px;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px">
         <h3 style="font-size:14px;font-weight:600;color:#111827;margin:0">Strength & Body Progress (${timeLabel})</h3>
-        <div style="display:flex;gap:4px">
-          <button onclick="changePercentileMonth(-1)" style="background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.08);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center">&lt;</button>
-          <button onclick="changePercentileMonth(1)" ${offset === 0 ? 'disabled style="background:rgba(0,0,0,0.01);border:1px solid rgba(0,0,0,0.03);color:rgba(0,0,0,0.2);cursor:default;border-radius:6px;display:flex;align-items:center;justify-content:center"' : 'style="background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.08);color:#111827;cursor:pointer;padding:4px 8px;font-size:12px;font-weight:bold;border-radius:6px;display:flex;align-items:center;justify-content:center"'} onclick="changePercentileMonth(1)">&gt;</button>
-        </div>
       </div>
       
       <div style="font-size:10px;color:#6b7280;margin-bottom:12px;padding:8px;background:rgba(0,0,0,0.02);border-radius:6px;border:1px solid rgba(0,0,0,0.04);line-height:1.4">
