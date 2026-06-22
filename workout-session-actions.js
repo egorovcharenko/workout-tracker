@@ -257,7 +257,6 @@ function useWorkoutActions({
   };
 
   const onFinishWorkout = (elapsedSec) => {
-    localStorage.removeItem(SETS_LS_KEY(workout.name, sessionDate));
     const payload = serializeForSave(exercises, workout.name, sessionId, startedAt, elapsedSec, sessionDate);
     api.save(payload).finally(() => {
       window.location.href = "/";
