@@ -211,8 +211,9 @@ function useWorkoutActions({
       if (!match) return e;
       const lastWork = [...e.sets].reverse().find(s => s.kind === "work");
       const newIdx = (typeof lastWork?.idx === "number" ? lastWork.idx : 0) + 1;
-      const newSetNumber = targetSuperset 
-        ? (newIdx - 1) * subCount + (e.subIdx || 0) + 1
+      const isInterleaved = targetSuperset && (e.subIdx !== null && e.subIdx !== undefined);
+      const newSetNumber = isInterleaved 
+        ? (newIdx - 1) * subCount + e.subIdx + 1
         : (lastWork?.setNumber || 0) + 1;
       const newSet = {
         kind: "work", idx: newIdx, setNumber: newSetNumber,

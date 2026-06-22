@@ -180,10 +180,11 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
           if (exName === ex.name && kind === "working") workingLastBySetNum[parseInt(setNumStr)] = src[k];
         });
       });
-      const fallbackForWorking = (want) => {
-        if (workingLastBySetNum[want] != null) return workingLastBySetNum[want];
-        const nums = Object.keys(workingLastBySetNum).map(Number).sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
-        return nums.length ? workingLastBySetNum[nums[0]] : null;
+      const sortedHistNums = Object.keys(workingLastBySetNum).map(Number).sort((a, b) => a - b);
+      const fallbackForWorking = (idx) => {
+        if (idx < sortedHistNums.length) return workingLastBySetNum[sortedHistNums[idx]];
+        if (sortedHistNums.length > 0) return workingLastBySetNum[sortedHistNums[sortedHistNums.length - 1]];
+        return null;
       };
       const workGripFallback = lookupExerciseGrip(ex.name);
       if (ex.name === "Assisted Pull-Ups") {
@@ -201,11 +202,10 @@ function flattenTemplate(workout, lastSessionMap, hintsMap) {
         uaSet.lastBands = [];
         sets.push(uaSet);
       }
-      const maxWorkingLast = Math.max(0, ...Object.keys(workingLastBySetNum).map(Number));
-      const workingCount = Math.max(ex.sets || 3, maxWorkingLast);
+      const workingCount = Math.max(ex.sets || 3, sortedHistNums.length);
       for (let i = 0; i < workingCount; i++) {
         const setNumber = i + 1;
-        const last = fallbackForWorking(setNumber);
+        const last = fallbackForWorking(i);
         sets.push(buildSet({
           kind: "work", idx: i + 1,
           template: ex,
