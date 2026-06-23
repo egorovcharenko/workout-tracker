@@ -48,7 +48,7 @@ const WORKOUTS = [
     id: "main-b", name: "Main B", program: true, kind: "main", abSplit: "B", rest: 120, warmup: "Light hinges + band pull-aparts",
     exercises: [
       { name: "Barbell RDL", sets: 3, warmups: 3, reps: "3-5", equipment: "barbell", rest: 150, notes: "Brace hard, keep flat back. Top-set driven." },
-      { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120, notes: "Bench at ~30°. Top-set driven: 12 reps on top set -> +5 lb next session.", defaultWarmup: [45], defaultWarmupReps: [10], defaultWork: [105, 105, 105, 105], defaultWorkReps: [8, 8, 8, 8] },
+      { name: "Incline Barbell Press", sets: 4, warmups: 2, reps: "8-12", equipment: "barbell", rest: 120, notes: "Bench at ~30°. Top-set driven: 12 reps on top set -> +5 lb next session.", defaultWarmup: [45, 75], defaultWarmupReps: [10, 5], defaultWork: [105, 105, 105, 105], defaultWorkReps: [8, 8, 8, 8] },
       { name: "Bent-Over Barbell Rows", sets: 3, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120, notes: "Keep back flat, pull to lower chest." },
       { name: "Assisted Pull-Ups", sets: 3, reps: "1-12", notes: "1. Fresh attempt (1 unassisted). 2. Set 1–2: assisted. 3. Set 3: negatives (3-5s lowering). Top set hits 12 -> REDUCE assistance.", equipment: "band", assist: true, grips: ['pullup', 'neutral', 'chinup'], rest: 150, noWarmup: true },
     ],
@@ -81,7 +81,7 @@ const WORKOUTS = [
     id: "deadlift-day", name: "Deadlift Day", hidden: true, abSplit: "B", rest: 90, warmup: "Hinges + pull-aparts",
     exercises: [
       { name: "Barbell RDL", sets: 3, warmups: 3, reps: "3-5", equipment: "barbell", rest: 120 },
-      { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120 },
+      { name: "Incline Barbell Press", sets: 4, warmups: 2, reps: "8-12", equipment: "barbell", rest: 120, defaultWarmup: [45, 75], defaultWarmupReps: [10, 5] },
       { name: "Assisted Pull-Ups", sets: 4, reps: "5-8", video: "https://www.youtube.com/shorts/0sRmDbT9Pm0", equipment: "band", assist: true, grips: ['neutral', 'chinup', 'pullup'], rest: 120, noWarmup: true },
       { name: "Standing Overhead Press", sets: 3, reps: "6-8", equipment: "barbell", warmups: 1, rest: 120 },
       { name: "Face Pulls", sets: 3, reps: "15-20", equipment: "band", rest: 60, noWarmup: true },
@@ -135,7 +135,7 @@ const SWAP_GROUPS = [
     { name: "Goblet Squat", sets: 3, warmups: 2, reps: "10-12", video: "https://www.youtube.com/shorts/MeIiIdhvXT4", bandAddon: true, rest: 120 }, { name: "Band Squat", sets: 3, warmups: 2, reps: "12-15", video: "https://www.youtube.com/shorts/7VGmSe3FWPU", equipment: "band" }, { name: "Lunges", sets: 3, reps: "10-12", rest: 90 }
   ]},
   { family: "Chest Press (Push)", exercises: [
-    { name: "Barbell Bench Press", sets: 4, warmups: 3, reps: "1x4-5, 3x8", notes: "Top set: 1x4-5 @ ~1 RIR. Back-off: 3x8 @ 1-2 RIR. Safeties just below chest.", equipment: "barbell", rest: 150, defaultWarmup: [45, 95, 115], defaultWarmupReps: [10, 5, 3], defaultWork: [140, 125, 125, 125], defaultWorkReps: [5, 8, 8, 8] }, { name: "Incline Barbell Press", sets: 4, warmups: 1, reps: "8-12", equipment: "barbell", rest: 120, notes: "Bench at ~30°. Double progression: 12 on all sets -> +5 lb.", defaultWarmup: [45], defaultWarmupReps: [10], defaultWork: [100, 100, 100, 100], defaultWorkReps: [8, 8, 8, 8] },
+    { name: "Barbell Bench Press", sets: 4, warmups: 3, reps: "1x4-5, 3x8", notes: "Top set: 1x4-5 @ ~1 RIR. Back-off: 3x8 @ 1-2 RIR. Safeties just below chest.", equipment: "barbell", rest: 150, defaultWarmup: [45, 95, 115], defaultWarmupReps: [10, 5, 3], defaultWork: [140, 125, 125, 125], defaultWorkReps: [5, 8, 8, 8] }, { name: "Incline Barbell Press", sets: 4, warmups: 2, reps: "8-12", equipment: "barbell", rest: 120, notes: "Bench at ~30°. Double progression: 12 on all sets -> +5 lb.", defaultWarmup: [45, 75], defaultWarmupReps: [10, 5], defaultWork: [100, 100, 100, 100], defaultWorkReps: [8, 8, 8, 8] },
     { name: "Dumbbell Flat Bench Press", sets: 4, reps: "8-12", video: "https://www.youtube.com/shorts/YQ0g-a_QLag", rest: 120 }, { name: "Incline Dumbbell Press", sets: 4, reps: "8-12", rest: 120 }
   ]},
   { family: "Overhead Press (Shoulders)", exercises: [
